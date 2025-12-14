@@ -2,6 +2,12 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@/config/site";
+import dynamic from "next/dynamic";
+
+const DynamicToaster = dynamic(
+  () => import('sonner').then((mod) => mod.Toaster),
+  { ssr: false }
+);
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +31,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={inter.className}>
         {children}
+        <DynamicToaster position="top-right" richColors />
       </body>
     </html>
   );
