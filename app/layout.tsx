@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
 import { siteConfig } from "@/config/site";
+import dynamic from "next/dynamic";
 
 const inter = Inter({ subsets: ["latin"] });
+
+const DynamicToaster = dynamic(
+  () => import('sonner').then((mod) => mod.Toaster),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: {
@@ -25,7 +30,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={inter.className}>
-        <Providers>{children}</Providers>
+        {children}
+        <DynamicToaster position="top-right" richColors />
       </body>
     </html>
   );
