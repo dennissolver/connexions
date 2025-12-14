@@ -1,283 +1,306 @@
+// app/api/create-agent/route.ts
+// Creates the actual interviewer agent with dynamically researched role persona
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { 
+  generateInterviewerPromptAsync, 
+  InterviewerConfig,
+  RoleProfile 
+} from '@/lib/prompts/interviewer-agent';
 
-interface AgentConfig {
-  clientName?: string;
-  companyName?: string;
-  interviewPurpose?: string;
-  targetAudience?: string;
-  interviewStyle?: string;
-  tone?: string;
-  timeLimit?: number;
-  outputsRequired?: string[];
-  keyTopics?: string[];
-  keyQuestions?: string[];
-  constraints?: string[];
-  summary?: string;
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-interface ClientDetails {
-  fullName: string;
-  email: string;
-  phone?: string;
-  companyName: string;
-}
-
-/**
- * Creates a new AI Interviewer agent from the Setup Agent conversation
- * - Creates ElevenLabs agent
- * - Saves to database
- * - Returns interview URL
- */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { config, client }: { config: AgentConfig; client: ClientDetails } = body;
+    const data = await request.json();
 
-    if (!config || !client) {
+    // Validate required fields
+    const required = [
+      'company_name', 'company_email', 'agent_name', 'agent_role',
+      'interview_purpose', 'target_audience', 'interview_style',
+      'tone', 'duration_minutes', 'key_topics', 'key_questions',
+      'notification_email'
+    ];
+
+    for (const field of required) {
+      if (!data[field]) {
+        return NextResponse.json(
+          { error: `Missing required field: ${field}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Generate slug from agent name
+    const slug = generateSlug(data.agent_name, data.company_name);
+
+    // Check if slug already exists
+    const { data: existing } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('slug', slug)
+      .single();
+
+    if (existing) {
       return NextResponse.json(
-        { error: 'Config and client details required' },
+        { error: 'An agent with this name already exists' },
         { status: 400 }
       );
     }
 
-    if (!client.fullName || !client.email || !client.companyName) {
-      return NextResponse.json(
-        { error: 'Full name, email, and company name required' },
-        { status: 400 }
-      );
-    }
+    // Build interviewer config
+    const config: InterviewerConfig = {
+      agent_name: data.agent_name,
+      agent_role: data.agent_role,
+      interview_purpose: data.interview_purpose,
+      target_audience: data.target_audience,
+      interview_style: data.interview_style,
+      tone: data.tone,
+      duration_minutes: data.duration_minutes,
+      key_topics: data.key_topics,
+      key_questions: data.key_questions,
+      constraints: data.constraints,
+      company_name: data.company_name,
+    };
 
-    const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // DYNAMIC ROLE RESEARCH: Use AI to understand this specific role
+    // This generates custom expertise, techniques, and approach for ANY profession
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    
+    console.log(`Researching role profile for: ${data.agent_role}`);
+    
+    const { systemPrompt, firstMessage, roleProfile } = await generateInterviewerPromptAsync(
+      config,
+      anthropicApiKey
+    );
+    
+    console.log(`Generated profile for: ${roleProfile.role_title}`);
 
-    if (!elevenLabsKey) {
-      return NextResponse.json(
-        { error: 'ELEVENLABS_API_KEY not configured' },
-        { status: 500 }
-      );
-    }
+    // Create ElevenLabs conversational agent
+    let elevenlabsAgentId = null;
+    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
 
-    // Generate the interviewer prompt from config
-    const interviewerPrompt = generateInterviewerPrompt(config, client.companyName);
+    if (elevenlabsApiKey) {
+      try {
+        // Voice selection
+        const voiceId = data.voice_gender === 'male'
+          ? 'pNInz6obpgDQGcFmaJgB' // Adam
+          : 'EXAVITQu4vr4xnSDxMaL'; // Sarah
 
-    // Create ElevenLabs agent
-    const agentRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': elevenLabsKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: `${client.companyName} Interviewer`,
-        conversation_config: {
-          agent: {
-            prompt: {
-              prompt: interviewerPrompt,
+        const response = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': elevenlabsApiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: `${data.agent_name} - ${data.company_name}`,
+            conversation_config: {
+              agent: {
+                prompt: {
+                  prompt: systemPrompt,
+                },
+                first_message: firstMessage,
+                language: 'en',
+              },
+              tts: {
+                voice_id: voiceId,
+                model_id: 'eleven_turbo_v2_5',
+                stability: 0.5,
+                similarity_boost: 0.75,
+              },
+              stt: {
+                provider: 'elevenlabs',
+              },
+              turn: {
+                mode: 'turn_based',
+              },
             },
-            first_message: generateFirstMessage(config, client.companyName),
-            language: 'en',
-          },
-          tts: {
-            voice_id: getVoiceForTone(config.tone),
-          },
-        },
-      }),
-    });
+            platform_settings: {
+              webhook: {
+                url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/webhooks/elevenlabs`,
+                events: ['conversation.ended', 'conversation.transcript'],
+              },
+            },
+          }),
+        });
 
-    if (!agentRes.ok) {
-      const error = await agentRes.json();
-      console.error('Failed to create ElevenLabs agent:', error);
-      return NextResponse.json(
-        { error: 'Failed to create voice agent' },
-        { status: 500 }
-      );
+        if (response.ok) {
+          const agent = await response.json();
+          elevenlabsAgentId = agent.agent_id;
+          console.log('ElevenLabs agent created:', elevenlabsAgentId);
+        } else {
+          const error = await response.json();
+          console.warn('ElevenLabs creation failed:', error);
+        }
+      } catch (err) {
+        console.warn('ElevenLabs API error:', err);
+      }
     }
 
-    const agentData = await agentRes.json();
-    const elevenLabsAgentId = agentData.agent_id;
-
-    // Generate slug
-    const slug = generateSlug(client.companyName);
-
-    // Save to database if Supabase is configured
-    let dbAgent = null;
-    if (supabaseUrl && supabaseServiceKey) {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-      // First, create or get client
+    // Get or create client
+    let clientId = data.client_id;
+    
+    if (!clientId) {
+      // Check if client exists by email
       const { data: existingClient } = await supabase
         .from('clients')
         .select('id')
-        .eq('email', client.email)
+        .eq('email', data.company_email)
         .single();
 
-      let clientId = existingClient?.id;
-
-      if (!clientId) {
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        // Create new client
         const { data: newClient, error: clientError } = await supabase
           .from('clients')
           .insert({
-            email: client.email,
-            name: client.fullName,
-            company_name: client.companyName,
+            email: data.company_email,
+            company_name: data.company_name,
+            company_website: data.company_website,
+            name: data.contact_name,
           })
-          .select('id')
+          .select()
           .single();
 
         if (clientError) {
           console.error('Failed to create client:', clientError);
-        } else {
-          clientId = newClient?.id;
+          return NextResponse.json({ error: 'Failed to create client' }, { status: 500 });
         }
-      }
 
-      // Create agent record
-      const { data: agent, error: agentError } = await supabase
-        .from('agents')
-        .insert({
-          client_id: clientId,
-          name: `${client.companyName} Interviewer`,
-          slug,
-          status: 'active',
-          company_name: client.companyName,
-          interview_purpose: config.interviewPurpose || '',
-          target_interviewees: config.targetAudience || '',
-          interviewer_tone: config.tone || 'professional',
-          estimated_duration_mins: config.timeLimit || 15,
-          themes: config.keyTopics || [],
-          key_topics: config.keyTopics || [],
-          key_questions: config.keyQuestions || [],
-          constraints: config.constraints || [],
-          elevenlabs_agent_id: elevenLabsAgentId,
-        })
-        .select()
-        .single();
-
-      if (agentError) {
-        console.error('Failed to save agent:', agentError);
-      } else {
-        dbAgent = agent;
+        clientId = newClient.id;
       }
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const interviewUrl = `${baseUrl}/i/${slug}`;
+    // Create agent in database
+    const { data: agent, error: agentError } = await supabase
+      .from('agents')
+      .insert({
+        client_id: clientId,
+        name: data.agent_name,
+        slug,
+        status: 'active',
+        company_name: data.company_name,
+        interview_purpose: data.interview_purpose,
+        target_interviewees: data.target_audience,
+        agent_role: data.agent_role,
+        interviewer_tone: data.tone,
+        estimated_duration_mins: data.duration_minutes,
+        elevenlabs_agent_id: elevenlabsAgentId,
+        voice_id: data.voice_gender === 'male' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL',
+        key_topics: data.key_topics,
+        key_questions: data.key_questions,
+        constraints: data.constraints ? [data.constraints] : null,
+        system_prompt: systemPrompt,
+        first_message: firstMessage,
+        role_profile: roleProfile,  // Store the researched role profile
+      })
+      .select()
+      .single();
+
+    if (agentError) {
+      console.error('Failed to create agent:', agentError);
+      return NextResponse.json({ error: 'Failed to create agent' }, { status: 500 });
+    }
+
+    // Update setup session if conversation_id provided
+    if (data.conversation_id) {
+      await supabase
+        .from('setup_sessions')
+        .update({
+          status: 'built',
+          agent_id: agent.id,
+          confirmed_data: data,
+          built_at: new Date().toISOString(),
+        })
+        .eq('conversation_id', data.conversation_id);
+    }
+
+    // Send notification email
+    if (data.notification_email) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: data.notification_email,
+            subject: `Your AI Interviewer "${data.agent_name}" is Ready!`,
+            template: 'agent-created',
+            data: {
+              agentName: data.agent_name,
+              agentRole: data.agent_role,
+              interviewUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/i/${slug}`,
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard`,
+            },
+          }),
+        });
+      } catch (err) {
+        console.warn('Failed to send notification email:', err);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      agent: {
-        id: dbAgent?.id || elevenLabsAgentId,
-        slug,
-        name: `${client.companyName} Interviewer`,
-        elevenLabsAgentId,
-        interviewUrl,
-      },
+      agentId: agent.id,
+      slug: agent.slug,
+      interviewUrl: `/i/${slug}`,
+      elevenlabsAgentId,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create agent error:', error);
     return NextResponse.json(
-      { error: 'Failed to create agent' },
+      { error: error.message || 'Failed to create agent' },
       { status: 500 }
     );
   }
 }
 
-function generateInterviewerPrompt(config: AgentConfig, companyName: string): string {
-  let prompt = `You are an AI interviewer for ${companyName}.\n\n`;
-
-  if (config.summary) {
-    prompt += config.summary + '\n\n';
-  }
-
-  prompt += '## Your Role\n';
-  prompt += `You conduct ${config.interviewPurpose || 'research'} interviews with ${config.targetAudience || 'participants'}.\n\n`;
-
-  prompt += '## Interview Style\n';
-  const styles: Record<string, string> = {
-    'unstructured': 'Be exploratory and conversational. Follow the natural flow of discussion. Dig deeper into interesting points.',
-    'semi-structured': 'Cover key topics but adapt based on responses. Have flexibility in how you explore areas.',
-    'structured': 'Follow a consistent set of questions. Ensure comparability across interviews.',
-  };
-  prompt += (styles[config.interviewStyle || ''] || styles['semi-structured']) + '\n\n';
-
-  prompt += '## Tone\n';
-  const tones: Record<string, string> = {
-    'formal': 'Maintain a formal, professional demeanor.',
-    'professional': 'Be professional but warm and approachable.',
-    'friendly': 'Be friendly and conversational. Put them at ease.',
-    'casual': 'Be casual and relaxed. Like a conversation with a colleague.',
-  };
-  prompt += (tones[config.tone || ''] || tones['professional']) + '\n\n';
-
-  if (config.keyTopics && config.keyTopics.length > 0) {
-    prompt += '## Key Topics to Explore\n';
-    config.keyTopics.forEach(topic => {
-      prompt += `- ${topic}\n`;
-    });
-    prompt += '\n';
-  }
-
-  if (config.keyQuestions && config.keyQuestions.length > 0) {
-    prompt += '## Specific Questions to Ask\n';
-    config.keyQuestions.forEach(q => {
-      prompt += `- ${q}\n`;
-    });
-    prompt += '\n';
-  }
-
-  if (config.constraints && config.constraints.length > 0) {
-    prompt += '## Constraints & Sensitivities\n';
-    config.constraints.forEach(c => {
-      prompt += `- ${c}\n`;
-    });
-    prompt += '\n';
-  }
-
-  if (config.timeLimit) {
-    prompt += `## Duration\nAim to complete the interview in about ${config.timeLimit} minutes.\n\n`;
-  }
-
-  prompt += '## Guidelines\n';
-  prompt += '- Listen actively and acknowledge responses\n';
-  prompt += '- Ask follow-up questions to understand deeper motivations\n';
-  prompt += '- Keep the conversation natural and flowing\n';
-  prompt += '- Be respectful of their time\n';
-  prompt += '- Thank them at the end\n';
-
-  return prompt;
-}
-
-function generateFirstMessage(config: AgentConfig, companyName: string): string {
-  const greetings: Record<string, string> = {
-    'formal': `Good day. Thank you for joining this ${companyName} interview. I appreciate you taking the time to speak with me today. May I ask your name?`,
-    'professional': `Hi there! Thank you for joining this interview with ${companyName}. I really appreciate you taking the time. Before we begin, may I ask your name?`,
-    'friendly': `Hey! Thanks so much for chatting with me today. I'm really looking forward to hearing your thoughts. What's your name?`,
-    'casual': `Hi! Thanks for hopping on. I'd love to hear your perspective. First off, what's your name?`,
-  };
-
-  return greetings[config.tone || ''] || greetings['professional'];
-}
-
-function getVoiceForTone(tone?: string): string {
-  // ElevenLabs voice IDs
-  const voices: Record<string, string> = {
-    'formal': 'pNInz6obpgDQGcFmaJgB', // Adam
-    'professional': 'EXAVITQu4vr4xnSDxMaL', // Sarah
-    'friendly': '21m00Tcm4TlvDq8ikWAM', // Rachel
-    'casual': 'AZnzlk1XvdvUeBnXmlld', // Domi
-  };
-
-  return voices[tone || ''] || voices['professional'];
-}
-
-function generateSlug(companyName: string): string {
-  const base = companyName
+function generateSlug(agentName: string, companyName: string): string {
+  const base = `${companyName}-${agentName}`
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  const suffix = Math.random().toString(36).slice(2, 8);
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+
+  // Add random suffix for uniqueness
+  const suffix = Math.random().toString(36).substring(2, 6);
   return `${base}-${suffix}`;
+}
+
+// GET - Retrieve agent by ID or slug
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const slug = searchParams.get('slug');
+
+    if (!id && !slug) {
+      return NextResponse.json({ error: 'ID or slug required' }, { status: 400 });
+    }
+
+    let query = supabase.from('agents').select('*');
+
+    if (id) {
+      query = query.eq('id', id);
+    } else if (slug) {
+      query = query.eq('slug', slug);
+    }
+
+    const { data: agent, error } = await query.single();
+
+    if (error || !agent) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ agent });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
