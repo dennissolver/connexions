@@ -6,7 +6,9 @@ import { Bot, User, Clock, MessageSquare, Target, Mic, CheckCircle, Loader2, Ale
 
 interface AgentConfig {
   clientName?: string;
+  clientEmail?: string;
   companyName?: string;
+  appName?: string;
   interviewPurpose?: string;
   targetAudience?: string;
   interviewStyle?: string;
@@ -24,6 +26,7 @@ interface ClientDetails {
   email: string;
   phone: string;
   companyName: string;
+  appName: string;
 }
 
 export default function ConfirmPage() {
@@ -34,6 +37,7 @@ export default function ConfirmPage() {
     email: '',
     phone: '',
     companyName: '',
+    appName: '',
   });
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +52,9 @@ export default function ConfirmPage() {
       setClient(prev => ({
         ...prev,
         fullName: parsed.clientName || '',
+        email: parsed.clientEmail || '',
         companyName: parsed.companyName || '',
+        appName: parsed.appName || `${parsed.companyName || 'My'} Interviewer`,
       }));
     } else {
       // No config, redirect back to create
@@ -61,7 +67,7 @@ export default function ConfirmPage() {
     setError('');
   };
 
-  const isValid = client.fullName && client.email && client.companyName;
+  const isValid = client.fullName && client.email && client.companyName && client.appName;
 
   const handleCreate = async () => {
     if (!isValid || !config) return;
@@ -70,10 +76,23 @@ export default function ConfirmPage() {
     setError('');
 
     try {
+      // Update config with confirmed email
+      const updatedConfig = {
+        ...config,
+        clientEmail: client.email,
+        appName: client.appName,
+      };
+      
+      // Store updated config for success page email sending
+      sessionStorage.setItem('agentConfig', JSON.stringify(updatedConfig));
+
       const response = await fetch('/api/create-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, client }),
+        body: JSON.stringify({ 
+          config: updatedConfig, 
+          client 
+        }),
       });
 
       const data = await response.json();
@@ -82,15 +101,11 @@ export default function ConfirmPage() {
         throw new Error(data.error || 'Failed to create agent');
       }
 
-      // Clear session storage
-      sessionStorage.removeItem('agentConfig');
-      sessionStorage.removeItem('setupTranscript');
-
       // Store the new agent info for success page
       sessionStorage.setItem('createdAgent', JSON.stringify(data.agent));
 
-      // Redirect to success/dashboard
-      router.push(`/interview/${data.agent.id}?created=true`);
+      // Redirect to success page
+      router.push(`/agent/${data.agent.id}?created=true`);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create agent');
@@ -232,7 +247,7 @@ export default function ConfirmPage() {
             Your Details
           </h2>
           <p className="text-slate-400 text-sm mb-4">
-            We need a few details to set up your account.
+            Confirm your details. We'll send the interview link to your email.
           </p>
 
           <div className="space-y-4">
@@ -251,6 +266,22 @@ export default function ConfirmPage() {
 
             <div>
               <label className="block text-sm text-slate-400 mb-1">
+                Email <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="email"
+                value={client.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="john@company.com"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                We'll send your interview link to this email
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">
                 Company Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -264,15 +295,18 @@ export default function ConfirmPage() {
 
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                Email <span className="text-red-400">*</span>
+                Interviewer App Name <span className="text-red-400">*</span>
               </label>
               <input
-                type="email"
-                value={client.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
+                type="text"
+                value={client.appName}
+                onChange={(e) => handleInputChange('appName', e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="john@acme.com"
+                placeholder="Acme Customer Interviews"
               />
+              <p className="text-xs text-slate-500 mt-1">
+                This will be the name of your AI interviewer
+              </p>
             </div>
 
             <div>
@@ -318,7 +352,7 @@ export default function ConfirmPage() {
         </button>
 
         <p className="text-center text-slate-500 text-sm mt-4">
-          You'll get a shareable link to send to interviewees
+          You'll get a shareable link sent to your email
         </p>
       </main>
     </div>

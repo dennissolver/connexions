@@ -8,7 +8,9 @@ Extract the following information from the transcript and return it as JSON:
 {
   "conversationComplete": boolean (true if the client confirmed the summary),
   "clientName": "their name or null",
+  "clientEmail": "their email address - THIS IS REQUIRED",
   "companyName": "company name or null",
+  "appName": "the name they want for their AI interviewer",
   "interviewPurpose": "what the interviews are for",
   "targetAudience": "who will be interviewed",
   "interviewStyle": "unstructured|semi-structured|structured",
@@ -21,7 +23,10 @@ Extract the following information from the transcript and return it as JSON:
   "summary": "A complete description of the AI interviewer to be created, written as instructions for the interviewer agent"
 }
 
-Only include fields you can confidently extract from the conversation. If something wasn't discussed, use null or empty array.
+IMPORTANT:
+- clientEmail is critical - look for any email address mentioned in the conversation
+- appName defaults to "[companyName] Interviewer" if not explicitly stated
+- Only include fields you can confidently extract from the conversation. If something wasn't discussed, use null or empty array.
 
 The summary should be comprehensive enough to create an effective AI interviewer prompt.`;
 
@@ -83,6 +88,11 @@ export async function POST(request: NextRequest) {
     // Generate a default summary if none exists
     if (config && !config.summary && config.interviewPurpose) {
       config.summary = generateSummary(config);
+    }
+
+    // Default app name if not provided
+    if (config && !config.appName && config.companyName) {
+      config.appName = `${config.companyName} Interviewer`;
     }
 
     return NextResponse.json({

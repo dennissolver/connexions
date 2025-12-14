@@ -1,5 +1,6 @@
+// app/page.tsx
 import Link from "next/link";
-import { Phone, Bot, Zap, ArrowRight, Mic, CheckCircle, Users, Clock, BarChart3, Mail, Calendar, Globe, ExternalLink } from "lucide-react";
+import { Phone, Bot, Zap, ArrowRight, Mic, Users, Clock, BarChart3, Building2, GraduationCap, Briefcase, Heart, Scale, FlaskConical } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -9,21 +10,20 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">AI Interview Agents</h1>
-            <p className="text-xs text-slate-400">by Corporate AI Solutions</p>
+            <p className="text-xs text-slate-500">by Corporate AI Solutions</p>
           </div>
           <nav className="flex items-center gap-4">
             <a
               href="https://calendly.com/mcmdennis"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-2 text-slate-400 hover:text-white transition"
+              className="text-slate-400 hover:text-white transition text-sm"
             >
-              <Calendar className="w-4 h-4" />
               Book a Demo
             </a>
             <Link
               href="/create"
-              className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-medium transition text-sm"
+              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
             >
               Create Agent
             </Link>
@@ -31,93 +31,60 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-purple-500/10 text-purple-400 px-4 py-2 rounded-full text-sm mb-8">
-            <Mic className="w-4 h-4" />
-            Voice-First AI Technology
-          </div>
-
-          <h2 className="text-4xl md:text-6xl font-bold mb-6">
-            Create AI Voice Agents That Conduct Interviews For You
-          </h2>
-
-          <p className="text-xl text-slate-400 mb-8 max-w-2xl mx-auto">
-            Design custom AI interviewers through a simple conversation.
-            No coding. No complex setup. Just tell us what you need —
-            and start interviewing at scale within minutes.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Link
-              href="/create"
-              className="inline-flex items-center justify-center gap-3 bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25"
-            >
-              <Phone className="w-6 h-6" />
-              Create Your Agent Now
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <a
-              href="https://calendly.com/mcmdennis"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-semibold text-lg transition"
-            >
-              <Calendar className="w-6 h-6" />
-              Book a Demo
-            </a>
-          </div>
-
-          <p className="text-sm text-slate-500">
-            Free to get started • No credit card required • Live in 5 minutes
-          </p>
+      {/* Hero - No CTA button here, just headline */}
+      <section className="container mx-auto px-4 py-20 flex flex-col items-center text-center">
+        <div className="inline-flex items-center gap-2 bg-purple-500/10 text-purple-400 px-4 py-2 rounded-full text-sm mb-8">
+          <Mic className="w-4 h-4" />
+          Voice-First AI Interviews
         </div>
+
+        <h2 className="text-4xl md:text-6xl font-bold mb-6 max-w-4xl leading-tight">
+          Create AI Voice Agents That Conduct Interviews For You
+        </h2>
+
+        <p className="text-xl text-slate-400 max-w-2xl">
+          Design your custom AI interviewer through a simple voice conversation.
+          No coding, no forms — just tell us what you need.
+        </p>
       </section>
 
-      {/* What Is It */}
+      {/* How can AI Interview Agents work for you? */}
       <section className="border-t border-slate-800 bg-slate-900/50">
         <div className="container mx-auto px-4 py-20">
-          <div className="max-w-4xl mx-auto">
-            <h3 className="text-3xl font-bold text-center mb-4">What Is AI Interview Agents?</h3>
-            <p className="text-slate-400 text-center mb-12 text-lg max-w-2xl mx-auto">
-              A platform that lets anyone create custom AI-powered voice interviewers —
-              without writing a single line of code.
-            </p>
+          <h3 className="text-3xl font-bold text-center mb-4">How Can AI Interview Agents Work For You?</h3>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">
+            We help you create custom AI voice agents that conduct interviews on your behalf —
+            at scale, 24/7, with consistent quality.
+          </p>
 
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="bg-slate-800/50 rounded-2xl p-6">
-                <Bot className="w-10 h-10 text-purple-400 mb-4" />
-                <h4 className="text-xl font-semibold mb-2">AI That Interviews For You</h4>
-                <p className="text-slate-400">
-                  Your AI agent conducts natural voice conversations with customers,
-                  candidates, or research participants — 24/7, without you lifting a finger.
-                </p>
-              </div>
-              <div className="bg-slate-800/50 rounded-2xl p-6">
-                <Mic className="w-10 h-10 text-purple-400 mb-4" />
-                <h4 className="text-xl font-semibold mb-2">Voice-First Design</h4>
-                <p className="text-slate-400">
-                  Real conversations, not chatbots. Your interviewees speak naturally
-                  with an AI that listens, understands, and asks thoughtful follow-ups.
-                </p>
-              </div>
-              <div className="bg-slate-800/50 rounded-2xl p-6">
-                <Zap className="w-10 h-10 text-purple-400 mb-4" />
-                <h4 className="text-xl font-semibold mb-2">Setup Through Conversation</h4>
-                <p className="text-slate-400">
-                  No forms or configuration. Just have a voice call with our Setup Agent —
-                  describe what you need, and we build your custom interviewer.
-                </p>
-              </div>
-              <div className="bg-slate-800/50 rounded-2xl p-6">
-                <Users className="w-10 h-10 text-purple-400 mb-4" />
-                <h4 className="text-xl font-semibold mb-2">Scale Unlimited</h4>
-                <p className="text-slate-400">
-                  Interview 10 people or 10,000. Your AI agent handles them all
-                  with the same quality, consistency, and attention to detail.
-                </p>
-              </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
+            <div className="bg-slate-800/50 rounded-xl p-6">
+              <Bot className="w-10 h-10 text-purple-400 mb-4" />
+              <h4 className="font-semibold mb-2">AI Interviewers</h4>
+              <p className="text-sm text-slate-400">
+                Custom voice agents trained to ask the right questions for your specific use case
+              </p>
+            </div>
+            <div className="bg-slate-800/50 rounded-xl p-6">
+              <Mic className="w-10 h-10 text-purple-400 mb-4" />
+              <h4 className="font-semibold mb-2">Voice-First Design</h4>
+              <p className="text-sm text-slate-400">
+                Natural voice conversations, not boring forms. Better engagement, richer responses
+              </p>
+            </div>
+            <div className="bg-slate-800/50 rounded-xl p-6">
+              <Zap className="w-10 h-10 text-purple-400 mb-4" />
+              <h4 className="font-semibold mb-2">Conversation Setup</h4>
+              <p className="text-sm text-slate-400">
+                Create your agent by talking to us. No configuration screens or complex forms
+              </p>
+            </div>
+            <div className="bg-slate-800/50 rounded-xl p-6">
+              <Users className="w-10 h-10 text-purple-400 mb-4" />
+              <h4 className="font-semibold mb-2">Unlimited Scale</h4>
+              <p className="text-sm text-slate-400">
+                Interview hundreds of people simultaneously without hiring more staff
+              </p>
             </div>
           </div>
         </div>
@@ -125,40 +92,34 @@ export default function HomePage() {
 
       {/* Benefits */}
       <section className="container mx-auto px-4 py-20">
-        <h3 className="text-3xl font-bold text-center mb-4">Why Use AI Interview Agents?</h3>
-        <p className="text-slate-400 text-center mb-12 max-w-xl mx-auto">
-          Save time, reduce costs, and get better insights from every conversation.
-        </p>
+        <h3 className="text-3xl font-bold text-center mb-12">Why Use AI Interviewers?</h3>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center">
             <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Clock className="w-8 h-8 text-green-400" />
             </div>
-            <h4 className="font-semibold text-lg mb-2">Save 100+ Hours</h4>
-            <p className="text-sm text-slate-400">
-              Stop spending hours on repetitive interviews.
-              Your AI handles the conversations while you focus on insights.
+            <h4 className="font-semibold text-xl mb-2">Save 100+ Hours</h4>
+            <p className="text-slate-400">
+              Stop spending days on repetitive interviews. Let AI handle the volume while you focus on insights.
             </p>
           </div>
           <div className="text-center">
             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-blue-400" />
+              <BarChart3 className="w-8 h-8 text-blue-400" />
             </div>
-            <h4 className="font-semibold text-lg mb-2">Consistent Quality</h4>
-            <p className="text-sm text-slate-400">
-              Every interview follows your methodology perfectly.
-              No interviewer fatigue, no missed questions, no bias.
+            <h4 className="font-semibold text-xl mb-2">Consistent Quality</h4>
+            <p className="text-slate-400">
+              Every interview follows your methodology. No interviewer fatigue, no missed questions.
             </p>
           </div>
           <div className="text-center">
             <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-8 h-8 text-purple-400" />
+              <Users className="w-8 h-8 text-purple-400" />
             </div>
-            <h4 className="font-semibold text-lg mb-2">Deeper Insights</h4>
-            <p className="text-sm text-slate-400">
-              AI captures everything and identifies patterns
-              you might miss. Get transcripts, summaries, and analysis.
+            <h4 className="font-semibold text-xl mb-2">Deeper Insights</h4>
+            <p className="text-slate-400">
+              Voice conversations capture nuance and emotion that text forms miss entirely.
             </p>
           </div>
         </div>
@@ -167,269 +128,219 @@ export default function HomePage() {
       {/* Use Cases */}
       <section className="border-t border-slate-800 bg-slate-900/50">
         <div className="container mx-auto px-4 py-20">
-          <h3 className="text-3xl font-bold text-center mb-4">Perfect For Any Interview Type</h3>
+          <h3 className="text-3xl font-bold text-center mb-4">Use Cases</h3>
           <p className="text-slate-400 text-center mb-12 max-w-xl mx-auto">
-            Whatever conversations you need to scale, we've got you covered.
+            AI Interview Agents work for any scenario where you need to gather information through conversation.
           </p>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-            {[
-              { title: 'Customer Discovery', desc: 'Validate problems and solutions with target customers' },
-              { title: 'Lead Qualification', desc: 'Screen and qualify leads before sales calls' },
-              { title: 'User Research', desc: 'Gather product feedback and usability insights' },
-              { title: 'Founder Screening', desc: 'Evaluate startup founders for investment' },
-              { title: 'HR Interviews', desc: 'Initial candidate screening at scale' },
-              { title: 'Exit Interviews', desc: 'Understand why employees or customers leave' },
-              { title: 'Market Research', desc: 'Test concepts and messaging with your audience' },
-              { title: 'Compliance Intake', desc: 'Structured data collection for regulated industries' },
-            ].map((item) => (
-              <div key={item.title} className="bg-slate-800/50 rounded-xl p-4">
-                <h4 className="font-semibold mb-1">{item.title}</h4>
-                <p className="text-sm text-slate-400">{item.desc}</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <FlaskConical className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Customer Discovery</h4>
+                <p className="text-sm text-slate-400">Validate ideas and understand customer needs</p>
               </div>
-            ))}
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <Briefcase className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Lead Qualification</h4>
+                <p className="text-sm text-slate-400">Screen inbound leads before sales calls</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <Users className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">User Research</h4>
+                <p className="text-sm text-slate-400">Gather product feedback at scale</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <Building2 className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Founder Screening</h4>
+                <p className="text-sm text-slate-400">Pre-qualify startup applicants</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <GraduationCap className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">HR Screening</h4>
+                <p className="text-sm text-slate-400">First-round candidate interviews</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <Heart className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Exit Interviews</h4>
+                <p className="text-sm text-slate-400">Understand why employees leave</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <BarChart3 className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Market Research</h4>
+                <p className="text-sm text-slate-400">Survey target demographics</p>
+              </div>
+            </div>
+            <div className="bg-slate-800/30 rounded-xl p-5 flex items-start gap-4">
+              <Scale className="w-6 h-6 text-purple-400 shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Compliance Intake</h4>
+                <p className="text-sm text-slate-400">Structured data collection</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
+      {/* How it works */}
       <section className="container mx-auto px-4 py-20">
-        <h3 className="text-3xl font-bold text-center mb-4">Create Your AI Interviewer in 3 Steps</h3>
-        <p className="text-slate-400 text-center mb-12 max-w-xl mx-auto">
-          No technical skills required. Just have a conversation.
-        </p>
+        <h3 className="text-3xl font-bold text-center mb-12">How It Works</h3>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center">
-            <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl font-bold text-purple-400">1</span>
+            <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl font-bold text-purple-400">1</span>
             </div>
-            <h4 className="font-semibold text-lg mb-2">Start a Call</h4>
-            <p className="text-sm text-slate-400">
-              Click "Create Your Agent" and start a voice conversation with our Setup Agent.
+            <h4 className="font-semibold text-xl mb-2">Start a Call</h4>
+            <p className="text-slate-400">
+              Click "Create Your Agent" and have a 3-5 minute voice conversation with our Setup Agent.
             </p>
           </div>
           <div className="text-center">
-            <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl font-bold text-purple-400">2</span>
+            <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl font-bold text-purple-400">2</span>
             </div>
-            <h4 className="font-semibold text-lg mb-2">Describe Your Needs</h4>
-            <p className="text-sm text-slate-400">
-              Tell us who you want to interview, what you want to learn, and your preferred style.
+            <h4 className="font-semibold text-xl mb-2">Describe Your Needs</h4>
+            <p className="text-slate-400">
+              Tell us who you want to interview, what questions matter, and the tone you prefer.
             </p>
           </div>
           <div className="text-center">
-            <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl font-bold text-purple-400">3</span>
+            <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl font-bold text-purple-400">3</span>
             </div>
-            <h4 className="font-semibold text-lg mb-2">Share & Interview</h4>
-            <p className="text-sm text-slate-400">
-              Get your unique interview link. Share it with participants. Start collecting insights.
+            <h4 className="font-semibold text-xl mb-2">Share & Interview</h4>
+            <p className="text-slate-400">
+              Get your unique interview link. Share it with anyone you want your AI to interview.
             </p>
           </div>
         </div>
 
-        <div className="text-center mt-12">
+        {/* Primary CTA - After all the explanation */}
+        <div className="text-center mt-16">
           <Link
             href="/create"
-            className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25"
+            className="group inline-flex items-center gap-4 bg-green-600 hover:bg-green-500 text-white px-8 py-5 rounded-2xl font-semibold text-xl transition-all hover:scale-105 shadow-lg shadow-green-500/25"
           >
-            <Phone className="w-6 h-6" />
-            Create Your Agent Now
-            <ArrowRight className="w-5 h-5" />
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+              <Phone className="w-6 h-6" />
+            </div>
+            <span>Create Your Agent Now</span>
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
+
+          <p className="text-sm text-slate-500 mt-4">
+            3-5 minute setup call • No signup required • Free to try
+          </p>
         </div>
       </section>
 
-      {/* Other Products - Portfolio */}
+      {/* Portfolio */}
       <section className="border-t border-slate-800 bg-slate-900/50">
         <div className="container mx-auto px-4 py-20">
-          <h3 className="text-2xl font-bold text-center mb-2">Built by Corporate AI Solutions</h3>
+          <h3 className="text-3xl font-bold text-center mb-4">Our Portfolio</h3>
           <p className="text-slate-400 text-center mb-12 max-w-xl mx-auto">
-            AI Interview Agents is part of our suite of AI-powered business tools.
+            AI Interview Agents is part of the Corporate AI Solutions family of products.
           </p>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <a
-              href="https://raiseready-six.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">RaiseReady</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">AI pitch coach for founders preparing to raise capital</p>
+            <a href="https://raiseready-six.vercel.app/" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">RaiseReady</h4>
+              <p className="text-sm text-slate-400">AI pitch deck coaching for founders</p>
             </a>
-            <a
-              href="https://f2k-checkpoint.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">Checkpoint</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">AI-powered startup validation and progress tracking</p>
+            <a href="https://f2k-checkpoint.vercel.app/" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">Checkpoint</h4>
+              <p className="text-sm text-slate-400">Automated founder screening for accelerators</p>
             </a>
-            <a
-              href="https://disabilityconnect.netlify.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">DisabilityConnect</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">Connecting disability support services with those who need them</p>
+            <a href="https://disabilityconnect.netlify.app/" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">DisabilityConnect</h4>
+              <p className="text-sm text-slate-400">AI assistants for NDIS providers</p>
             </a>
-            <a
-              href="https://whats-your-project.com/grants-directory/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">GrantBridge</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">AI-powered grant discovery and application assistance</p>
+            <a href="https://whats-your-project.com/grants-directory/" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">GrantBridge</h4>
+              <p className="text-sm text-slate-400">AI-powered grant discovery and matching</p>
             </a>
-            <a
-              href="http://www.corporateaisolutions.com/cleanclosewaitlist"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">CleanClose</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">Streamlined property settlement and conveyancing</p>
+            <a href="http://www.corporateaisolutions.com/cleanclosewaitlist" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">CleanClose</h4>
+              <p className="text-sm text-slate-400">AI due diligence for M&A</p>
             </a>
-            <a
-              href="https://corporateaisolutions.com/raiseready-white-label/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-slate-800/50 rounded-xl p-5 hover:bg-slate-800 transition group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold">White Label Solutions</h4>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </div>
-              <p className="text-sm text-slate-400">Custom AI voice agents for your business</p>
+            <a href="https://corporateaisolutions.com/raiseready-white-label/" target="_blank" rel="noopener noreferrer" className="bg-slate-800/50 rounded-xl p-6 hover:bg-slate-800 transition">
+              <h4 className="font-semibold text-lg mb-2">White Label</h4>
+              <p className="text-sm text-slate-400">Custom AI solutions for your brand</p>
             </a>
           </div>
         </div>
       </section>
 
-      {/* Contact Section */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-br from-purple-500/20 to-slate-800/50 rounded-3xl p-8 md:p-12">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div>
-                <h3 className="text-3xl font-bold mb-4">Let's Talk</h3>
-                <p className="text-slate-300 mb-6">
-                  Have questions? Want a custom solution for your business?
-                  Get in touch with Dennis McMahon, founder of Corporate AI Solutions.
-                </p>
-
-                <div className="space-y-4">
-                  <a
-                    href="mailto:dennis@corporateaisolutions.com"
-                    className="flex items-center gap-3 text-slate-300 hover:text-white transition"
-                  >
-                    <Mail className="w-5 h-5 text-purple-400" />
+      {/* Contact / Footer */}
+      <footer className="border-t border-slate-800">
+        <div className="container mx-auto px-4 py-12">
+          <div className="grid md:grid-cols-2 gap-12 max-w-4xl mx-auto">
+            <div>
+              <h3 className="text-xl font-bold mb-4">AI Interview Agents</h3>
+              <p className="text-slate-400 mb-6">
+                Create custom AI voice interviewers through conversation.
+                A product by Corporate AI Solutions.
+              </p>
+              <Link
+                href="/create"
+                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium transition"
+              >
+                <Phone className="w-4 h-4" />
+                Create Your Agent
+              </Link>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Contact</h4>
+              <div className="space-y-3 text-slate-400">
+                <p><span className="text-slate-500">Founder:</span> Dennis McMahon</p>
+                <p>
+                  <span className="text-slate-500">Email:</span>{' '}
+                  <a href="mailto:dennis@corporateaisolutions.com" className="hover:text-white transition">
                     dennis@corporateaisolutions.com
                   </a>
-                  <a
-                    href="tel:+61402612471"
-                    className="flex items-center gap-3 text-slate-300 hover:text-white transition"
-                  >
-                    <Phone className="w-5 h-5 text-purple-400" />
+                </p>
+                <p>
+                  <span className="text-slate-500">Phone:</span>{' '}
+                  <a href="tel:+61402612471" className="hover:text-white transition">
                     +61 402 612 471
                   </a>
+                </p>
+                <p>
+                  <span className="text-slate-500">Website:</span>{' '}
+                  <a href="https://www.corporateaisolutions.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">
+                    corporateaisolutions.com
+                  </a>
+                </p>
+                <p className="pt-2">
                   <a
-                    href="https://www.corporateaisolutions.com"
+                    href="https://calendly.com/mcmdennis"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 text-slate-300 hover:text-white transition"
+                    className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition"
                   >
-                    <Globe className="w-5 h-5 text-purple-400" />
-                    www.corporateaisolutions.com
+                    Book a Demo
+                    <ArrowRight className="w-4 h-4" />
                   </a>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <p className="text-slate-400 mb-4">Ready to see it in action?</p>
-                <a
-                  href="https://calendly.com/mcmdennis"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 bg-white text-slate-900 px-8 py-4 rounded-2xl font-semibold text-lg transition-all hover:scale-105 shadow-lg"
-                >
-                  <Calendar className="w-6 h-6" />
-                  Book a Meeting
-                </a>
-                <p className="text-sm text-slate-500 mt-3">
-                  Free 30-minute consultation
                 </p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Final CTA */}
-      <section className="border-t border-slate-800 bg-slate-900">
-        <div className="container mx-auto px-4 py-16 text-center">
-          <h3 className="text-3xl font-bold mb-4">Ready to Create Your AI Interviewer?</h3>
-          <p className="text-slate-400 mb-8 max-w-xl mx-auto">
-            Start a voice conversation with our Setup Agent.
-            Describe what you need. Get your custom AI interviewer in minutes.
-          </p>
-          <Link
-            href="/create"
-            className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25"
-          >
-            <Phone className="w-6 h-6" />
-            Start Creating Now
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="text-center md:text-left">
-              <p className="font-semibold">AI Interview Agents</p>
-              <p className="text-sm text-slate-500">
-                A product of Corporate AI Solutions
-              </p>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-slate-400">
-              <a href="mailto:dennis@corporateaisolutions.com" className="hover:text-white transition">
-                Contact
-              </a>
-              <a href="https://www.corporateaisolutions.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">
-                Corporate AI Solutions
-              </a>
-              <a href="https://calendly.com/mcmdennis" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">
-                Book Demo
-              </a>
-            </div>
-          </div>
-          <div className="text-center mt-6 pt-6 border-t border-slate-800">
-            <p className="text-xs text-slate-500">
-              © {new Date().getFullYear()} Corporate AI Solutions. Built with ❤️ by Dennis McMahon.
-            </p>
+          <div className="border-t border-slate-800 mt-12 pt-8 text-center text-sm text-slate-500">
+            © 2024 Corporate AI Solutions. All rights reserved.
           </div>
         </div>
       </footer>
