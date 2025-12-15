@@ -124,10 +124,11 @@ async function triggerEvaluation(interviewId: string): Promise<void> {
   try {
     console.log(`Starting evaluation for interview ${interviewId}`);
     
-    const result = await evalRunner.evaluateInterview(interviewId);
+    const result = await evalRunner(interviewId);
     
     if (result) {
-      console.log(`Evaluation complete for ${interviewId}: Score ${result.overall_score}`);
+      console.log(`Evaluation complete for ${interviewId}: Drift=${result.roleDriftScore}, Flag=${result.driftFlag}`);
+
     } else {
       console.log(`Evaluation skipped for ${interviewId} (no transcript or too short)`);
     }

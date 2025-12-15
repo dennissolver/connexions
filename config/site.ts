@@ -1,14 +1,28 @@
 // config/site.ts
-// Site metadata configuration
+// ============================================================================
+// SITE & SEO CONFIGURATION
+// Web-facing metadata only (no business logic)
+// ============================================================================
+
+import { clientConfig } from "./client";
 
 export const siteConfig = {
-  name: "AI Agent Interviews",
-  description: "AI-Powered Research Interview Platform",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  // Product identity (single source of truth)
+  name: clientConfig.platform.name,
+  description: clientConfig.platform.description,
+
+  // Canonical URL
+  url:
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "http://localhost:3000",
+
+  // Open Graph / Social
   ogImage: "/og.png",
+
+  // External links
   links: {
-    github: "https://github.com/raiseready/ai-agent-interviews",
+    github: "https://github.com/raiseready/connexions",
   },
-};
+} as const;
 
 export type SiteConfig = typeof siteConfig;

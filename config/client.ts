@@ -1,69 +1,128 @@
 // config/client.ts
 // ============================================================================
-// CLIENT CONFIGURATION - Single Source of Truth
+// CLIENT CONFIGURATION
+// Platform defaults & product identity
+// (NOT tenant data, NOT runtime state)
 // ============================================================================
 
+/* ============================================================================
+   TYPES
+============================================================================ */
+
+export type LLMProvider = "anthropic" | "openai" | "grok" | "gemini";
+
+export interface LLMProviderConfig {
+  enabled: boolean;
+  defaultModel: string;
+  models: readonly string[];
+}
+
+/* ============================================================================
+   CLIENT CONFIG
+============================================================================ */
+
 export const clientConfig = {
-  // ==========================================================================
-  // PLATFORM INFORMATION
-  // ==========================================================================
+  /* ==========================================================================
+     PLATFORM IDENTITY (OPERATOR DEFAULTS)
+     This describes who RUNS the platform, not who USES it
+  ========================================================================== */
   platform: {
-    name: "AI Agent Interviews",
+    name: "Connexions",
     tagline: "AI-Powered Research Interview Platform",
-    description: "Conduct structured research interviews with AI assistance. Validate ideas, gather insights, and analyse results at scale.",
+    description:
+      "Conduct structured research interviews with AI assistance. Validate ideas, gather insights, and analyse results at scale.",
     version: "1.0.0",
   },
 
-  // ==========================================================================
-  // COMPANY INFORMATION
-  // ==========================================================================
   company: {
-    name: "RaiseReady",
+    // Platform operator identity (default seed)
+    name: "Corporate AI Solutions",
     legalName: "Global Buildtech Australia Pty Ltd",
-    website: "https://raiseready.com",
-    supportEmail: "support@raiseready.com",
-    
+    website: "https://corporateaisolutions.com",
+    supportEmail: "dennis@corporateaisolutions.com",
+
     social: {
-      linkedin: "https://linkedin.com/company/raiseready",
-      twitter: "https://twitter.com/raiseready",
+      linkedin: "https://linkedin.com/company/corporateaisolutions",
+      twitter: "https://twitter.com/corpaisolutions",
     },
   },
 
-  // ==========================================================================
-  // INTERVIEW CONFIGURATION
-  // ==========================================================================
+  /* ==========================================================================
+     INTERVIEW DEFAULTS
+     Opinionated defaults — ALWAYS overridable per agent / interview
+  ========================================================================== */
   interview: {
-    // Default interviewer persona
-    defaultPersona: `You are professional, warm, and genuinely curious. You're conducting research, not selling.
-Your tone is conversational but respectful of the interviewee's time and expertise.
-You're here to learn and understand their perspective.`,
+    defaultPersona: `
+You are professional, warm, and genuinely curious.
+You are conducting research, not selling.
+Your tone is conversational and respectful of the interviewee’s time.
+You are here to learn and understand their perspective.
+`.trim(),
 
-    // Default consent requirements
     defaultConsent: [
       "I consent to this interview being recorded and analysed",
       "I consent to anonymised quotes being used in research findings",
       "I understand I can stop the interview at any time",
     ],
 
-    // Time settings
-    maxDurationMins: 45,
-    warningAtMins: 35,
-    
-    // AI model settings
-    aiModel: "claude-sonnet-4-20250514",
-    maxTokens: 4096,
-    temperature: 0.7,
+    timing: {
+      maxDurationMins: 45,
+      warningAtMins: 35,
+    },
+
+    /* ======================================================================
+       AI / LLM DEFAULTS
+       Claude is the default. Others are supported and switchable.
+    ====================================================================== */
+    ai: {
+      defaultProvider: "anthropic" as LLMProvider,
+
+      providers: {
+        anthropic: {
+          enabled: true,
+          defaultModel: "claude-sonnet-4-20250514",
+          models: [
+            "claude-sonnet-4-20250514",
+            "claude-opus-4-20250514",
+          ],
+        } satisfies LLMProviderConfig,
+
+        openai: {
+          enabled: true,
+          defaultModel: "gpt-4o-mini",
+          models: [
+            "gpt-4o-mini",
+            "gpt-4o",
+          ],
+        } satisfies LLMProviderConfig,
+
+        grok: {
+          enabled: true,
+          defaultModel: "grok-2",
+          models: ["grok-2"],
+        } satisfies LLMProviderConfig,
+
+        gemini: {
+          enabled: true,
+          defaultModel: "gemini-1.5-pro",
+          models: ["gemini-1.5-pro"],
+        } satisfies LLMProviderConfig,
+      },
+
+      maxTokens: 4096,
+      temperature: 0.7,
+    },
   },
 
-  // ==========================================================================
-  // THEME & BRANDING
-  // ==========================================================================
+  /* ==========================================================================
+     THEME & BRANDING (UI DEFAULTS)
+  ========================================================================== */
   theme: {
     mode: "dark" as "dark" | "light",
     colors: {
-      primary: "#8B5CF6",      // Purple
+      primary: "#8B5CF6",
       primaryHover: "#7C3AED",
-      accent: "#10B981",       // Emerald
+      accent: "#10B981",
       accentHover: "#059669",
       background: "#0F172A",
       surface: "#1E293B",
@@ -76,9 +135,10 @@ You're here to learn and understand their perspective.`,
     },
   },
 
-  // ==========================================================================
-  // FEATURE TOGGLES
-  // ==========================================================================
+  /* ==========================================================================
+     FEATURE FLAGS
+     Used for gradual rollout & enterprise toggles
+  ========================================================================== */
   features: {
     enableAnalytics: true,
     enableExport: true,
@@ -87,30 +147,33 @@ You're here to learn and understand their perspective.`,
     enableRealTimeAnalysis: true,
     enableBatchAnalysis: true,
   },
+} as const;
 
-  // ==========================================================================
-  // EXTERNAL SERVICES
-  // ==========================================================================
-  services: {
-    supabase: {
-      // Keys stored in env vars
-    },
-    anthropic: {
-      // Key stored in env vars
-    },
-  },
+/* ============================================================================
+   READ-ONLY HELPERS
+   (Encourage consistent access, discourage hard-coding)
+============================================================================ */
+
+export const getPlatformInfo = () => clientConfig.platform;
+export const getCompanyInfo = () => clientConfig.company;
+
+export const getInterviewDefaults = () => clientConfig.interview;
+export const getDefaultPersona = () => clientConfig.interview.defaultPersona;
+
+export const getAIDefaults = () => clientConfig.interview.ai;
+
+export const getDefaultLLMProvider = () =>
+  clientConfig.interview.ai.defaultProvider;
+
+export const getDefaultLLMModel = (provider?: LLMProvider) => {
+  const resolvedProvider =
+    provider ?? clientConfig.interview.ai.defaultProvider;
+
+  return clientConfig.interview.ai.providers[resolvedProvider].defaultModel;
 };
 
-// ==========================================================================
-// HELPER FUNCTIONS
-// ==========================================================================
-
-export const getPlatformName = () => clientConfig.platform.name;
-export const getCompanyName = () => clientConfig.company.name;
-export const getDefaultPersona = () => clientConfig.interview.defaultPersona;
-export const getAIModel = () => clientConfig.interview.aiModel;
-
-export const isFeatureEnabled = (feature: keyof typeof clientConfig.features) =>
-  clientConfig.features[feature];
+export const isFeatureEnabled = (
+  feature: keyof typeof clientConfig.features
+) => clientConfig.features[feature];
 
 export type ClientConfig = typeof clientConfig;
