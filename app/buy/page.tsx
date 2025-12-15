@@ -15,6 +15,7 @@ export default async function BuyPage({ searchParams }: BuyPageProps) {
     .from("agents")
     .select("name, estimated_duration_mins")
     .eq("id", demoAgentId)
+    .eq("is_demo", true)
     .single();
 
   if (!agent) notFound();
