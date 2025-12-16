@@ -1,4 +1,4 @@
-﻿// lib/prompts/interviewer-agent.ts
+﻿// lib/prompts/authoredInterviewerPrompt.ts
 
 export interface InterviewerConfig {
   agent_role: string;

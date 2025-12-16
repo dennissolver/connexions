@@ -1,10 +1,10 @@
 -- ============================================================================
 -- AI INTERVIEW AGENTS - EVALUATION SYSTEM
--- Tracks performance metrics for every interview, enables drill-down analysis
+-- Tracks performance metrics for every interviews, enables drill-down analysis
 -- ============================================================================
 
 -- ============================================================================
--- INTERVIEW EVALUATIONS (One per interview)
+-- INTERVIEW EVALUATIONS (One per interviews)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS interview_evaluations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

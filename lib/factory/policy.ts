@@ -18,7 +18,7 @@ export function enforceFactoryPolicy({
   }
 
   if (questionsCount > limits.maxQuestionsPerAgent) {
-    throw new Error("Too many interview questions");
+    throw new Error("Too many interviews questions");
   }
 
   if (durationMins > limits.maxInterviewDurationMins) {

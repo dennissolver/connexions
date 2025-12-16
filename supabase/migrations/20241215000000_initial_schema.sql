@@ -230,7 +230,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Increment total interview count
+-- Increment total interviews count
 CREATE OR REPLACE FUNCTION increment_agent_interviews(agent_uuid UUID)
 RETURNS void AS $$
 BEGIN
@@ -241,7 +241,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Increment completed interview count
+-- Increment completed interviews count
 CREATE OR REPLACE FUNCTION increment_agent_completed_interviews(agent_uuid UUID)
 RETURNS void AS $$
 BEGIN
@@ -351,7 +351,7 @@ CREATE POLICY "Service role manages platform setups" ON platform_setups
 
 COMMENT ON TABLE clients IS 'Client/tenant accounts for multi-tenant SaaS';
 COMMENT ON TABLE agents IS 'AI interviewer agents created by clients';
-COMMENT ON TABLE interviews IS 'Individual interview sessions conducted by agents';
+COMMENT ON TABLE interviews IS 'Individual interviews sessions conducted by agents';
 COMMENT ON TABLE setup_sessions IS 'Voice setup conversations before agent creation';
 COMMENT ON TABLE platform_setups IS 'White-label platform creation tracking';
 

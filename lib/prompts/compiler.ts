@@ -1,7 +1,14 @@
 // lib/prompts/compiler.ts
 
+export type InterviewPhase =
+  | "intro"
+  | "context"
+  | "questions"
+  | "wrapup"
+  | "complete";
+
 export interface InterviewFlowState {
-  phase: string;
+  phase: InterviewPhase;
   turn_count: number;
   answered_questions: string[];
   required_questions: string[];
@@ -48,5 +55,5 @@ Proceed accordingly.
 `.trim();
 }
 
-// Backwards-compatible alias for API routes
+// Backwards-compatible alias
 export const compileInterviewerPrompt = compileInterviewerSystemPrompt;

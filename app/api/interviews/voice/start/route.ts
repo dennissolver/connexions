@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { initialiseInterviewState } from "@/lib/interview";
+import { initialiseInterviewState } from "@/lib/interview/initialiseInterviewState";
+
 
 /**
- * POST /api/interview/voice/start
+ * POST /api/interviews/voice/start
  *
  * Responsibilities:
  * - Validate request
  * - Obtain ElevenLabs signed URL
- * - Create interview instance
- * - Initialise system-owned interview state
+ * - Create interviews instance
+ * - Initialise system-owned interviews state
  *
  * DOES NOT:
  * - Call LLMs
  * - Compile prompts
- * - Run interview turns
+ * - Run interviews turns
  * - Trigger evaluations
  */
 export async function POST(request: NextRequest) {
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     const signedUrlData = await signedUrlRes.json();
 
     /**
-     * 2. Create interview instance
+     * 2. Create interviews instance
      */
     const { data: interview, error: interviewError } = await supabase
       .from("interviews")
@@ -95,9 +96,9 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (interviewError || !interview?.id) {
-      console.error("Failed to create interview:", interviewError);
+      console.error("Failed to create interviews:", interviewError);
       return NextResponse.json(
-        { error: "Failed to create interview" },
+        { error: "Failed to create interviews" },
         { status: 500 }
       );
     }
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
     const interviewId = interview.id;
 
     /**
-     * 3. Initialise interview state (SYSTEM-OWNED)
+     * 3. Initialise interviews state (SYSTEM-OWNED)
      * Interview MUST NOT exist without state
      */
     await initialiseInterviewState(interviewId);
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (metricError) {
       console.warn(
-        "Failed to increment agent interview count:",
+        "Failed to increment agent interviews count:",
         metricError
       );
       // Non-fatal
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Voice start error:", error);
     return NextResponse.json(
-      { error: "Failed to start voice interview" },
+      { error: "Failed to start voice interviews" },
       { status: 500 }
     );
   }

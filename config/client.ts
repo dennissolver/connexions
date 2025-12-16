@@ -49,7 +49,7 @@ export const clientConfig = {
 
   /* ==========================================================================
      INTERVIEW DEFAULTS
-     Opinionated defaults — ALWAYS overridable per agent / interview
+     Opinionated defaults — ALWAYS overridable per agent / interviews
   ========================================================================== */
   interview: {
     defaultPersona: `
@@ -60,9 +60,9 @@ You are here to learn and understand their perspective.
 `.trim(),
 
     defaultConsent: [
-      "I consent to this interview being recorded and analysed",
+      "I consent to this interviews being recorded and analysed",
       "I consent to anonymised quotes being used in research findings",
-      "I understand I can stop the interview at any time",
+      "I understand I can stop the interviews at any time",
     ],
 
     timing: {

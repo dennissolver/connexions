@@ -118,7 +118,7 @@ export default function AgentSuccessPage() {
       setVerificationProgress(70);
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Step 3: Test that interview page loads
+      // Step 3: Test that interviews page loads
       const pageResponse = await fetch(`/api/agents/${agent?.slug || agentId}`);
       if (!pageResponse.ok) {
         throw new Error('Interview page not accessible');

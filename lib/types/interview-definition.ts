@@ -1,4 +1,4 @@
-// lib/types/interview-definition.ts
+// lib/types/interviews-definition.ts
 export interface InterviewDefinition {
   mode: "interview" | "survey";
 

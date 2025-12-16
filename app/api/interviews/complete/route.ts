@@ -1,5 +1,5 @@
-// app/api/interview/complete/route.ts
-// UPDATED: Now triggers evaluation after marking interview complete
+// app/api/interviews/complete/route.ts
+// UPDATED: Now triggers evaluation after marking interviews complete
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Find interview by ID or conversation ID
+    // Find interviews by ID or conversation ID
     let interview;
     if (interviewId) {
       const { data } = await supabase
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update interview status
+    // Update interviews status
     const updateData: any = {
       status: 'completed',
       completed_at: new Date().toISOString(),
@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
       .eq('id', interview.id);
 
     if (updateError) {
-      console.error('Failed to update interview:', updateError);
+      console.error('Failed to update interviews:', updateError);
       return NextResponse.json(
-        { error: 'Failed to complete interview' },
+        { error: 'Failed to complete interviews' },
         { status: 500 }
       );
     }
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Interview complete error:', error);
     return NextResponse.json(
-      { error: 'Failed to complete interview' },
+      { error: 'Failed to complete interviews' },
       { status: 500 }
     );
   }

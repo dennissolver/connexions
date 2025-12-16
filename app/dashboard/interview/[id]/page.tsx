@@ -83,7 +83,7 @@ export default function InterviewDetailPage() {
         setAnalysis(data.extracted_data.ai_analysis);
       }
     } catch (error) {
-      console.error('Failed to load interview:', error);
+      console.error('Failed to load interviews:', error);
     } finally {
       setLoading(false);
     }
@@ -109,11 +109,11 @@ export default function InterviewDetailPage() {
       const result = await response.json();
       setAnalysis(result.analysis);
       
-      // Refresh interview to get updated extracted_data
+      // Refresh interviews to get updated extracted_data
       loadInterview();
     } catch (error) {
       console.error('Analysis failed:', error);
-      alert('Failed to analyze interview. Please try again.');
+      alert('Failed to analyze interviews. Please try again.');
     } finally {
       setAnalyzing(false);
     }

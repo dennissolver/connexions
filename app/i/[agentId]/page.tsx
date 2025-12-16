@@ -65,7 +65,7 @@ export default function VoiceInterviewPage() {
       setAgent(json.agent ?? json);
       setStage('welcome');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load interview');
+      setError(err instanceof Error ? err.message : 'Failed to load interviews');
       setStage('error');
     }
   };
@@ -144,7 +144,7 @@ export default function VoiceInterviewPage() {
   };
 
   /* ----------------------------------------
-     Save interview state
+     Save interviews state
   ---------------------------------------- */
   const saveInterview = async (status: string) => {
     if (!interviewId) return;
@@ -155,7 +155,7 @@ export default function VoiceInterviewPage() {
         body: JSON.stringify({ interviewId, status })
       });
     } catch (err) {
-      console.error('Failed to save interview', err);
+      console.error('Failed to save interviews', err);
     }
   };
 

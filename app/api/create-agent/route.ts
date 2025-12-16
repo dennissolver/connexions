@@ -10,7 +10,7 @@ import {
   generateInterviewerPromptAsync,
   InterviewerConfig,
   RoleProfile,
-} from "@/lib/prompts/interviewer-agent";
+} from "@/lib/prompts/authoredInterviewerPrompt";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

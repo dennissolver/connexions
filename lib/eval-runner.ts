@@ -13,7 +13,7 @@ const anthropic = new Anthropic({
 });
 
 export async function runEvaluation(interviewId: string) {
-  // 1. Fetch interview
+  // 1. Fetch interviews
   const { data: interview } = await supabase
     .from("interviews")
     .select("id, agent_id, transcript")

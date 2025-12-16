@@ -25,7 +25,7 @@ export default function DemoPage() {
         {[
           {
             title: "Declared structure",
-            body: "The questions, objectives, roles, and assumptions defined when the interview was designed."
+            body: "The questions, objectives, roles, and assumptions defined when the interviews was designed."
           },
           {
             title: "Observed behaviour",

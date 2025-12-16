@@ -1,49 +1,40 @@
+// app/api/demo/start/route.ts
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   try {
-    console.log(
-      "SERVICE ROLE PRESENT:",
-      !!process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const formData = await req.formData();
+    const leadId = formData.get("leadId")?.toString();
 
-    const body = await req.json();
-
-    const name = body.name?.toString().trim();
-    const company = body.company?.toString().trim();
-    const email = body.email?.toString().trim();
-    const website = body.website?.toString().trim() || null;
-
-    if (!name || !company || !email) {
+    if (!leadId) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing leadId" },
         { status: 400 }
       );
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("demo_clients")
-      .insert({
-        name,
-        company,
-        email,
-        website,
-      })
+    // Optional: validate lead exists
+    const { data: lead, error: leadError } = await supabaseAdmin
+      .from("demo_leads")
       .select("id")
+      .eq("id", leadId)
       .single();
 
-    if (error) {
-      console.error("Supabase insert error:", error);
+    if (leadError || !lead) {
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: "Invalid leadId" },
+        { status: 400 }
       );
     }
 
-    return NextResponse.json({ demoClientId: data.id });
+    // Redirect into live demo experience
+    return NextResponse.redirect(
+      new URL(`/demo/live?leadId=${leadId}`, req.url)
+    );
+
   } catch (err) {
-    console.error("Demo start error:", err);
+    console.error("Demo start failed:", err);
     return NextResponse.json(
       { error: "Invalid request" },
       { status: 400 }

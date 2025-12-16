@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const transcriptUrl = urlData?.signedUrl || data.path;
 
-    // Update interview record with transcript URL
+    // Update interviews record with transcript URL
     await supabase
       .from('interviews')
       .update({
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
 
       if (!interview?.transcript_url) {
         return NextResponse.json(
-          { error: 'No transcript found for this interview' },
+          { error: 'No transcript found for this interviews' },
           { status: 404 }
         );
       }

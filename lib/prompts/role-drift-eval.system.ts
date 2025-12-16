@@ -5,7 +5,7 @@
  * Evaluate whether the interviewer agent is drifting away from its
  * originally defined role, tone, and behavioral constraints.
  *
- * This evaluation is NOT about interview quality.
+ * This evaluation is NOT about interviews quality.
  * It is about identity consistency over time.
  */
 

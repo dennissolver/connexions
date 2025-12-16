@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/send-email
- * Sends welcome email with interview link to client
+ * Sends welcome email with interviews link to client
  * 
  * Supports multiple email providers:
  * - Resend (RESEND_API_KEY)
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     if (!to || !interviewUrl) {
       return NextResponse.json(
-        { error: 'Email and interview URL required' },
+        { error: 'Email and interviews URL required' },
         { status: 400 }
       );
     }
