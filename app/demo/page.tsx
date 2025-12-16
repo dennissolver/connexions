@@ -25,9 +25,8 @@ export default function DemoPage() {
 
       const conv = await Conversation.startSession({
         agentId,
-        dynamicVariables: {
-          lead_id: leadId || "",
-        },
+        connectionType: "webrtc",
+        clientTools: {},
         onConnect: () => setStatus("connected"),
         onDisconnect: () => {
           setStatus("ended");
@@ -103,7 +102,6 @@ export default function DemoPage() {
           {status === "ended" && "Interview complete!"}
         </p>
 
-        {/* Start Button */}
         {status === "idle" && (
           <button
             onClick={startConversation}
@@ -113,14 +111,12 @@ export default function DemoPage() {
           </button>
         )}
 
-        {/* Connecting */}
         {status === "connecting" && (
           <button disabled className="w-full rounded-lg bg-neutral-700 text-neutral-300 py-4 font-medium">
             Connecting...
           </button>
         )}
 
-        {/* End Button */}
         {status === "connected" && (
           <button
             onClick={endConversation}
@@ -130,7 +126,6 @@ export default function DemoPage() {
           </button>
         )}
 
-        {/* Restart */}
         {status === "ended" && (
           <button
             onClick={() => setStatus("idle")}
