@@ -43,8 +43,7 @@ export default function LandingPage() {
 
           <p className="mt-6 text-xl text-neutral-300 leading-relaxed">
             Create AI voice interviewers for customer research, user feedback, exit interviews, 
-            compliance audits, and surveys — with observable quality, role adherence, 
-            and measurable performance.
+            compliance audits, and surveys with observable quality and measurable performance.
           </p>
 
           <div className="mt-10 flex flex-wrap gap-4">
@@ -59,7 +58,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-4 text-sm text-neutral-500">
-            No credit card required · Experience a live AI interview in 3 minutes
+            No credit card required - Experience a live AI interview in 3 minutes
           </p>
         </div>
       </section>
@@ -71,24 +70,24 @@ export default function LandingPage() {
             <div>
               <h2 className="text-2xl font-bold mb-4 text-red-400">The Problem</h2>
               <p className="text-neutral-300 mb-4">
-                Traditional interviews don't scale. Most AI interview tools lose tone over time, 
+                Traditional interviews do not scale. Most AI interview tools lose tone over time, 
                 ask inconsistent questions, drift away from their intended role, and give you 
                 no way to measure quality.
               </p>
               <p className="text-neutral-400">
-                Once deployed, you're blind. No visibility into performance, no alerts when 
+                Once deployed, you are blind. No visibility into performance, no alerts when 
                 things go wrong, no way to prove compliance.
               </p>
             </div>
             <div>
               <h2 className="text-2xl font-bold mb-4 text-green-400">Our Solution</h2>
               <p className="text-neutral-300 mb-4">
-                Connexions doesn't just run interviews — we evaluate them continuously. 
+                Connexions does not just run interviews - we evaluate them continuously. 
                 Every conversation is assessed for role adherence, goal achievement, 
                 and conversation quality.
               </p>
               <p className="text-neutral-400">
-                You don't hope it works. You see exactly how it's performing, with alerts 
+                You do not hope it works. You see exactly how it is performing, with alerts 
                 when agents drift from their intended behavior.
               </p>
             </div>
@@ -107,20 +106,36 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { icon: Mic, title: 'Natural Voice Conversations', description: 'ElevenLabs-powered voice AI that sounds human, responds naturally, and keeps conversations flowing.' },
-              { icon: BarChart3, title: 'Continuous Evaluation', description: 'Every interview is automatically evaluated for goal achievement, quality, and role adherence.' },
-              { icon: Shield, title: 'Drift Detection', description: 'Real-time alerts when your agent starts behaving differently than intended. Catch issues before they become problems.' },
-              { icon: Clock, title: 'Instant Deployment', description: 'Go from concept to live interviews in minutes. Our factory provisions your complete platform automatically.' },
-              { icon: Users, title: 'Multi-Tenant Ready', description: 'Run different interview types for different audiences. Each agent has its own configuration and analytics.' },
-              { icon: FileText, title: 'Rich Transcripts & Exports', description: 'Full conversation transcripts, structured data extraction, and CSV exports for your analysis.' },
-            ].map((feature, i) => (
-              <div key={i} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-                <feature.icon className="w-10 h-10 text-purple-500 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-neutral-400 text-sm">{feature.description}</p>
-              </div>
-            ))}
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <Mic className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Natural Voice Conversations</h3>
+              <p className="text-neutral-400 text-sm">ElevenLabs-powered voice AI that sounds human and keeps conversations flowing.</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <BarChart3 className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Continuous Evaluation</h3>
+              <p className="text-neutral-400 text-sm">Every interview is automatically evaluated for goal achievement and quality.</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <Shield className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Drift Detection</h3>
+              <p className="text-neutral-400 text-sm">Real-time alerts when your agent starts behaving differently than intended.</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <Clock className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Instant Deployment</h3>
+              <p className="text-neutral-400 text-sm">Go from concept to live interviews in minutes with automated provisioning.</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <Users className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Multi-Tenant Ready</h3>
+              <p className="text-neutral-400 text-sm">Run different interview types for different audiences with separate analytics.</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+              <FileText className="w-10 h-10 text-purple-500 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Rich Exports</h3>
+              <p className="text-neutral-400 text-sm">Full transcripts, structured data extraction, and CSV exports.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -136,19 +151,30 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { title: 'Customer Discovery', desc: 'Founders running hundreds of customer interviews to validate product-market fit' },
-              { title: 'User Research', desc: 'Product teams gathering qualitative feedback from users at scale' },
-              { title: 'Exit Interviews', desc: 'HR teams understanding why employees leave without the awkwardness' },
-              { title: 'Compliance Audits', desc: 'Legal teams conducting structured interviews with consistent questioning' },
-              { title: 'Grant Applications', desc: 'Researchers gathering standardized data for funding submissions' },
-              { title: 'Impact Assessment', desc: 'Nonprofits measuring program outcomes through beneficiary interviews' },
-            ].map((useCase, i) => (
-              <div key={i} className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
-                <h3 className="font-semibold mb-2">{useCase.title}</h3>
-                <p className="text-sm text-neutral-400">{useCase.desc}</p>
-              </div>
-            ))}
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">Customer Discovery</h3>
+              <p className="text-sm text-neutral-400">Founders running hundreds of customer interviews to validate product-market fit</p>
+            </div>
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">User Research</h3>
+              <p className="text-sm text-neutral-400">Product teams gathering qualitative feedback from users at scale</p>
+            </div>
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">Exit Interviews</h3>
+              <p className="text-sm text-neutral-400">HR teams understanding why employees leave without the awkwardness</p>
+            </div>
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">Compliance Audits</h3>
+              <p className="text-sm text-neutral-400">Legal teams conducting structured interviews with consistent questioning</p>
+            </div>
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">Grant Applications</h3>
+              <p className="text-sm text-neutral-400">Researchers gathering standardized data for funding submissions</p>
+            </div>
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-5">
+              <h3 className="font-semibold mb-2">Impact Assessment</h3>
+              <p className="text-sm text-neutral-400">Nonprofits measuring program outcomes through beneficiary interviews</p>
+            </div>
           </div>
         </div>
       </section>
@@ -162,20 +188,34 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-4 gap-8">
-            {[
-              { step: '1', title: 'Define Your Interview', desc: 'Tell our Setup Agent what you want to learn. Voice or form — your choice.' },
-              { step: '2', title: 'We Build Your Agent', desc: 'We create a custom AI interviewer trained on your requirements.' },
-              { step: '3', title: 'Share The Link', desc: 'Send your interview link to participants. They talk, AI listens.' },
-              { step: '4', title: 'Review Insights', desc: 'Get transcripts, analytics, and quality scores for every conversation.' },
-            ].map((item, i) => (
-              <div key={i} className="text-center">
-                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-purple-400 font-bold text-lg">{item.step}</span>
-                </div>
-                <h3 className="font-semibold mb-2">{item.title}</h3>
-                <p className="text-sm text-neutral-400">{item.desc}</p>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-purple-400 font-bold text-lg">1</span>
               </div>
-            ))}
+              <h3 className="font-semibold mb-2">Define Your Interview</h3>
+              <p className="text-sm text-neutral-400">Tell our Setup Agent what you want to learn.</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-purple-400 font-bold text-lg">2</span>
+              </div>
+              <h3 className="font-semibold mb-2">We Build Your Agent</h3>
+              <p className="text-sm text-neutral-400">We create a custom AI interviewer trained on your requirements.</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-purple-400 font-bold text-lg">3</span>
+              </div>
+              <h3 className="font-semibold mb-2">Share The Link</h3>
+              <p className="text-sm text-neutral-400">Send your interview link to participants.</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-purple-400 font-bold text-lg">4</span>
+              </div>
+              <h3 className="font-semibold mb-2">Review Insights</h3>
+              <p className="text-sm text-neutral-400">Get transcripts, analytics, and quality scores.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -196,7 +236,7 @@ export default function LandingPage() {
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 text-left">
             <DemoForm />
             <p className="text-xs text-neutral-500 text-center mt-4">
-              Takes ~3 minutes · No credit card · Demo data only
+              Takes about 3 minutes - No credit card - Demo data only
             </p>
           </div>
         </div>
@@ -208,26 +248,41 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">Platform Solutions Portfolio</h2>
             <p className="text-neutral-400 max-w-2xl mx-auto">
-              Connexions is built by Corporate AI Solutions. Here's what else we've built 
-              for clients across various sectors.
+              Connexions is built by Corporate AI Solutions. Here is what else we have built.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: Target, title: 'RaiseReady for VCs', desc: 'Pre-filter founders automatically. Save time and effort with AI-powered screening before you take meetings.', url: 'https://corporateaisolutions.com/raiseready-white-label/', color: 'text-blue-400' },
-              { icon: Rocket, title: 'RaiseReady for Impact', desc: 'Platform connecting impact founders with aligned investors. Streamlined due diligence and matching.', url: 'https://raiseready-six.vercel.app/', color: 'text-green-400' },
-              { icon: FileText, title: 'CleanClose', desc: 'Help founders cleanly close down their venture. Compliance, notifications, and wind-down in one platform.', url: 'https://corporateaisolutions.com/cleanclose/', color: 'text-orange-400' },
-              { icon: Heart, title: 'Disability Connect', desc: 'NDIS service matching platform connecting participants with providers based on needs and availability.', url: 'https://disabilityconnect.netlify.app/', color: 'text-pink-400' },
-              { icon: Building2, title: 'Grants Directory', desc: 'Comprehensive searchable directory of grants for Australian businesses and projects.', url: 'https://whats-your-project.com/grants-directory/', color: 'text-yellow-400' },
-              { icon: Briefcase, title: 'F2K Checkpoint', desc: 'Founder-to-market checkpoint tool for startup validation and progress tracking.', url: 'https://f2k-checkpoint-new.vercel.app/', color: 'text-purple-400' },
-            ].map((project, i) => (
-              <a key={i} href={project.url} target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
-                <project.icon className={`w-8 h-8 ${project.color} mb-4`} />
-                <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">{project.title}</h3>
-                <p className="text-sm text-neutral-400">{project.desc}</p>
-              </a>
-            ))}
+            <a href="https://corporateaisolutions.com/raiseready-white-label/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <Target className="w-8 h-8 text-blue-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">RaiseReady for VCs</h3>
+              <p className="text-sm text-neutral-400">Pre-filter founders automatically with AI-powered screening.</p>
+            </a>
+            <a href="https://raiseready-six.vercel.app/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <Rocket className="w-8 h-8 text-green-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">RaiseReady for Impact</h3>
+              <p className="text-sm text-neutral-400">Connect impact founders with aligned investors.</p>
+            </a>
+            <a href="https://corporateaisolutions.com/cleanclose/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <FileText className="w-8 h-8 text-orange-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">CleanClose</h3>
+              <p className="text-sm text-neutral-400">Help founders cleanly close down their venture.</p>
+            </a>
+            <a href="https://disabilityconnect.netlify.app/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <Heart className="w-8 h-8 text-pink-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">Disability Connect</h3>
+              <p className="text-sm text-neutral-400">NDIS service matching platform.</p>
+            </a>
+            <a href="https://whats-your-project.com/grants-directory/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <Building2 className="w-8 h-8 text-yellow-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">Grants Directory</h3>
+              <p className="text-sm text-neutral-400">Searchable directory of Australian grants.</p>
+            </a>
+            <a href="https://f2k-checkpoint-new.vercel.app/" target="_blank" rel="noopener noreferrer" className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition group">
+              <Briefcase className="w-8 h-8 text-purple-400 mb-4" />
+              <h3 className="font-semibold mb-2 group-hover:text-purple-400 transition">F2K Checkpoint</h3>
+              <p className="text-sm text-neutral-400">Founder validation and progress tracking.</p>
+            </a>
           </div>
         </div>
       </section>
@@ -237,7 +292,7 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Simple, Transparent Pricing</h2>
           <p className="text-neutral-400 mb-8">
-            No hidden fees. No per-seat charges. Just usage-based pricing that scales with you.
+            No hidden fees. No per-seat charges. Usage-based pricing that scales with you.
           </p>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8">
@@ -245,12 +300,30 @@ export default function LandingPage() {
             <p className="text-neutral-400 mb-6">Your own AI interview platform</p>
             
             <ul className="text-left space-y-3 mb-8">
-              {['Unlimited interview agents', '100 interviews included', 'Full analytics dashboard', 'Drift detection & alerts', 'CSV exports', 'Priority support'].map((item, i) => (
-                <li key={i} className="flex items-center gap-3 text-neutral-300">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  {item}
-                </li>
-              ))}
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                Unlimited interview agents
+              </li>
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                100 interviews included
+              </li>
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                Full analytics dashboard
+              </li>
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                Drift detection and alerts
+              </li>
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                CSV exports
+              </li>
+              <li className="flex items-center gap-3 text-neutral-300">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                Priority support
+              </li>
             </ul>
 
             <p className="text-sm text-neutral-500 mb-6">+ $4 per interview above 100</p>
@@ -268,7 +341,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-12">
             <div>
-              <h2 className="text-3xl font-bold mb-4">Let's Talk</h2>
+              <h2 className="text-3xl font-bold mb-4">Let us Talk</h2>
               <p className="text-neutral-400 mb-8">
                 Have questions about Connexions or need a custom solution? 
                 We build platform solutions for organizations across sectors.
@@ -310,16 +383,12 @@ export default function LandingPage() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
               <h3 className="font-semibold mb-4">About Corporate AI Solutions</h3>
               <p className="text-neutral-400 text-sm mb-4">
-                We're a boutique AI consultancy specializing in platform solutions 
+                We are a boutique AI consultancy specializing in platform solutions 
                 for venture capital, impact investing, disability services, and 
                 founder support organizations.
               </p>
-              <p className="text-neutral-400 text-sm mb-6">
-                From white-label SaaS platforms to custom AI agents, we build 
-                technology that solves real business problems.
-              </p>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 mt-6">
                 <div className="w-12 h-12 bg-neutral-800 rounded-full flex items-center justify-center text-xl font-bold">DM</div>
                 <div>
                   <div className="font-semibold">Dennis McMahon</div>
@@ -353,7 +422,7 @@ export default function LandingPage() {
           </div>
           
           <p className="text-center text-xs text-neutral-600 mt-6">
-            © 2024 Corporate AI Solutions. Built for production use. Designed for observability.
+            2024 Corporate AI Solutions. Built for production use.
           </p>
         </div>
       </footer>
