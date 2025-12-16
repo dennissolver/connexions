@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating ElevenLabs agent:', agentDisplayName);
 
-    // Build agent config
+    // Build agent config - using eleven_flash_v2 for English
     const agentConfig: any = {
       name: agentDisplayName,
       conversation_config: {
@@ -82,10 +82,10 @@ export async function POST(request: NextRequest) {
         },
         tts: {
           voice_id: voiceId,
-          model_id: 'eleven_turbo_v2_5',
+          model_id: 'eleven_flash_v2',
         },
         stt: { provider: 'elevenlabs' },
-        turn: { mode: 'turn_based' },
+        turn: { mode: 'turn' },
       },
     };
 
