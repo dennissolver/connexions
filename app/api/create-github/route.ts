@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     const githubToken = process.env.GITHUB_TOKEN;
     const templateOwner = process.env.GITHUB_TEMPLATE_OWNER || 'dennissolver';
-    const templateRepo = process.env.GITHUB_TEMPLATE_REPO || 'aiagentinterviewer';
+    const templateRepo = process.env.GITHUB_TEMPLATE_REPO || 'connexions';
 
     if (!githubToken) {
       return NextResponse.json({ error: 'GITHUB_TOKEN not configured' }, { status: 500 });
