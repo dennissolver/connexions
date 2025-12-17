@@ -1,14 +1,25 @@
-// app/layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { clientConfig } from '@/config/client';
+﻿import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { siteConfig } from "@/config/site";
+import dynamic from "next/dynamic";
 
-const inter = Inter({ subsets: ['latin'] });
+const DynamicToaster = dynamic(
+  () => import('sonner').then((mod) => mod.Toaster),
+  { ssr: false }
+);
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: clientConfig.platform.name,
-  description: clientConfig.platform.description,
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -17,8 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="dark">
+      <body className={inter.className}>
+        {children}
+        <DynamicToaster position="top-right" richColors />
+      </body>
     </html>
   );
 }
