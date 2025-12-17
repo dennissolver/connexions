@@ -139,7 +139,12 @@ ELEVENLABS_API_KEY=your-elevenlabs-api-key
 
 # Platform Configuration
 NEXT_PUBLIC_PLATFORM_NAME=Your Platform Name
-NEXT_PUBLIC_COMPANY_NAME=Your Company Name`,
+NEXT_PUBLIC_COMPANY_NAME=Your Company Name
+
+# Parent Platform (Connexions) - for centralized evaluation
+PARENT_API_URL=https://connexions.vercel.app
+PARENT_API_KEY=your-parent-api-key
+CHILD_PLATFORM_ID=your-platform-id`,
 
   'app/globals.css': `/* app/globals.css */
 @tailwind base;
@@ -535,6 +540,136 @@ export async function POST(request: NextRequest) {
   }
 }`,
 
+  // NEW: ElevenLabs webhook to capture transcripts
+  'app/api/webhooks/elevenlabs/route.ts': `// app/api/webhooks/elevenlabs/route.ts
+// Receives transcript data from ElevenLabs when conversations end
+// Stores locally and forwards to parent Connexions for centralized evaluation
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    console.log('ElevenLabs webhook received:', JSON.stringify(body, null, 2));
+
+    const {
+      conversation_id,
+      agent_id,
+      status,
+      transcript,
+      metadata,
+      analysis,
+    } = body;
+
+    if (!conversation_id) {
+      return NextResponse.json({ error: 'Missing conversation_id' }, { status: 400 });
+    }
+
+    const supabase = createClient();
+
+    // Find the interview by elevenlabs conversation ID or agent
+    const { data: interview, error: findError } = await supabase
+      .from('interviews')
+      .select('*, agents(*)')
+      .eq('status', 'in_progress')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (findError || !interview) {
+      console.warn('Could not find matching interview for conversation:', conversation_id);
+      // Still process and store the transcript
+    }
+
+    // Store transcript in local database
+    const { data: stored, error: storeError } = await supabase
+      .from('interview_transcripts')
+      .upsert({
+        interview_id: interview?.id,
+        elevenlabs_conversation_id: conversation_id,
+        elevenlabs_agent_id: agent_id,
+        transcript: transcript,
+        analysis: analysis,
+        metadata: metadata,
+        status: status,
+        received_at: new Date().toISOString(),
+      }, {
+        onConflict: 'elevenlabs_conversation_id'
+      })
+      .select()
+      .single();
+
+    if (storeError) {
+      console.error('Failed to store transcript:', storeError);
+    }
+
+    // Update interview status
+    if (interview?.id) {
+      await supabase
+        .from('interviews')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          transcript_received: true,
+        })
+        .eq('id', interview.id);
+    }
+
+    // Forward to parent Connexions for centralized evaluation
+    const parentApiUrl = process.env.PARENT_API_URL;
+    const parentApiKey = process.env.PARENT_API_KEY;
+    const childPlatformId = process.env.CHILD_PLATFORM_ID;
+
+    if (parentApiUrl && parentApiKey) {
+      try {
+        const parentResponse = await fetch(\`\${parentApiUrl}/api/child/transcript\`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': \`Bearer \${parentApiKey}\`,
+          },
+          body: JSON.stringify({
+            childPlatformId,
+            interviewId: interview?.id,
+            agentId: interview?.agent_id,
+            agentName: interview?.agents?.name,
+            conversationId: conversation_id,
+            transcript,
+            analysis,
+            metadata,
+            status,
+            completedAt: new Date().toISOString(),
+          }),
+        });
+
+        if (!parentResponse.ok) {
+          console.error('Failed to forward to parent:', await parentResponse.text());
+        } else {
+          console.log('Successfully forwarded transcript to parent for evaluation');
+        }
+      } catch (parentError) {
+        console.error('Error forwarding to parent:', parentError);
+        // Don't fail the webhook - parent forwarding is secondary
+      }
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      stored: !!stored,
+      interviewId: interview?.id 
+    });
+
+  } catch (error) {
+    console.error('ElevenLabs webhook error:', error);
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+  }
+}
+
+// Handle webhook verification (GET requests)
+export async function GET(request: NextRequest) {
+  return NextResponse.json({ status: 'ElevenLabs webhook endpoint active' });
+}`,
+
   'lib/supabase/client.ts': `// lib/supabase/client.ts
 import { createBrowserClient } from '@supabase/ssr';
 
@@ -564,7 +699,7 @@ export function createClient() {
 // DYNAMIC CONFIG FILE - Generated per client
 // ============================================================================
 
-function generateClientConfig(platformName: string, companyName: string, colors: { primary: string; accent: string; background: string }) {
+function generateClientConfig(platformName: string, companyName: string, colors: { primary: string; accent: string; background: string }, parentApiUrl?: string) {
   return `// config/client.ts
 export const clientConfig = {
   platform: {
@@ -589,6 +724,9 @@ export const clientConfig = {
   features: {
     enableAnalytics: true,
     enableExport: true,
+  },
+  parent: {
+    apiUrl: "${parentApiUrl || 'https://connexions.vercel.app'}",
   },
 } as const;
 
@@ -624,7 +762,17 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ELEVENLABS_API_KEY=your-elevenlabs-api-key
 NEXT_PUBLIC_PLATFORM_NAME=${platformName}
 NEXT_PUBLIC_COMPANY_NAME=${companyName}
+PARENT_API_URL=https://connexions.vercel.app
+PARENT_API_KEY=your-parent-api-key
+CHILD_PLATFORM_ID=your-platform-id
 \`\`\`
+
+## Webhook Configuration
+
+Configure ElevenLabs to send webhooks to:
+\`https://your-domain.vercel.app/api/webhooks/elevenlabs\`
+
+This enables automatic transcript capture and forwarding to the parent platform for evaluation.
 `;
 }
 
@@ -698,6 +846,7 @@ interface CreateGithubRequest {
   createdResources?: {
     supabaseUrl?: string;
     supabaseAnonKey?: string;
+    childPlatformId?: string;
   };
 }
 
@@ -783,7 +932,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Push dynamic config file
-    const clientConfigContent = generateClientConfig(platformName, companyName, colors);
+    const parentApiUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://connexions.vercel.app';
+    const clientConfigContent = generateClientConfig(platformName, companyName, colors, parentApiUrl);
     await pushFileToRepo(owner, safeName, 'config/client.ts', clientConfigContent, 'Add client config', headers);
 
     // Update README

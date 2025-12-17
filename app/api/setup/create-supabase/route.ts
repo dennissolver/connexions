@@ -26,28 +26,28 @@ export async function POST(request: NextRequest) {
 
     // ========== Check if project already exists ==========
     console.log('Checking for existing Supabase project:', safeName);
-    
+
     const listRes = await fetch('https://api.supabase.com/v1/projects', {
       headers: { Authorization: `Bearer ${supabaseAccessToken}` },
     });
-    
+
     const projects = await listRes.json();
     const existing = projects.find((p: any) => p.name === safeName);
-    
+
     if (existing) {
       console.log('Found existing project:', existing.id);
-      
+
       const keysRes = await fetch(
         `https://api.supabase.com/v1/projects/${existing.id}/api-keys`,
         { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
       );
-      
+
       const keys = await keysRes.json();
       const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
       const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
-      
+
       await configureAuthUrls(supabaseAccessToken, existing.id, inferredVercelUrl);
-      
+
       return NextResponse.json({
         success: true,
         projectId: existing.id,
@@ -212,6 +212,7 @@ async function runMigration(token: string, projectRef: string): Promise<void> {
   const schema = `
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Clients table
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
@@ -226,6 +227,7 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Agents table
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
@@ -244,12 +246,18 @@ CREATE TABLE IF NOT EXISTS agents (
   constraints TEXT[],
   system_prompt TEXT,
   first_message TEXT,
+  welcome_message TEXT,
+  closing_message TEXT,
+  primary_color TEXT DEFAULT '#8B5CF6',
+  background_color TEXT DEFAULT '#0F172A',
+  logo_url TEXT,
   total_interviews INT DEFAULT 0,
   completed_interviews INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Interviews table
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
@@ -265,17 +273,62 @@ CREATE TABLE IF NOT EXISTS interviews (
   summary TEXT,
   feedback JSONB DEFAULT '{}',
   extracted_data JSONB DEFAULT '{}',
+  transcript_received BOOLEAN DEFAULT FALSE,
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   duration_seconds INT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Interview transcripts table (for ElevenLabs webhook data)
+CREATE TABLE IF NOT EXISTS interview_transcripts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  elevenlabs_conversation_id TEXT UNIQUE,
+  elevenlabs_agent_id TEXT,
+  transcript JSONB,
+  analysis JSONB,
+  metadata JSONB,
+  status TEXT,
+  received_at TIMESTAMPTZ DEFAULT NOW(),
+  forwarded_to_parent BOOLEAN DEFAULT FALSE,
+  forwarded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
 CREATE INDEX IF NOT EXISTS idx_agents_client_id ON agents(client_id);
 CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
+CREATE INDEX IF NOT EXISTS idx_agents_elevenlabs ON agents(elevenlabs_agent_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
+CREATE INDEX IF NOT EXISTS idx_interviews_started ON interviews(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_interview_transcripts_interview ON interview_transcripts(interview_id);
+CREATE INDEX IF NOT EXISTS idx_interview_transcripts_conversation ON interview_transcripts(elevenlabs_conversation_id);
+
+-- Enable RLS on all tables
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview_transcripts ENABLE ROW LEVEL SECURITY;
+
+-- Service role policies (full access for backend)
+CREATE POLICY "Service role full access to clients" ON clients
+  FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access to agents" ON agents
+  FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access to interviews" ON interviews
+  FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Service role full access to interview_transcripts" ON interview_transcripts
+  FOR ALL USING (auth.role() = 'service_role');
+
+-- Public read access for agents (for interview pages)
+CREATE POLICY "Public read access to active agents" ON agents
+  FOR SELECT USING (status = 'active');
   `;
 
   const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
@@ -288,7 +341,8 @@ CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
   });
 
   if (!res.ok) {
-    console.warn('Migration warning (may already exist)');
+    const error = await res.text();
+    console.warn('Migration warning:', error);
   } else {
     console.log('Schema migration complete');
   }
