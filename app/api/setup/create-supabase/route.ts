@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
       const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
       const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
 
+      // Run migration on existing project (to add any missing tables)
+      console.log('Ensuring schema is up to date...');
+      await runMigration(supabaseAccessToken, existing.id);
+
       await configureAuthUrls(supabaseAccessToken, existing.id, inferredVercelUrl);
 
       return NextResponse.json({
@@ -210,9 +214,26 @@ async function configureAuthUrls(token: string, projectRef: string, vercelUrl: s
 
 async function runMigration(token: string, projectRef: string): Promise<void> {
   const schema = `
+-- ============================================================================
+-- CHILD PLATFORM SCHEMA v2.0
+-- Complete database schema for AI Interview child platforms
+-- ============================================================================
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Clients table
+-- Function for updating timestamps
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- CLIENTS TABLE
+-- Platform owners/administrators
+-- ============================================================================
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
@@ -227,12 +248,40 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Agents table
-CREATE TABLE IF NOT EXISTS agents (
+-- ============================================================================
+-- TEMPLATES TABLE
+-- Reusable interview templates
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
+  description TEXT,
+  category TEXT,
+  questions JSONB DEFAULT '[]',
+  settings JSONB DEFAULT '{}',
+  greeting TEXT,
+  closing_message TEXT,
+  estimated_duration_mins INT DEFAULT 10,
+  is_public BOOLEAN DEFAULT false,
+  use_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- AGENTS TABLE (Interview Panels)
+-- Each agent represents an interview panel/survey
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS agents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  template_id UUID REFERENCES templates(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE,
+  description TEXT,
+  greeting TEXT DEFAULT 'Hello! Thanks for joining this interview.',
+  questions JSONB DEFAULT '[]',
   status TEXT DEFAULT 'active',
   company_name TEXT,
   interview_purpose TEXT,
@@ -253,14 +302,37 @@ CREATE TABLE IF NOT EXISTS agents (
   logo_url TEXT,
   total_interviews INT DEFAULT 0,
   completed_interviews INT DEFAULT 0,
+  avg_duration_seconds INT,
+  avg_score DECIMAL(3,2),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Interviews table
+-- Generate slug from name if not provided
+CREATE OR REPLACE FUNCTION generate_agent_slug()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.slug IS NULL OR NEW.slug = '' THEN
+    NEW.slug := lower(regexp_replace(NEW.name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(NEW.id::text, 1, 8);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_generate_agent_slug ON agents;
+CREATE TRIGGER trigger_generate_agent_slug
+  BEFORE INSERT ON agents
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_agent_slug();
+
+-- ============================================================================
+-- INTERVIEWS TABLE
+-- Completed interview sessions
+-- ============================================================================
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  interviewee_id UUID,
   status TEXT DEFAULT 'pending',
   source TEXT DEFAULT 'voice',
   interviewee_name TEXT,
@@ -270,6 +342,7 @@ CREATE TABLE IF NOT EXISTS interviews (
   messages JSONB DEFAULT '[]',
   transcript TEXT,
   transcript_url TEXT,
+  audio_url TEXT,
   summary TEXT,
   feedback JSONB DEFAULT '{}',
   extracted_data JSONB DEFAULT '{}',
@@ -277,10 +350,34 @@ CREATE TABLE IF NOT EXISTS interviews (
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   duration_seconds INT,
+  metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Interview transcripts table (for ElevenLabs webhook data)
+-- ============================================================================
+-- RESPONSES TABLE
+-- Structured question/answer pairs extracted from interviews
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS responses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  question_index INT,
+  question_text TEXT,
+  answer_text TEXT,
+  answer_duration_seconds INT,
+  sentiment TEXT,
+  sentiment_score DECIMAL(3,2),
+  key_points TEXT[],
+  entities JSONB DEFAULT '{}',
+  follow_up_needed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- INTERVIEW TRANSCRIPTS TABLE
+-- Raw transcript data from ElevenLabs webhooks
+-- ============================================================================
 CREATE TABLE IF NOT EXISTS interview_transcripts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
@@ -296,39 +393,189 @@ CREATE TABLE IF NOT EXISTS interview_transcripts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for performance
+-- ============================================================================
+-- INTERVIEWEES TABLE
+-- Invited participants and their status
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS interviewees (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  custom_field TEXT,
+  custom_data JSONB DEFAULT '{}',
+  invite_token TEXT UNIQUE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'invited',
+  invited_at TIMESTAMPTZ DEFAULT NOW(),
+  reminded_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  interview_id UUID REFERENCES interviews(id),
+  source TEXT DEFAULT 'manual',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- EVALUATIONS TABLE
+-- AI evaluation results from parent platform
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS evaluations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  goal_achievement_score DECIMAL(3,2),
+  conversation_quality_score DECIMAL(3,2),
+  user_engagement_score DECIMAL(3,2),
+  prompt_adherence_score DECIMAL(3,2),
+  overall_score DECIMAL(3,2),
+  insights JSONB DEFAULT '{}',
+  strengths TEXT[],
+  weaknesses TEXT[],
+  recommendations TEXT[],
+  flags TEXT[],
+  evaluated_by TEXT DEFAULT 'parent_platform',
+  evaluated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- EMAIL LOGS TABLE
+-- Track sent invites/notifications for debugging
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS email_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interviewee_id UUID REFERENCES interviewees(id) ON DELETE SET NULL,
+  interview_id UUID REFERENCES interviews(id) ON DELETE SET NULL,
+  agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
+  email_type TEXT NOT NULL,
+  to_email TEXT NOT NULL,
+  to_name TEXT,
+  subject TEXT,
+  template_used TEXT,
+  status TEXT DEFAULT 'pending',
+  provider TEXT DEFAULT 'resend',
+  provider_id TEXT,
+  error TEXT,
+  metadata JSONB DEFAULT '{}',
+  sent_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  opened_at TIMESTAMPTZ,
+  clicked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- WEBHOOK LOGS TABLE
+-- Track incoming webhook deliveries for debugging
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS webhook_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source TEXT NOT NULL,
+  event_type TEXT,
+  endpoint TEXT,
+  method TEXT DEFAULT 'POST',
+  headers JSONB DEFAULT '{}',
+  payload JSONB,
+  status TEXT DEFAULT 'received',
+  status_code INT,
+  response JSONB,
+  error TEXT,
+  processing_time_ms INT,
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
+CREATE INDEX IF NOT EXISTS idx_templates_client_id ON templates(client_id);
+CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
 CREATE INDEX IF NOT EXISTS idx_agents_client_id ON agents(client_id);
 CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
 CREATE INDEX IF NOT EXISTS idx_agents_elevenlabs ON agents(elevenlabs_agent_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
 CREATE INDEX IF NOT EXISTS idx_interviews_started ON interviews(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_responses_interview_id ON responses(interview_id);
+CREATE INDEX IF NOT EXISTS idx_responses_agent_id ON responses(agent_id);
 CREATE INDEX IF NOT EXISTS idx_interview_transcripts_interview ON interview_transcripts(interview_id);
 CREATE INDEX IF NOT EXISTS idx_interview_transcripts_conversation ON interview_transcripts(elevenlabs_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_interviewees_agent_id ON interviewees(agent_id);
+CREATE INDEX IF NOT EXISTS idx_interviewees_email ON interviewees(email);
+CREATE INDEX IF NOT EXISTS idx_interviewees_invite_token ON interviewees(invite_token);
+CREATE INDEX IF NOT EXISTS idx_interviewees_status ON interviewees(status);
+CREATE INDEX IF NOT EXISTS idx_evaluations_interview_id ON evaluations(interview_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_agent_id ON evaluations(agent_id);
+CREATE INDEX IF NOT EXISTS idx_email_logs_interviewee ON email_logs(interviewee_id);
+CREATE INDEX IF NOT EXISTS idx_email_logs_status ON email_logs(status);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_source ON webhook_logs(source);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_status ON webhook_logs(status);
 
--- Enable RLS on all tables
+-- ============================================================================
+-- TRIGGERS
+-- ============================================================================
+DROP TRIGGER IF EXISTS update_clients_updated_at ON clients;
+CREATE TRIGGER update_clients_updated_at
+  BEFORE UPDATE ON clients FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_templates_updated_at ON templates;
+CREATE TRIGGER update_templates_updated_at
+  BEFORE UPDATE ON templates FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_agents_updated_at ON agents;
+CREATE TRIGGER update_agents_updated_at
+  BEFORE UPDATE ON agents FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_interviewees_updated_at ON interviewees;
+CREATE TRIGGER update_interviewees_updated_at
+  BEFORE UPDATE ON interviewees FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- ROW LEVEL SECURITY
+-- ============================================================================
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interview_transcripts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviewees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_logs ENABLE ROW LEVEL SECURITY;
 
--- Service role policies (full access for backend)
-CREATE POLICY "Service role full access to clients" ON clients
-  FOR ALL USING (auth.role() = 'service_role');
+-- Drop existing policies (idempotent)
+DROP POLICY IF EXISTS "Allow all on clients" ON clients;
+DROP POLICY IF EXISTS "Allow all on templates" ON templates;
+DROP POLICY IF EXISTS "Allow all on agents" ON agents;
+DROP POLICY IF EXISTS "Allow all on interviews" ON interviews;
+DROP POLICY IF EXISTS "Allow all on responses" ON responses;
+DROP POLICY IF EXISTS "Allow all on interview_transcripts" ON interview_transcripts;
+DROP POLICY IF EXISTS "Allow all on interviewees" ON interviewees;
+DROP POLICY IF EXISTS "Allow all on evaluations" ON evaluations;
+DROP POLICY IF EXISTS "Allow all on email_logs" ON email_logs;
+DROP POLICY IF EXISTS "Allow all on webhook_logs" ON webhook_logs;
 
-CREATE POLICY "Service role full access to agents" ON agents
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Service role full access to interviews" ON interviews
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Service role full access to interview_transcripts" ON interview_transcripts
-  FOR ALL USING (auth.role() = 'service_role');
-
--- Public read access for agents (for interview pages)
-CREATE POLICY "Public read access to active agents" ON agents
-  FOR SELECT USING (status = 'active');
+-- Simple allow-all policies
+CREATE POLICY "Allow all on clients" ON clients FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on templates" ON templates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on agents" ON agents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interviews" ON interviews FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on responses" ON responses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interview_transcripts" ON interview_transcripts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interviewees" ON interviewees FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on evaluations" ON evaluations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on email_logs" ON email_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on webhook_logs" ON webhook_logs FOR ALL USING (true) WITH CHECK (true);
   `;
 
   const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
@@ -349,9 +596,15 @@ CREATE POLICY "Public read access to active agents" ON agents
 }
 
 async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Promise<void> {
-  const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
+  const buckets = [
+    { name: 'transcripts', public: false },
+    { name: 'recordings', public: false },
+    { name: 'exports', public: false },
+    { name: 'assets', public: true },
+    { name: 'attachments', public: false },
+  ];
 
-  for (const name of buckets) {
+  for (const bucket of buckets) {
     try {
       await fetch(`${supabaseUrl}/storage/v1/bucket`, {
         method: 'POST',
@@ -361,14 +614,14 @@ async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Pr
           apikey: serviceKey,
         },
         body: JSON.stringify({
-          id: name,
-          name: name,
-          public: name === 'assets',
+          id: bucket.name,
+          name: bucket.name,
+          public: bucket.public,
         }),
       });
-      console.log(`Created bucket: ${name}`);
+      console.log(`Created bucket: ${bucket.name}`);
     } catch (err) {
-      console.warn(`Bucket ${name} may already exist`);
+      console.warn(`Bucket ${bucket.name} may already exist`);
     }
   }
 }

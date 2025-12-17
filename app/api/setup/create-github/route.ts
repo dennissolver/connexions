@@ -1,1774 +1,358 @@
-// app/api/setup/create-github/route.ts
+// app/api/setup/create-supabase/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-
-const GITHUB_API = 'https://api.github.com';
-
-// ============================================================================
-// TEMPLATE FILES - These get pushed to every child repo
-// ============================================================================
-
-const TEMPLATE_FILES: Record<string, string> = {
-  'package.json': `{
-  "name": "connexions-interview-platform",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "@elevenlabs/client": "^0.12.2",
-    "@google/generative-ai": "^0.24.1",
-    "@supabase/ssr": "^0.5.0",
-    "@supabase/supabase-js": "^2.45.0",
-    "@tailwindcss/typography": "^0.5.19",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.460.0",
-    "next": "14.2.15",
-    "openai": "^6.14.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tailwind-merge": "^3.4.0",
-    "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.17.6",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3"
-  }
-}`,
-
-  'next.config.js': `// next.config.js
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
-  },
-};
-
-module.exports = nextConfig;`,
-
-  'tsconfig.json': `{
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./*"] }
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
-}`,
-
-  'tailwind.config.js': `// tailwind.config.js
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  theme: {
-    extend: {
-      colors: {
-        primary: 'var(--color-primary)',
-        accent: 'var(--color-accent)',
-        background: 'var(--color-background)',
-      },
-    },
-  },
-  plugins: [
-    require('tailwindcss-animate'),
-    require('@tailwindcss/typography'),
-  ],
-};`,
-
-  'postcss.config.js': `// postcss.config.js
-module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};`,
-
-  '.gitignore': `# Dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# Next.js
-/.next/
-/out/
-
-# Production
-/build
-
-# Misc
-.DS_Store
-*.pem
-
-# Local env files
-.env*.local
-.env
-
-# Vercel
-.vercel
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts`,
-
-  '.env.example': `# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# ElevenLabs Configuration  
-ELEVENLABS_API_KEY=your-elevenlabs-api-key
-ELEVENLABS_SETUP_AGENT_ID=your-setup-agent-id
-
-# Platform Configuration
-NEXT_PUBLIC_PLATFORM_NAME=Your Platform Name
-NEXT_PUBLIC_COMPANY_NAME=Your Company Name
-
-# Parent Platform (Connexions) - for centralized evaluation
-PARENT_API_URL=https://connexions.vercel.app
-PARENT_API_KEY=your-parent-api-key
-CHILD_PLATFORM_ID=your-platform-id
-
-# Email (optional - for sending invites)
-RESEND_API_KEY=your-resend-api-key`,
-
-  'app/globals.css': `/* app/globals.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --color-primary: #8B5CF6;
-  --color-accent: #10B981;
-  --color-background: #0F172A;
-}
-
-body {
-  background-color: var(--color-background);
-  color: #F8FAFC;
-}`,
-
-  'app/layout.tsx': `// app/layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { clientConfig } from '@/config/client';
-
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: clientConfig.platform.name,
-  description: clientConfig.platform.description,
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
-    </html>
-  );
-}`,
-
-  // ============================================================================
-  // MAIN PAGE - AI Setup Agent
-  // ============================================================================
-  'app/page.tsx': `// app/page.tsx
-import { Suspense } from 'react';
-import SetupClient from './SetupClient';
-
-export default function HomePage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
-      </div>
-    }>
-      <SetupClient />
-    </Suspense>
-  );
-}`,
-
-  // ============================================================================
-  // SETUP CLIENT - Main AI Agent Setup Flow
-  // ============================================================================
-  'app/SetupClient.tsx': `// app/SetupClient.tsx
-'use client';
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Phone, PhoneOff, Loader2, CheckCircle, Plus,
-  ArrowRight, MessageSquare, Bot, Users, Settings
-} from 'lucide-react';
-import VoiceAvatar from './components/VoiceAvatar';
-import { clientConfig } from '@/config/client';
-import { createClient } from '@/lib/supabase';
-
-type SetupState =
-  | 'loading'
-  | 'dashboard'
-  | 'ready_for_setup'
-  | 'setup_in_progress'
-  | 'processing'
-  | 'panel_ready'
-  | 'error';
-
-interface Panel {
-  id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  interview_count?: number;
-}
-
-export default function SetupClient() {
-  const router = useRouter();
-  const widgetContainerRef = useRef<HTMLDivElement>(null);
-  const widgetMountedRef = useRef(false);
-
-  const [state, setState] = useState<SetupState>('loading');
-  const [panels, setPanels] = useState<Panel[]>([]);
-  const [currentPanelId, setCurrentPanelId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [showWidget, setShowWidget] = useState(false);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-
-  const SETUP_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID || '';
-
-  // Load ElevenLabs script on mount
-  useEffect(() => {
-    const existingScript = document.querySelector('script[src*="elevenlabs.io/convai-widget"]');
-    if (existingScript) {
-      setScriptLoaded(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://elevenlabs.io/convai-widget/index.js';
-    script.async = true;
-    script.onload = () => {
-      console.log('[Setup] ElevenLabs script loaded');
-      setScriptLoaded(true);
-    };
-    document.body.appendChild(script);
-  }, []);
-
-  // Mount widget
-  useEffect(() => {
-    if (!showWidget || !SETUP_AGENT_ID || !scriptLoaded || !widgetContainerRef.current) {
-      return;
-    }
-
-    if (widgetMountedRef.current) {
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      if (widgetContainerRef.current && !widgetMountedRef.current) {
-        widgetMountedRef.current = true;
-        widgetContainerRef.current.innerHTML = \`<elevenlabs-convai agent-id="\${SETUP_AGENT_ID}"></elevenlabs-convai>\`;
-      }
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, [showWidget, SETUP_AGENT_ID, scriptLoaded]);
-
-  // Load existing panels
-  useEffect(() => {
-    loadPanels();
-  }, []);
-
-  async function loadPanels() {
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('agents')
-        .select('id, name, description, created_at')
-        .order('created_at', { ascending: false });
-      
-      setPanels(data || []);
-      setState(data && data.length > 0 ? 'dashboard' : 'ready_for_setup');
-    } catch (err) {
-      console.error('Failed to load panels:', err);
-      setState('ready_for_setup');
-    }
-  }
-
-  const startSetupCall = async () => {
-    widgetMountedRef.current = false;
-    setState('setup_in_progress');
-    setShowWidget(true);
-  };
-
-  const endCall = async () => {
-    setShowWidget(false);
-    widgetMountedRef.current = false;
-    
-    if (widgetContainerRef.current) {
-      widgetContainerRef.current.innerHTML = '';
-    }
-    
-    setState('processing');
-    
-    // Poll for new panel creation
-    const checkForNewPanel = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('agents')
-        .select('id, name')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (data && data.length > 0) {
-        const latestPanel = data[0];
-        if (!panels.find(p => p.id === latestPanel.id)) {
-          setCurrentPanelId(latestPanel.id);
-          setState('panel_ready');
-          return;
-        }
-      }
-      
-      // Retry after delay
-      setTimeout(checkForNewPanel, 2000);
-    };
-    
-    setTimeout(checkForNewPanel, 3000);
-  };
-
-  const WidgetContainer = () => (
-    <div 
-      ref={widgetContainerRef} 
-      className={\`mb-6 min-h-[80px] \${showWidget ? 'block' : 'hidden'}\`}
-    />
-  );
-
-  const renderContent = () => {
-    switch (state) {
-      case 'loading':
-        return (
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-            <p className="text-slate-400">Loading...</p>
-          </div>
-        );
-
-      case 'dashboard':
-        return (
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-2xl font-bold">{clientConfig.platform.name}</h1>
-                <p className="text-slate-400">{clientConfig.company.name}</p>
-              </div>
-              <button
-                onClick={() => setState('ready_for_setup')}
-                className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg flex items-center gap-2 transition"
-              >
-                <Plus className="w-4 h-4" />
-                New Panel
-              </button>
-            </div>
-
-            <div className="grid gap-4">
-              {panels.map((panel) => (
-                <div key={panel.id} className="bg-slate-900 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center">
-                      <Bot className="w-6 h-6 text-purple-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{panel.name}</h3>
-                      <p className="text-sm text-slate-400">{panel.description || 'No description'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={\`/i/\${panel.id}\`}
-                      target="_blank"
-                      className="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg flex items-center gap-2 text-sm transition"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Test
-                    </a>
-                    <a
-                      href={\`/panel/\${panel.id}/invite\`}
-                      className="bg-purple-600 hover:bg-purple-500 px-3 py-2 rounded-lg flex items-center gap-2 text-sm transition"
-                    >
-                      <Users className="w-4 h-4" />
-                      Invite
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'ready_for_setup':
-        return (
-          <div className="text-center max-w-lg mx-auto">
-            <VoiceAvatar size="lg" label="AI Setup Assistant" />
-            <h1 className="text-3xl font-bold mb-4">
-              {panels.length > 0 ? 'Create New Panel' : 'Welcome!'}
-            </h1>
-            <p className="text-slate-300 mb-2">
-              {panels.length > 0 
-                ? "Let's set up another interview panel."
-                : "Let's create your first AI interview panel."}
-            </p>
-            <p className="text-slate-400 mb-8">
-              Tell the assistant what kind of interviews or surveys you want to run.
-            </p>
-            <button
-              onClick={startSetupCall}
-              disabled={!SETUP_AGENT_ID || !scriptLoaded}
-              className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 px-8 py-4 rounded-xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25 disabled:opacity-50"
-            >
-              <Phone className="w-6 h-6" />
-              {scriptLoaded ? 'Start Setup Call' : 'Loading...'}
-            </button>
-            {panels.length > 0 && (
-              <button
-                onClick={() => setState('dashboard')}
-                className="block mx-auto mt-4 text-slate-400 hover:text-white transition"
-              >
-                Back to Dashboard
-              </button>
-            )}
-            <WidgetContainer />
-          </div>
-        );
-
-      case 'setup_in_progress':
-        return (
-          <div className="text-center max-w-lg mx-auto">
-            <VoiceAvatar isActive isSpeaking size="lg" label="Speaking..." />
-            <h2 className="text-2xl font-bold text-green-400 mb-4">Call in Progress</h2>
-            <p className="text-slate-400 mb-6">
-              Describe your interview panel. When finished, click End Call.
-            </p>
-            <WidgetContainer />
-            <button
-              onClick={endCall}
-              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-500 px-6 py-3 rounded-lg font-medium transition"
-            >
-              <PhoneOff className="w-5 h-5" />
-              End Call
-            </button>
-          </div>
-        );
-
-      case 'processing':
-        return (
-          <div className="text-center max-w-lg mx-auto">
-            <VoiceAvatar isActive size="lg" label="Creating panel..." />
-            <h2 className="text-2xl font-bold mb-4">Creating Your Panel</h2>
-            <p className="text-slate-400 mb-8">Processing your requirements...</p>
-            <div className="space-y-3 text-left bg-slate-900 rounded-xl p-6">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-slate-300">Setup conversation captured</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
-                <span className="text-purple-400">Building interview agent...</span>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'panel_ready':
-        return (
-          <div className="text-center max-w-lg mx-auto">
-            <VoiceAvatar size="lg" label="Panel ready!" />
-            <h2 className="text-3xl font-bold text-green-400 mb-4">Panel Created!</h2>
-            <p className="text-slate-400 mb-8">
-              Your interview panel is ready. You can now invite interviewees.
-            </p>
-            <div className="flex flex-col gap-3">
-              <a
-                href={\`/panel/\${currentPanelId}/complete\`}
-                className="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-lg font-semibold transition"
-              >
-                View Panel & Invite
-                <ArrowRight className="w-5 h-5" />
-              </a>
-              <button
-                onClick={() => {
-                  loadPanels();
-                  setState('dashboard');
-                }}
-                className="text-slate-400 hover:text-white transition"
-              >
-                Go to Dashboard
-              </button>
-            </div>
-          </div>
-        );
-
-      case 'error':
-        return (
-          <div className="text-center max-w-lg mx-auto">
-            <h2 className="text-2xl font-bold text-red-400 mb-4">Something Went Wrong</h2>
-            <p className="text-slate-400 mb-8">{error}</p>
-            <button 
-              onClick={() => setState('ready_for_setup')}
-              className="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-lg"
-            >
-              Try Again
-            </button>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      {renderContent()}
-    </div>
-  );
-}`,
-
-  // ============================================================================
-  // VOICE AVATAR COMPONENT
-  // ============================================================================
-  'app/components/VoiceAvatar.tsx': `// app/components/VoiceAvatar.tsx
-'use client';
-
-import { Bot } from 'lucide-react';
-
-interface VoiceAvatarProps {
-  isActive?: boolean;
-  isSpeaking?: boolean;
-  size?: 'sm' | 'md' | 'lg';
-  label?: string;
-}
-
-export default function VoiceAvatar({ 
-  isActive = false, 
-  isSpeaking = false,
-  size = 'md',
-  label
-}: VoiceAvatarProps) {
-  const sizeClasses = {
-    sm: 'w-16 h-16',
-    md: 'w-24 h-24',
-    lg: 'w-32 h-32',
-  };
-
-  const iconSizes = {
-    sm: 'w-8 h-8',
-    md: 'w-12 h-12',
-    lg: 'w-16 h-16',
-  };
-
-  return (
-    <div className="flex flex-col items-center mb-6">
-      <div className="relative">
-        {/* Pulse rings when active */}
-        {isActive && (
-          <>
-            <div className={\`absolute inset-0 \${sizeClasses[size]} rounded-full bg-purple-500/20 animate-ping\`} />
-            <div className={\`absolute inset-0 \${sizeClasses[size]} rounded-full bg-purple-500/10 animate-pulse\`} />
-          </>
-        )}
-        
-        {/* Speaking indicator */}
-        {isSpeaking && (
-          <div className={\`absolute inset-0 \${sizeClasses[size]} rounded-full border-4 border-green-400 animate-pulse\`} />
-        )}
-        
-        {/* Main avatar */}
-        <div className={\`relative \${sizeClasses[size]} rounded-full flex items-center justify-center \${
-          isActive 
-            ? 'bg-gradient-to-br from-purple-600 to-purple-800' 
-            : 'bg-slate-800'
-        } shadow-xl\`}>
-          <Bot className={\`\${iconSizes[size]} \${isActive ? 'text-white' : 'text-purple-400'}\`} />
-        </div>
-      </div>
-      
-      {label && (
-        <p className={\`mt-3 text-sm \${isActive ? 'text-green-400' : 'text-slate-400'}\`}>
-          {label}
-        </p>
-      )}
-    </div>
-  );
-}`,
-
-  // ============================================================================
-  // PANEL COMPLETE PAGE
-  // ============================================================================
-  'app/panel/[panelId]/complete/page.tsx': `// app/panel/[panelId]/complete/page.tsx
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  CheckCircle, Copy, Mail, Users, Phone, 
-  Upload, ArrowRight, Loader2, Bot 
-} from 'lucide-react';
-import { createClient } from '@/lib/supabase';
-import { clientConfig } from '@/config/client';
-
-interface Panel {
-  id: string;
-  name: string;
-  description: string;
-  greeting: string;
-  questions: any[];
-}
-
-export default function PanelCompletePage() {
-  const params = useParams();
-  const panelId = params.panelId as string;
-  
-  const [panel, setPanel] = useState<Panel | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [interviewUrl, setInterviewUrl] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setInterviewUrl(\`\${window.location.origin}/i/\${panelId}\`);
-    }
-    loadPanel();
-  }, [panelId]);
-
-  async function loadPanel() {
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('id', panelId)
-        .single();
-      
-      setPanel(data);
-    } catch (err) {
-      console.error('Failed to load panel:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(interviewUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!panel) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Panel Not Found</h1>
-          <Link href="/" className="text-purple-400 hover:text-purple-300">
-            Go to Dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        {/* Success Header */}
-        <div className="text-center mb-10">
-          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-green-400" />
-          </div>
-          <h1 className="text-3xl font-bold mb-2">Great Work!</h1>
-          <p className="text-xl text-slate-300">
-            Your <span className="text-purple-400">{panel.name}</span> panel is ready
-          </p>
-        </div>
-
-        {/* Interview Link */}
-        <div className="bg-slate-900 rounded-2xl p-6 mb-6">
-          <label className="block text-sm text-slate-400 mb-2">Interview Link</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={interviewUrl}
-              readOnly
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm"
-            />
-            <button
-              onClick={copyLink}
-              className={\`px-4 py-2 rounded-lg flex items-center gap-2 transition \${
-                copied 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-purple-600 hover:bg-purple-500 text-white'
-              }\`}
-            >
-              <Copy className="w-4 h-4" />
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="grid sm:grid-cols-2 gap-4 mb-8">
-          <Link
-            href={\`/i/\${panelId}\`}
-            className="flex items-center justify-center gap-3 bg-green-600 hover:bg-green-500 px-6 py-4 rounded-xl font-semibold transition"
-          >
-            <Phone className="w-5 h-5" />
-            Test Interview
-          </Link>
-          <Link
-            href={\`/panel/\${panelId}/invite\`}
-            className="flex items-center justify-center gap-3 bg-purple-600 hover:bg-purple-500 px-6 py-4 rounded-xl font-semibold transition"
-          >
-            <Users className="w-5 h-5" />
-            Invite Interviewees
-          </Link>
-        </div>
-
-        {/* Next Steps */}
-        <div className="bg-slate-900/50 rounded-2xl p-6">
-          <h3 className="font-semibold mb-4">Next Steps</h3>
-          <ul className="space-y-3">
-            <li className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-xs text-purple-400">1</span>
-              </div>
-              <div>
-                <p className="font-medium">Test your interviewer</p>
-                <p className="text-sm text-slate-400">
-                  Experience what your interviewees will see
-                </p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-xs text-purple-400">2</span>
-              </div>
-              <div>
-                <p className="font-medium">Invite participants</p>
-                <p className="text-sm text-slate-400">
-                  Send individual invites or upload a list
-                </p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-xs text-purple-400">3</span>
-              </div>
-              <div>
-                <p className="font-medium">Collect insights</p>
-                <p className="text-sm text-slate-400">
-                  Review transcripts and AI-generated summaries
-                </p>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        {/* Back to Dashboard */}
-        <div className="text-center mt-8">
-          <Link href="/" className="text-slate-400 hover:text-white transition">
-            ← Back to Dashboard
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}`,
-
-  // ============================================================================
-  // INVITE PAGE - Single & Bulk Invites
-  // ============================================================================
-  'app/panel/[panelId]/invite/page.tsx': `// app/panel/[panelId]/invite/page.tsx
-'use client';
-
-import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  Mail, Upload, Users, Send, Loader2, CheckCircle, 
-  AlertCircle, Download, ArrowLeft, FileSpreadsheet,
-  X, User
-} from 'lucide-react';
-import { createClient } from '@/lib/supabase';
-import { clientConfig } from '@/config/client';
-
-interface Panel {
-  id: string;
-  name: string;
-}
-
-interface Interviewee {
-  name: string;
-  email: string;
-  custom_field?: string;
-}
-
-interface InviteResult {
-  email: string;
-  success: boolean;
-  error?: string;
-}
-
-export default function InvitePage() {
-  const params = useParams();
-  const panelId = params.panelId as string;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [panel, setPanel] = useState<Panel | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
-  
-  // Single invite state
-  const [singleName, setSingleName] = useState('');
-  const [singleEmail, setSingleEmail] = useState('');
-  const [sendingSingle, setSendingSingle] = useState(false);
-  const [singleResult, setSingleResult] = useState<InviteResult | null>(null);
-  
-  // Bulk invite state
-  const [bulkInterviewees, setBulkInterviewees] = useState<Interviewee[]>([]);
-  const [sendingBulk, setSendingBulk] = useState(false);
-  const [bulkResults, setBulkResults] = useState<InviteResult[]>([]);
-  const [parseError, setParseError] = useState('');
-
-  useEffect(() => {
-    loadPanel();
-  }, [panelId]);
-
-  async function loadPanel() {
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('agents')
-        .select('id, name')
-        .eq('id', panelId)
-        .single();
-      setPanel(data);
-    } catch (err) {
-      console.error('Failed to load panel:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Single invite
-  async function handleSingleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    setSendingSingle(true);
-    setSingleResult(null);
-
-    try {
-      const res = await fetch('/api/invites/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          panelId,
-          interviewees: [{ name: singleName, email: singleEmail }],
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (res.ok && data.results?.[0]) {
-        setSingleResult(data.results[0]);
-        if (data.results[0].success) {
-          setSingleName('');
-          setSingleEmail('');
-        }
-      } else {
-        setSingleResult({ email: singleEmail, success: false, error: data.error || 'Failed to send' });
-      }
-    } catch (err) {
-      setSingleResult({ email: singleEmail, success: false, error: 'Network error' });
-    } finally {
-      setSendingSingle(false);
-    }
-  }
-
-  // File upload handler
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setParseError('');
-    setBulkInterviewees([]);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/invites/parse-excel', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.interviewees) {
-        setBulkInterviewees(data.interviewees);
-      } else {
-        setParseError(data.error || 'Failed to parse file');
-      }
-    } catch (err) {
-      setParseError('Failed to upload file');
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  }
-
-  // Bulk invite
-  async function handleBulkInvite() {
-    if (bulkInterviewees.length === 0) return;
-    
-    setSendingBulk(true);
-    setBulkResults([]);
-
-    try {
-      const res = await fetch('/api/invites/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          panelId,
-          interviewees: bulkInterviewees,
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (res.ok && data.results) {
-        setBulkResults(data.results);
-        // Clear successful ones from list
-        const failedEmails = data.results
-          .filter((r: InviteResult) => !r.success)
-          .map((r: InviteResult) => r.email);
-        setBulkInterviewees(bulkInterviewees.filter(i => failedEmails.includes(i.email)));
-      }
-    } catch (err) {
-      console.error('Bulk invite error:', err);
-    } finally {
-      setSendingBulk(false);
-    }
-  }
-
-  // Remove interviewee from bulk list
-  function removeInterviewee(email: string) {
-    setBulkInterviewees(bulkInterviewees.filter(i => i.email !== email));
-  }
-
-  // Download template
-  function downloadTemplate() {
-    const csv = 'name,email,custom_field\\nJohn Doe,john@example.com,Sales Team\\nJane Smith,jane@example.com,Marketing';
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'interviewees_template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link href={\`/panel/\${panelId}/complete\`} className="text-slate-400 hover:text-white flex items-center gap-2 mb-4">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Panel
-          </Link>
-          <h1 className="text-2xl font-bold">Invite Interviewees</h1>
-          <p className="text-slate-400">{panel?.name}</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab('single')}
-            className={\`px-4 py-2 rounded-lg flex items-center gap-2 transition \${
-              activeTab === 'single' 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }\`}
-          >
-            <User className="w-4 h-4" />
-            Single Invite
-          </button>
-          <button
-            onClick={() => setActiveTab('bulk')}
-            className={\`px-4 py-2 rounded-lg flex items-center gap-2 transition \${
-              activeTab === 'bulk' 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }\`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Bulk Upload
-          </button>
-        </div>
-
-        {/* Single Invite Tab */}
-        {activeTab === 'single' && (
-          <div className="bg-slate-900 rounded-2xl p-6">
-            <form onSubmit={handleSingleInvite} className="space-y-4">
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={singleName}
-                  onChange={(e) => setSingleName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={singleEmail}
-                  onChange={(e) => setSingleEmail(e.target.value)}
-                  placeholder="john@example.com"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                  required
-                />
-              </div>
-              
-              {singleResult && (
-                <div className={\`p-3 rounded-lg flex items-center gap-2 \${
-                  singleResult.success ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                }\`}>
-                  {singleResult.success ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  {singleResult.success ? 'Invite sent successfully!' : singleResult.error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={sendingSingle}
-                className="w-full bg-purple-600 hover:bg-purple-500 px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition disabled:opacity-50"
-              >
-                {sendingSingle ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-                Send Invite
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Bulk Upload Tab */}
-        {activeTab === 'bulk' && (
-          <div className="space-y-6">
-            {/* Upload Area */}
-            <div className="bg-slate-900 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium">Upload Excel or CSV</h3>
-                <button
-                  onClick={downloadTemplate}
-                  className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Template
-                </button>
-              </div>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-slate-700 hover:border-purple-500 rounded-xl p-8 flex flex-col items-center gap-2 transition"
-              >
-                <Upload className="w-8 h-8 text-slate-400" />
-                <span className="text-slate-400">Click to upload .xlsx, .xls, or .csv</span>
-                <span className="text-xs text-slate-500">Required columns: name, email</span>
-              </button>
-
-              {parseError && (
-                <div className="mt-4 p-3 bg-red-500/20 text-red-400 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  {parseError}
-                </div>
-              )}
-            </div>
-
-            {/* Preview List */}
-            {bulkInterviewees.length > 0 && (
-              <div className="bg-slate-900 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium">{bulkInterviewees.length} interviewees ready</h3>
-                  <button
-                    onClick={() => setBulkInterviewees([])}
-                    className="text-sm text-slate-400 hover:text-red-400"
-                  >
-                    Clear All
-                  </button>
-                </div>
-
-                <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
-                  {bulkInterviewees.map((person, i) => (
-                    <div key={i} className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
-                      <div>
-                        <span className="font-medium">{person.name}</span>
-                        <span className="text-slate-400 ml-2">{person.email}</span>
-                      </div>
-                      <button
-                        onClick={() => removeInterviewee(person.email)}
-                        className="text-slate-400 hover:text-red-400"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleBulkInvite}
-                  disabled={sendingBulk}
-                  className="w-full bg-purple-600 hover:bg-purple-500 px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition disabled:opacity-50"
-                >
-                  {sendingBulk ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                  Send All Invites
-                </button>
-              </div>
-            )}
-
-            {/* Results */}
-            {bulkResults.length > 0 && (
-              <div className="bg-slate-900 rounded-2xl p-6">
-                <h3 className="font-medium mb-4">Results</h3>
-                <div className="space-y-2">
-                  {bulkResults.map((result, i) => (
-                    <div 
-                      key={i}
-                      className={\`flex items-center gap-2 p-2 rounded-lg \${
-                        result.success ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                      }\`}
-                    >
-                      {result.success ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                      <span>{result.email}</span>
-                      {!result.success && <span className="text-xs">- {result.error}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}`,
-
-  // ============================================================================
-  // API: SEND INVITES
-  // ============================================================================
-  'app/api/invites/send/route.ts': `// app/api/invites/send/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { clientConfig } from '@/config/client';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-interface Interviewee {
-  name: string;
-  email: string;
-  custom_field?: string;
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const { panelId, interviewees } = await request.json();
+    const body = await request.json();
+    // Accept either platformName or projectName
+    const platformName = body.platformName || body.projectName;
 
-    if (!panelId || !interviewees || !Array.isArray(interviewees)) {
+    if (!platformName) {
+      return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
+    }
+
+    const supabaseAccessToken = process.env.SUPABASE_ACCESS_TOKEN;
+    const supabaseOrgId = process.env.SUPABASE_ORG_ID;
+
+    if (!supabaseAccessToken || !supabaseOrgId) {
       return NextResponse.json(
-        { error: 'Panel ID and interviewees array required' },
+        { error: 'SUPABASE_ACCESS_TOKEN and SUPABASE_ORG_ID required' },
+        { status: 500 }
+      );
+    }
+
+    const safeName = platformName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+    const inferredVercelUrl = `https://${safeName}.vercel.app`;
+
+    // ========== Check if project already exists ==========
+    console.log('Checking for existing Supabase project:', safeName);
+
+    const listRes = await fetch('https://api.supabase.com/v1/projects', {
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+
+    const projects = await listRes.json();
+    const existing = projects.find((p: any) => p.name === safeName);
+
+    if (existing) {
+      console.log('Found existing project:', existing.id);
+
+      const keysRes = await fetch(
+        `https://api.supabase.com/v1/projects/${existing.id}/api-keys`,
+        { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
+      );
+
+      const keys = await keysRes.json();
+      const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
+      const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
+
+      // Run migration on existing project (to add any missing tables)
+      console.log('Ensuring schema is up to date...');
+      await runMigration(supabaseAccessToken, existing.id);
+
+      await configureAuthUrls(supabaseAccessToken, existing.id, inferredVercelUrl);
+
+      return NextResponse.json({
+        success: true,
+        projectId: existing.id,
+        url: `https://${existing.id}.supabase.co`,
+        anonKey,
+        serviceKey,
+        vercelUrl: inferredVercelUrl,
+        alreadyExists: true,
+      });
+    }
+
+    // ========== Create new project ==========
+    const dbPassword = generatePassword();
+    console.log('Creating Supabase project:', safeName);
+
+    const createRes = await fetch('https://api.supabase.com/v1/projects', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${supabaseAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: safeName,
+        organization_id: supabaseOrgId,
+        region: 'ap-southeast-2',
+        plan: 'free',
+        db_pass: dbPassword,
+      }),
+    });
+
+    if (!createRes.ok) {
+      const error = await createRes.json();
+      console.error('Supabase creation failed:', error);
+      return NextResponse.json(
+        { error: error.message || 'Failed to create Supabase project' },
         { status: 400 }
       );
     }
 
-    // Get panel details
-    const { data: panel } = await supabase
-      .from('agents')
-      .select('name')
-      .eq('id', panelId)
-      .single();
+    const project = await createRes.json();
+    const projectRef = project.id;
+    console.log('Supabase project created:', projectRef);
 
-    if (!panel) {
-      return NextResponse.json({ error: 'Panel not found' }, { status: 404 });
+    // Wait for project ready
+    console.log('Waiting for project to be ready...');
+    await waitForProjectReady(supabaseAccessToken, projectRef);
+
+    // Get API keys
+    const keysRes = await fetch(
+      `https://api.supabase.com/v1/projects/${projectRef}/api-keys`,
+      { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
+    );
+
+    const keys = await keysRes.json();
+    const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
+    const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
+
+    if (!anonKey || !serviceKey) {
+      return NextResponse.json({ error: 'Failed to get API keys' }, { status: 500 });
     }
 
-    const results = [];
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    const supabaseUrl = `https://${projectRef}.supabase.co`;
 
-    for (const person of interviewees as Interviewee[]) {
-      try {
-        // Generate unique token
-        const token = crypto.randomUUID();
-        
-        // Create interviewee record
-        const { data: interviewee, error: dbError } = await supabase
-          .from('interviewees')
-          .insert({
-            agent_id: panelId,
-            name: person.name,
-            email: person.email,
-            custom_field: person.custom_field,
-            invite_token: token,
-            status: 'invited',
-          })
-          .select()
-          .single();
+    // Run schema migration
+    console.log('Running schema migration...');
+    await runMigration(supabaseAccessToken, projectRef);
 
-        if (dbError) throw dbError;
+    // Create storage buckets
+    console.log('Creating storage buckets...');
+    await createStorageBuckets(supabaseUrl, serviceKey);
 
-        // Generate magic link
-        const magicLink = \`\${baseUrl}/i/\${panelId}?token=\${token}\`;
-
-        // Send email (if RESEND_API_KEY is configured)
-        if (process.env.RESEND_API_KEY) {
-          await sendInviteEmail({
-            to: person.email,
-            name: person.name,
-            panelName: panel.name,
-            link: magicLink,
-          });
-        }
-
-        results.push({ email: person.email, success: true, link: magicLink });
-      } catch (err: any) {
-        results.push({ email: person.email, success: false, error: err.message });
-      }
-    }
-
-    return NextResponse.json({ results });
-  } catch (error: any) {
-    console.error('Send invites error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-async function sendInviteEmail({
-  to,
-  name,
-  panelName,
-  link,
-}: {
-  to: string;
-  name: string;
-  panelName: string;
-  link: string;
-}) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': \`Bearer \${process.env.RESEND_API_KEY}\`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: \`\${clientConfig.platform.name} <noreply@\${process.env.RESEND_DOMAIN || 'resend.dev'}>\`,
-      to,
-      subject: \`You're invited: \${panelName}\`,
-      html: \`
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Hi \${name},</h2>
-          <p>You've been invited to participate in an interview: <strong>\${panelName}</strong></p>
-          <p>Click the button below to start:</p>
-          <a href="\${link}" style="display: inline-block; background: #8B5CF6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
-            Start Interview
-          </a>
-          <p style="color: #666; font-size: 14px;">Or copy this link: \${link}</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-          <p style="color: #999; font-size: 12px;">\${clientConfig.company.name}</p>
-        </div>
-      \`,
-    }),
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(\`Email failed: \${error}\`);
-  }
-}`,
-
-  // ============================================================================
-  // API: PARSE EXCEL
-  // ============================================================================
-  'app/api/invites/parse-excel/route.ts': `// app/api/invites/parse-excel/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
-
-export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
-    }
-
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-    
-    // Get first sheet
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    
-    // Convert to JSON
-    const data = XLSX.utils.sheet_to_json(sheet);
-
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: 'No data found in file' }, { status: 400 });
-    }
-
-    // Validate and map columns
-    const interviewees = [];
-    const errors = [];
-
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i] as any;
-      
-      // Try different column name variations
-      const name = row.name || row.Name || row.NAME || row['Full Name'] || row.fullName || '';
-      const email = row.email || row.Email || row.EMAIL || row['Email Address'] || row.emailAddress || '';
-      const customField = row.custom_field || row.customField || row['Custom Field'] || row.department || row.team || '';
-
-      if (!email) {
-        errors.push(\`Row \${i + 2}: Missing email\`);
-        continue;
-      }
-
-      // Basic email validation
-      if (!email.includes('@')) {
-        errors.push(\`Row \${i + 2}: Invalid email "\${email}"\`);
-        continue;
-      }
-
-      interviewees.push({
-        name: name || email.split('@')[0],
-        email: email.toLowerCase().trim(),
-        custom_field: customField,
-      });
-    }
-
-    if (interviewees.length === 0) {
-      return NextResponse.json(
-        { error: 'No valid interviewees found. ' + errors.join('; ') },
-        { status: 400 }
-      );
-    }
+    // Configure auth URLs
+    console.log('Configuring auth URLs...');
+    await configureAuthUrls(supabaseAccessToken, projectRef, inferredVercelUrl);
 
     return NextResponse.json({
-      interviewees,
-      total: interviewees.length,
-      errors: errors.length > 0 ? errors : undefined,
+      success: true,
+      projectId: projectRef,
+      url: supabaseUrl,
+      anonKey,
+      serviceKey,
+      vercelUrl: inferredVercelUrl,
     });
+
   } catch (error: any) {
-    console.error('Parse Excel error:', error);
+    console.error('Create Supabase error:', error);
     return NextResponse.json(
-      { error: 'Failed to parse file: ' + error.message },
+      { error: error.message || 'Failed to create Supabase project' },
       { status: 500 }
     );
   }
-}`,
-
-  // ============================================================================
-  // INTERVIEW PAGE (existing - with token support)
-  // ============================================================================
-  'app/i/[agentId]/page.tsx': `// app/i/[agentId]/page.tsx
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { Phone, PhoneOff, Loader2, Mic, MicOff, Bot, CheckCircle } from 'lucide-react';
-
-interface Agent {
-  id: string;
-  name: string;
-  company_name: string;
-  logo_url?: string;
-  primary_color: string;
-  elevenlabs_agent_id?: string;
 }
 
-export default function InterviewPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const agentId = params.agentId as string;
-  const inviteToken = searchParams.get('token');
-
-  const [agent, setAgent] = useState<Agent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [status, setStatus] = useState<'ready' | 'connecting' | 'active' | 'complete'>('ready');
-  const [intervieweeId, setIntervieweeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadAgent();
-    if (inviteToken) {
-      validateToken();
-    }
-  }, [agentId, inviteToken]);
-
-  async function loadAgent() {
-    try {
-      const res = await fetch(\`/api/agents/\${agentId}\`);
-      if (!res.ok) throw new Error('Agent not found');
-      const data = await res.json();
-      setAgent(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+function generatePassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 24; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
   }
+  return password;
+}
 
-  async function validateToken() {
-    if (!inviteToken) return;
-    
-    try {
-      const res = await fetch(\`/api/invites/validate?token=\${inviteToken}\`);
-      if (res.ok) {
-        const data = await res.json();
-        setIntervieweeId(data.intervieweeId);
-      }
-    } catch (err) {
-      console.error('Token validation failed:', err);
-    }
-  }
+async function waitForProjectReady(token: string, projectRef: string, maxWait = 180000): Promise<void> {
+  const startTime = Date.now();
 
-  async function startInterview() {
-    setStatus('connecting');
-    
-    // Update interviewee status if we have a token
-    if (intervieweeId) {
-      await fetch('/api/invites/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intervieweeId, status: 'started' }),
-      });
+  while (Date.now() - startTime < maxWait) {
+    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const project = await res.json();
+
+    if (project.status === 'ACTIVE_HEALTHY') {
+      console.log('Project is ready!');
+      return;
     }
 
-    // Load ElevenLabs widget
-    const script = document.createElement('script');
-    script.src = 'https://elevenlabs.io/convai-widget/index.js';
-    script.async = true;
-    script.onload = () => {
-      const container = document.getElementById('widget-container');
-      if (container && agent?.elevenlabs_agent_id) {
-        container.innerHTML = \`<elevenlabs-convai agent-id="\${agent.elevenlabs_agent_id}"></elevenlabs-convai>\`;
-        setStatus('active');
-      }
-    };
-    document.body.appendChild(script);
+    console.log(`Project status: ${project.status}, waiting...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
-  async function endInterview() {
-    const container = document.getElementById('widget-container');
-    if (container) {
-      container.innerHTML = '';
-    }
-    
-    // Update interviewee status
-    if (intervieweeId) {
-      await fetch('/api/invites/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intervieweeId, status: 'completed' }),
-      });
-    }
-    
-    setStatus('complete');
-  }
+  throw new Error('Timeout waiting for project to be ready');
+}
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-      </div>
-    );
-  }
-
-  if (error || !agent) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Interview Not Found</h1>
-          <p className="text-slate-400">{error || 'This interview link is invalid.'}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
-      <div className="max-w-md w-full text-center">
-        {/* Agent Info */}
-        <div className="mb-8">
-          <div 
-            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: agent.primary_color + '20' }}
-          >
-            <Bot className="w-10 h-10" style={{ color: agent.primary_color }} />
-          </div>
-          <h1 className="text-2xl font-bold">{agent.name}</h1>
-          <p className="text-slate-400">{agent.company_name}</p>
-        </div>
-
-        {/* Status-based content */}
-        {status === 'ready' && (
-          <>
-            <p className="text-slate-300 mb-8">
-              Click below to start your interview. Make sure your microphone is enabled.
-            </p>
-            <button
-              onClick={startInterview}
-              className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 px-8 py-4 rounded-xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25"
-            >
-              <Phone className="w-6 h-6" />
-              Start Interview
-            </button>
-          </>
-        )}
-
-        {status === 'connecting' && (
-          <div className="flex items-center justify-center gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
-            <span>Connecting...</span>
-          </div>
-        )}
-
-        {status === 'active' && (
-          <>
-            <div id="widget-container" className="mb-6" />
-            <button
-              onClick={endInterview}
-              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-500 px-6 py-3 rounded-lg font-medium transition"
-            >
-              <PhoneOff className="w-5 h-5" />
-              End Interview
-            </button>
-          </>
-        )}
-
-        {status === 'complete' && (
-          <div className="text-center">
-            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-green-400 mb-2">Interview Complete</h2>
-            <p className="text-slate-400">Thank you for your time!</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}`,
-
-  // ============================================================================
-  // API: VALIDATE INVITE TOKEN
-  // ============================================================================
-  'app/api/invites/validate/route.ts': `// app/api/invites/validate/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token');
-
-  if (!token) {
-    return NextResponse.json({ error: 'Token required' }, { status: 400 });
-  }
-
-  const { data, error } = await supabase
-    .from('interviewees')
-    .select('id, name, email, status')
-    .eq('invite_token', token)
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 404 });
-  }
-
-  return NextResponse.json({
-    intervieweeId: data.id,
-    name: data.name,
-    status: data.status,
-  });
-}`,
-
-  // ============================================================================
-  // API: UPDATE INTERVIEWEE STATUS
-  // ============================================================================
-  'app/api/invites/update-status/route.ts': `// app/api/invites/update-status/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function POST(request: NextRequest) {
+async function configureAuthUrls(token: string, projectRef: string, vercelUrl: string): Promise<void> {
   try {
-    const { intervieweeId, status } = await request.json();
+    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        site_url: vercelUrl,
+        uri_allow_list: [
+          `${vercelUrl}/**`,
+          `${vercelUrl}`,
+          'http://localhost:3000/**',
+          'http://localhost:3000',
+        ],
+        redirect_urls: [
+          `${vercelUrl}/auth/callback`,
+          `${vercelUrl}/`,
+          'http://localhost:3000/auth/callback',
+          'http://localhost:3000/',
+        ],
+      }),
+    });
 
-    if (!intervieweeId || !status) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (res.ok) {
+      console.log('Auth URLs configured:', vercelUrl);
+    } else {
+      const error = await res.json().catch(() => ({}));
+      console.warn('Auth URL config warning:', error);
     }
-
-    const updates: any = { status };
-    
-    if (status === 'started') {
-      updates.started_at = new Date().toISOString();
-    } else if (status === 'completed') {
-      updates.completed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase
-      .from('interviewees')
-      .update(updates)
-      .eq('id', intervieweeId);
-
-    if (error) throw error;
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    console.warn('Could not configure auth URLs:', err);
   }
-}`,
+}
 
-  // ============================================================================
-  // API: GET AGENT
-  // ============================================================================
-  'app/api/agents/[agentId]/route.ts': `// app/api/agents/[agentId]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+async function runMigration(token: string, projectRef: string): Promise<void> {
+  const schema = `
+-- ============================================================================
+-- CHILD PLATFORM SCHEMA
+-- Complete database schema for AI Interview child platforms
+-- ============================================================================
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Function for updating timestamps
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- CLIENTS TABLE
+-- Platform owners/administrators
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  company_name TEXT,
+  subscription_tier TEXT DEFAULT 'free',
+  agents_limit INT DEFAULT 3,
+  interviews_limit INT DEFAULT 100,
+  setup_data JSONB DEFAULT '{}',
+  branding JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { agentId: string } }
-) {
-  const { agentId } = params;
+-- ============================================================================
+-- AGENTS TABLE (Interview Panels)
+-- Each agent represents an interview panel/survey
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS agents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE,
+  description TEXT,
+  greeting TEXT DEFAULT 'Hello! Thanks for joining this interview.',
+  questions JSONB DEFAULT '[]',
+  status TEXT DEFAULT 'active',
+  company_name TEXT,
+  interview_purpose TEXT,
+  target_interviewees TEXT,
+  interviewer_tone TEXT DEFAULT 'professional',
+  estimated_duration_mins INT DEFAULT 10,
+  elevenlabs_agent_id TEXT,
+  voice_id TEXT,
+  key_topics TEXT[],
+  key_questions TEXT[],
+  constraints TEXT[],
+  system_prompt TEXT,
+  first_message TEXT,
+  welcome_message TEXT,
+  closing_message TEXT,
+  primary_color TEXT DEFAULT '#8B5CF6',
+  background_color TEXT DEFAULT '#0F172A',
+  logo_url TEXT,
+  total_interviews INT DEFAULT 0,
+  completed_interviews INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-  const { data, error } = await supabase
-    .from('agents')
-    .select('*')
-    .eq('id', agentId)
-    .single();
+-- Generate slug from name if not provided
+CREATE OR REPLACE FUNCTION generate_agent_slug()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.slug IS NULL OR NEW.slug = '' THEN
+    NEW.slug := lower(regexp_replace(NEW.name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(NEW.id::text, 1, 8);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-  }
+DROP TRIGGER IF EXISTS trigger_generate_agent_slug ON agents;
+CREATE TRIGGER trigger_generate_agent_slug
+  BEFORE INSERT ON agents
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_agent_slug();
 
-  return NextResponse.json(data);
-}`,
+-- ============================================================================
+-- INTERVIEWS TABLE
+-- Completed interview sessions
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS interviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending',
+  source TEXT DEFAULT 'voice',
+  interviewee_name TEXT,
+  interviewee_email TEXT,
+  interviewee_profile JSONB DEFAULT '{}',
+  conversation_id TEXT,
+  messages JSONB DEFAULT '[]',
+  transcript TEXT,
+  transcript_url TEXT,
+  summary TEXT,
+  feedback JSONB DEFAULT '{}',
+  extracted_data JSONB DEFAULT '{}',
+  transcript_received BOOLEAN DEFAULT FALSE,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  duration_seconds INT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-  // ============================================================================
-  // SUPABASE CLIENT
-  // ============================================================================
-  'lib/supabase.ts': `// lib/supabase.ts
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+-- ============================================================================
+-- INTERVIEW TRANSCRIPTS TABLE
+-- Raw transcript data from ElevenLabs webhooks
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS interview_transcripts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  elevenlabs_conversation_id TEXT UNIQUE,
+  elevenlabs_agent_id TEXT,
+  transcript JSONB,
+  analysis JSONB,
+  metadata JSONB,
+  status TEXT,
+  received_at TIMESTAMPTZ DEFAULT NOW(),
+  forwarded_to_parent BOOLEAN DEFAULT FALSE,
+  forwarded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return createSupabaseClient(supabaseUrl, supabaseKey);
-}`,
-
-  // ============================================================================
-  // DATABASE MIGRATION - Interviewees Table
-  // ============================================================================
-  'supabase/migrations/002_interviewees.sql': `-- supabase/migrations/002_interviewees.sql
--- Interviewees table for tracking invited participants
-
+-- ============================================================================
+-- INTERVIEWEES TABLE
+-- Invited participants and their status
+-- ============================================================================
 CREATE TABLE IF NOT EXISTS interviewees (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -1783,301 +367,113 @@ CREATE TABLE IF NOT EXISTS interviewees (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for common queries
-CREATE INDEX idx_interviewees_agent_id ON interviewees(agent_id);
-CREATE INDEX idx_interviewees_email ON interviewees(email);
-CREATE INDEX idx_interviewees_invite_token ON interviewees(invite_token);
-CREATE INDEX idx_interviewees_status ON interviewees(status);
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
+CREATE INDEX IF NOT EXISTS idx_agents_client_id ON agents(client_id);
+CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
+CREATE INDEX IF NOT EXISTS idx_agents_elevenlabs ON agents(elevenlabs_agent_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
+CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
+CREATE INDEX IF NOT EXISTS idx_interviews_started ON interviews(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_interview_transcripts_interview ON interview_transcripts(interview_id);
+CREATE INDEX IF NOT EXISTS idx_interview_transcripts_conversation ON interview_transcripts(elevenlabs_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_interviewees_agent_id ON interviewees(agent_id);
+CREATE INDEX IF NOT EXISTS idx_interviewees_email ON interviewees(email);
+CREATE INDEX IF NOT EXISTS idx_interviewees_invite_token ON interviewees(invite_token);
+CREATE INDEX IF NOT EXISTS idx_interviewees_status ON interviewees(status);
 
--- RLS policies
-ALTER TABLE interviewees ENABLE ROW LEVEL SECURITY;
+-- ============================================================================
+-- TRIGGERS
+-- ============================================================================
+DROP TRIGGER IF EXISTS update_clients_updated_at ON clients;
+CREATE TRIGGER update_clients_updated_at
+  BEFORE UPDATE ON clients
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
 
-CREATE POLICY "Allow all operations on interviewees" ON interviewees
-  FOR ALL USING (true) WITH CHECK (true);
+DROP TRIGGER IF EXISTS update_agents_updated_at ON agents;
+CREATE TRIGGER update_agents_updated_at
+  BEFORE UPDATE ON agents
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
 
--- Trigger to update updated_at
+DROP TRIGGER IF EXISTS update_interviewees_updated_at ON interviewees;
 CREATE TRIGGER update_interviewees_updated_at
   BEFORE UPDATE ON interviewees
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();`,
-};
+  EXECUTE FUNCTION update_updated_at_column();
 
-// ============================================================================
-// DYNAMIC CONFIG FILE - Generated per client
-// ============================================================================
+-- ============================================================================
+-- ROW LEVEL SECURITY
+-- ============================================================================
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview_transcripts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviewees ENABLE ROW LEVEL SECURITY;
 
-function generateClientConfig(platformName: string, companyName: string, colors: { primary: string; accent: string; background: string }, parentApiUrl?: string) {
-  return `// config/client.ts
-export const clientConfig = {
-  platform: {
-    name: "${platformName}",
-    tagline: "AI-Powered Interview Platform",
-    description: "Conduct structured interviews with AI assistance.",
-    version: "1.0.0",
-  },
-  company: {
-    name: "${companyName}",
-    website: "",
-    supportEmail: "support@example.com",
-  },
-  theme: {
-    mode: "dark" as "dark" | "light",
-    colors: {
-      primary: "${colors.primary}",
-      accent: "${colors.accent}",
-      background: "${colors.background}",
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Service role full access to clients" ON clients;
+DROP POLICY IF EXISTS "Service role full access to agents" ON agents;
+DROP POLICY IF EXISTS "Service role full access to interviews" ON interviews;
+DROP POLICY IF EXISTS "Service role full access to interview_transcripts" ON interview_transcripts;
+DROP POLICY IF EXISTS "Service role full access to interviewees" ON interviewees;
+DROP POLICY IF EXISTS "Public read access to active agents" ON agents;
+DROP POLICY IF EXISTS "Allow all on clients" ON clients;
+DROP POLICY IF EXISTS "Allow all on agents" ON agents;
+DROP POLICY IF EXISTS "Allow all on interviews" ON interviews;
+DROP POLICY IF EXISTS "Allow all on interview_transcripts" ON interview_transcripts;
+DROP POLICY IF EXISTS "Allow all on interviewees" ON interviewees;
+
+-- Simple allow-all policies for child platforms (service role handles auth)
+CREATE POLICY "Allow all on clients" ON clients FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on agents" ON agents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interviews" ON interviews FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interview_transcripts" ON interview_transcripts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interviewees" ON interviewees FOR ALL USING (true) WITH CHECK (true);
+  `;
+
+  const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
-  },
-  features: {
-    enableAnalytics: true,
-    enableExport: true,
-  },
-  parent: {
-    apiUrl: "${parentApiUrl || 'https://connexions.vercel.app'}",
-  },
-} as const;
+    body: JSON.stringify({ query: schema }),
+  });
 
-export const getPlatformInfo = () => clientConfig.platform;
-export const getCompanyInfo = () => clientConfig.company;
-export type ClientConfig = typeof clientConfig;`;
-}
-
-function generateReadme(platformName: string, companyName: string, supabaseUrl?: string) {
-  return `# ${platformName}
-
-AI Interview Platform for ${companyName}
-
-## Features
-
-- **AI Setup Assistant**: Voice-guided panel creation
-- **Interview Panels**: Create multiple interview/survey agents
-- **Single Invites**: Send individual interview invitations
-- **Bulk Invites**: Upload Excel/CSV to invite multiple participants
-- **Magic Links**: Secure, unique links for each interviewee
-- **Progress Tracking**: Monitor invite → started → completed status
-
-## Configuration
-
-- **Supabase URL**: ${supabaseUrl || 'Configure in Vercel'}
-- **Platform**: ${platformName}
-- **Company**: ${companyName}
-
-## Getting Started
-
-1. Clone this repository
-2. Install dependencies: \`npm install\`
-3. Set up environment variables
-4. Run migrations: \`npx supabase db push\`
-5. Run development server: \`npm run dev\`
-
-## Environment Variables
-
-\`\`\`
-NEXT_PUBLIC_SUPABASE_URL=${supabaseUrl || 'your-supabase-url'}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-ELEVENLABS_API_KEY=your-elevenlabs-api-key
-NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID=your-setup-agent-id
-NEXT_PUBLIC_PLATFORM_NAME=${platformName}
-NEXT_PUBLIC_COMPANY_NAME=${companyName}
-PARENT_API_URL=https://connexions.vercel.app
-PARENT_API_KEY=your-parent-api-key
-CHILD_PLATFORM_ID=your-platform-id
-RESEND_API_KEY=your-resend-api-key (optional, for email invites)
-\`\`\`
-
-## Database Schema
-
-Run the migrations in \`supabase/migrations/\` to set up:
-- \`agents\` - Interview panel configurations
-- \`interviews\` - Completed interview records
-- \`interviewees\` - Invited participants and their status
-
-## Invite Flow
-
-1. Create a panel via voice setup or dashboard
-2. Go to panel → Invite
-3. Single: Enter name + email → Send
-4. Bulk: Upload Excel/CSV with name, email columns → Send All
-5. Each interviewee gets a unique magic link
-6. Track progress: invited → started → completed
-`;
-}
-
-// ============================================================================
-// GITHUB HELPERS
-// ============================================================================
-
-async function pushFileToRepo(
-  owner: string,
-  repo: string,
-  path: string,
-  content: string,
-  message: string,
-  headers: HeadersInit
-): Promise<boolean> {
-  try {
-    // Check if file exists
-    const checkRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`, { headers });
-    let sha: string | undefined;
-
-    if (checkRes.ok) {
-      const existing = await checkRes.json();
-      sha = existing.sha;
-    }
-
-    const body: any = {
-      message,
-      content: Buffer.from(content).toString('base64'),
-    };
-
-    if (sha) {
-      body.sha = sha;
-    }
-
-    const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const error = await res.text();
-      console.error(`Failed to push ${path}:`, error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error(`Error pushing ${path}:`, error);
-    return false;
+  if (!res.ok) {
+    const error = await res.text();
+    console.warn('Migration warning:', error);
+  } else {
+    console.log('Schema migration complete');
   }
 }
 
-// ============================================================================
-// MAIN HANDLER
-// ============================================================================
+async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Promise<void> {
+  const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
 
-interface CreateGithubRequest {
-  repoName: string;
-  formData?: {
-    platformName?: string;
-    companyName?: string;
-    extractedColors?: {
-      primary?: string;
-      accent?: string;
-      background?: string;
-    };
-  };
-  platformName?: string;
-  companyName?: string;
-  createdResources?: {
-    supabaseUrl?: string;
-    supabaseAnonKey?: string;
-    childPlatformId?: string;
-  };
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const body: CreateGithubRequest = await request.json();
-    const { repoName, formData, createdResources } = body;
-
-    const platformName = body.platformName || formData?.platformName || 'AI Interview Platform';
-    const companyName = body.companyName || formData?.companyName || 'Your Company';
-    const supabaseUrl = createdResources?.supabaseUrl;
-
-    if (!repoName) {
-      return NextResponse.json({ error: 'Repository name required' }, { status: 400 });
-    }
-
-    const token = process.env.GITHUB_TOKEN;
-    const owner = process.env.GITHUB_OWNER || 'dennissolver';
-
-    if (!token) {
-      return NextResponse.json({ error: 'GitHub token not configured' }, { status: 500 });
-    }
-
-    const safeName = repoName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 100);
-
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-    };
-
-    // Check if repo exists
-    console.log('Checking for existing repo:', safeName);
-    const checkRes = await fetch(`${GITHUB_API}/repos/${owner}/${safeName}`, { headers });
-
-    if (checkRes.ok) {
-      console.log('Repo already exists:', safeName);
-      return NextResponse.json({
-        success: true,
-        repoUrl: `https://github.com/${owner}/${safeName}`,
-        repoName: safeName,
-        alreadyExists: true,
+  for (const name of buckets) {
+    try {
+      await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+          apikey: serviceKey,
+        },
+        body: JSON.stringify({
+          id: name,
+          name: name,
+          public: name === 'assets',
+        }),
       });
+      console.log(`Created bucket: ${name}`);
+    } catch (err) {
+      console.warn(`Bucket ${name} may already exist`);
     }
-
-    // Create empty repo
-    console.log('Creating repo:', safeName);
-    const createRes = await fetch(`${GITHUB_API}/user/repos`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        name: safeName,
-        description: `AI Interview Platform for ${companyName}`,
-        private: false,
-        auto_init: true,
-      }),
-    });
-
-    if (!createRes.ok) {
-      const error = await createRes.json();
-      console.error('Failed to create repo:', error);
-      return NextResponse.json({ error: error.message || 'Failed to create repository' }, { status: 400 });
-    }
-
-    console.log('Repo created, waiting for it to be ready...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Push all template files
-    console.log('Pushing template files...');
-
-    const colors = {
-      primary: formData?.extractedColors?.primary || '#8B5CF6',
-      accent: formData?.extractedColors?.accent || '#10B981',
-      background: formData?.extractedColors?.background || '#0F172A',
-    };
-
-    // Push static template files
-    for (const [path, content] of Object.entries(TEMPLATE_FILES)) {
-      console.log(`Pushing ${path}...`);
-      await pushFileToRepo(owner, safeName, path, content, `Add ${path}`, headers);
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    // Push dynamic config file
-    const parentApiUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://connexions.vercel.app';
-    const clientConfigContent = generateClientConfig(platformName, companyName, colors, parentApiUrl);
-    await pushFileToRepo(owner, safeName, 'config/client.ts', clientConfigContent, 'Add client config', headers);
-
-    // Update README
-    const readmeContent = generateReadme(platformName, companyName, supabaseUrl);
-    await pushFileToRepo(owner, safeName, 'README.md', readmeContent, 'Update README', headers);
-
-    console.log('All files pushed successfully!');
-
-    return NextResponse.json({
-      success: true,
-      repoUrl: `https://github.com/${owner}/${safeName}`,
-      repoName: safeName,
-    });
-
-  } catch (error: any) {
-    console.error('Create GitHub error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to create repository' }, { status: 500 });
   }
 }
