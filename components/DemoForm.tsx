@@ -2,53 +2,22 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ArrowRight, Loader2 } from 'lucide-react';
 
 export default function DemoForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
-    const formData = new FormData(e.currentTarget);
-    
-    try {
-      const res = await fetch('/api/demo/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.get('name'),
-          company: formData.get('company'),
-          email: formData.get('email'),
-          website: formData.get('website'),
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to start demo');
-      }
-
-      router.push(data.redirectUrl);
-    } catch (err: any) {
-      setError(err.message);
-      setLoading(false);
-    }
+    // Brief delay for UX feedback, then redirect to demo
+    await new Promise(resolve => setTimeout(resolve, 500));
+    window.location.href = 'https://connexion-demo-opal.vercel.app/';
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
       <div>
         <label className="block text-sm text-neutral-400 mb-1">Your Name</label>
         <input
