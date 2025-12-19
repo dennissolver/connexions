@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
 async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   const { leadId, companyName } = session.metadata || {};
   const customerId = session.customer as string;
-  const subscriptionId = session.subscription as string;
+  const sessionData = session as any;
+  const subscriptionId = sessionData.subscription as string;
 
   console.log('✅ Checkout completed:', { customerId, subscriptionId, leadId });
 
@@ -134,6 +135,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
+  const subData = subscription as any;
 
   console.log('🔄 Subscription updated:', {
     subscriptionId: subscription.id,
@@ -150,7 +152,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     })
     .eq('stripe_customer_id', customerId);
 
-  // Update billing period - access from items if available
+  // Update billing period
   const { data: client } = await supabase
     .from('clients')
     .select('id')
@@ -158,8 +160,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     .single();
 
   if (client) {
-    // Get period dates from subscription object (use type assertion for raw data)
-    const subData = subscription as any;
     const periodStart = subData.current_period_start;
     const periodEnd = subData.current_period_end;
 
@@ -189,11 +189,12 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const customerId = invoice.customer as string;
+  const invoiceData = invoice as any;
+  const customerId = invoiceData.customer as string;
 
   console.log('💵 Invoice paid:', {
     invoiceId: invoice.id,
-    amount: invoice.amount_paid,
+    amount: invoiceData.amount_paid,
     customerId,
   });
 
@@ -207,7 +208,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   if (!client) return;
 
   // Reset usage counter for new billing period
-  if (invoice.subscription) {
+  if (invoiceData.subscription) {
     await supabase
       .from('billing_accounts')
       .update({
@@ -221,7 +222,8 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handleInvoiceFailed(invoice: Stripe.Invoice) {
-  const customerId = invoice.customer as string;
+  const invoiceData = invoice as any;
+  const customerId = invoiceData.customer as string;
 
   console.log('⚠️ Invoice payment failed:', { customerId });
 
