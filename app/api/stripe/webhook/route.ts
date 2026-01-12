@@ -2,18 +2,32 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-12-15.clover',
-});
+// Lazy initialization - only create clients when needed at runtime
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY not configured');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-12-15.clover',
+  });
+}
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase(): SupabaseClient {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase credentials not configured');
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
+  const supabase = getSupabase();
+
   const body = await req.text();
   const signature = req.headers.get('stripe-signature')!;
 
@@ -34,32 +48,32 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        await handleCheckoutComplete(session);
+        await handleCheckoutComplete(supabase, session);
         break;
       }
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionChange(subscription);
+        await handleSubscriptionChange(supabase, subscription);
         break;
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionCanceled(subscription);
+        await handleSubscriptionCanceled(supabase, subscription);
         break;
       }
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
-        await handleInvoicePaid(invoice);
+        await handleInvoicePaid(supabase, invoice);
         break;
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
-        await handleInvoiceFailed(invoice);
+        await handleInvoiceFailed(supabase, invoice);
         break;
       }
 
@@ -78,7 +92,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
+async function handleCheckoutComplete(supabase: SupabaseClient, session: Stripe.Checkout.Session) {
   const { leadId, companyName } = session.metadata || {};
   const customerId = session.customer as string;
   const sessionData = session as any;
@@ -133,7 +147,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   console.log('✅ Created client and billing account:', newClient.id);
 }
 
-async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+async function handleSubscriptionChange(supabase: SupabaseClient, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
   const subData = subscription as any;
 
@@ -175,7 +189,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   }
 }
 
-async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
+async function handleSubscriptionCanceled(supabase: SupabaseClient, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
 
   console.log('❌ Subscription canceled:', { customerId });
@@ -188,7 +202,7 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
     .eq('stripe_customer_id', customerId);
 }
 
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
+async function handleInvoicePaid(supabase: SupabaseClient, invoice: Stripe.Invoice) {
   const invoiceData = invoice as any;
   const customerId = invoiceData.customer as string;
 
@@ -221,7 +235,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
 }
 
-async function handleInvoiceFailed(invoice: Stripe.Invoice) {
+async function handleInvoiceFailed(supabase: SupabaseClient, invoice: Stripe.Invoice) {
   const invoiceData = invoice as any;
   const customerId = invoiceData.customer as string;
 

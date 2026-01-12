@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // Accept either platformName or projectName
     const platformName = body.platformName || body.projectName;
 
     if (!platformName) {
@@ -31,20 +30,30 @@ export async function POST(request: NextRequest) {
       headers: { Authorization: `Bearer ${supabaseAccessToken}` },
     });
 
+    if (!listRes.ok) {
+      const errorText = await listRes.text();
+      console.error('Failed to list projects:', listRes.status, errorText.slice(0, 200));
+      return NextResponse.json({ error: 'Failed to list Supabase projects' }, { status: 500 });
+    }
+
     const projects = await listRes.json();
     const existing = projects.find((p: any) => p.name === safeName);
 
     if (existing) {
       console.log('Found existing project:', existing.id);
 
-      const keysRes = await fetch(
-        `https://api.supabase.com/v1/projects/${existing.id}/api-keys`,
-        { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
-      );
+      // Fetch keys with retry for existing project
+      const keys = await fetchApiKeysWithRetry(supabaseAccessToken, existing.id);
+      if (!keys) {
+        return NextResponse.json({ error: 'Failed to fetch API keys for existing project' }, { status: 500 });
+      }
 
-      const keys = await keysRes.json();
       const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
       const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
+
+      if (!anonKey || !serviceKey) {
+        return NextResponse.json({ error: 'API keys not found for existing project' }, { status: 500 });
+      }
 
       // Run migration on existing project (to add any missing tables)
       console.log('Ensuring schema is up to date...');
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!createRes.ok) {
-      const error = await createRes.json();
+      const error = await createRes.json().catch(() => ({}));
       console.error('Supabase creation failed:', error);
       return NextResponse.json(
         { error: error.message || 'Failed to create Supabase project' },
@@ -99,21 +108,20 @@ export async function POST(request: NextRequest) {
     console.log('Waiting for project to be ready...');
     await waitForProjectReady(supabaseAccessToken, projectRef);
 
-    // Get API keys
-    const keysRes = await fetch(
-      `https://api.supabase.com/v1/projects/${projectRef}/api-keys`,
-      { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
-    );
+    // Get API keys with retry (keys endpoint can lag behind project status)
+    console.log('Fetching API keys...');
+    const keys = await fetchApiKeysWithRetry(supabaseAccessToken, projectRef);
+    if (!keys) {
+      return NextResponse.json({ error: 'Failed to fetch API keys after retries' }, { status: 500 });
+    }
 
-    const keys = await keysRes.json();
     const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
     const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
+    const supabaseUrl = `https://${projectRef}.supabase.co`;
 
     if (!anonKey || !serviceKey) {
       return NextResponse.json({ error: 'Failed to get API keys' }, { status: 500 });
     }
-
-    const supabaseUrl = `https://${projectRef}.supabase.co`;
 
     // Run schema migration
     console.log('Running schema migration...');
@@ -145,6 +153,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
 function generatePassword(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
   let password = '';
@@ -154,6 +166,50 @@ function generatePassword(): string {
   return password;
 }
 
+async function fetchApiKeysWithRetry(token: string, projectRef: string, maxAttempts = 5): Promise<any[] | null> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(
+        `https://api.supabase.com/v1/projects/${projectRef}/api-keys`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.warn(`API keys fetch failed (attempt ${attempt}/${maxAttempts}):`, res.status, errorText.slice(0, 200));
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          continue;
+        }
+        return null;
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.warn(`API keys returned non-JSON (attempt ${attempt}/${maxAttempts}):`, contentType);
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          continue;
+        }
+        return null;
+      }
+
+      const keys = await res.json();
+      console.log(`API keys fetched successfully (attempt ${attempt})`);
+      return keys;
+
+    } catch (err) {
+      console.warn(`API keys fetch error (attempt ${attempt}/${maxAttempts}):`, err);
+      if (attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
 async function waitForProjectReady(token: string, projectRef: string, maxWait = 180000): Promise<void> {
   const startTime = Date.now();
 
@@ -161,6 +217,12 @@ async function waitForProjectReady(token: string, projectRef: string, maxWait = 
     const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (!res.ok) {
+      console.warn('Project status check failed:', res.status);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      continue;
+    }
 
     const project = await res.json();
 
@@ -232,7 +294,6 @@ $$ LANGUAGE plpgsql;
 
 -- ============================================================================
 -- CLIENTS TABLE
--- Platform owners/administrators
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -250,7 +311,6 @@ CREATE TABLE IF NOT EXISTS clients (
 
 -- ============================================================================
 -- TEMPLATES TABLE
--- Reusable interview templates
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -271,7 +331,6 @@ CREATE TABLE IF NOT EXISTS templates (
 
 -- ============================================================================
 -- AGENTS TABLE (Interview Panels)
--- Each agent represents an interview panel/survey
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -327,7 +386,6 @@ CREATE TRIGGER trigger_generate_agent_slug
 
 -- ============================================================================
 -- INTERVIEWS TABLE
--- Completed interview sessions
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -356,7 +414,6 @@ CREATE TABLE IF NOT EXISTS interviews (
 
 -- ============================================================================
 -- RESPONSES TABLE
--- Structured question/answer pairs extracted from interviews
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS responses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -376,7 +433,6 @@ CREATE TABLE IF NOT EXISTS responses (
 
 -- ============================================================================
 -- INTERVIEW TRANSCRIPTS TABLE
--- Raw transcript data from ElevenLabs webhooks
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS interview_transcripts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -395,7 +451,6 @@ CREATE TABLE IF NOT EXISTS interview_transcripts (
 
 -- ============================================================================
 -- INTERVIEWEES TABLE
--- Invited participants and their status
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS interviewees (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -420,7 +475,6 @@ CREATE TABLE IF NOT EXISTS interviewees (
 
 -- ============================================================================
 -- EVALUATIONS TABLE
--- AI evaluation results from parent platform
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -443,7 +497,6 @@ CREATE TABLE IF NOT EXISTS evaluations (
 
 -- ============================================================================
 -- EMAIL LOGS TABLE
--- Track sent invites/notifications for debugging
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS email_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -469,7 +522,6 @@ CREATE TABLE IF NOT EXISTS email_logs (
 
 -- ============================================================================
 -- WEBHOOK LOGS TABLE
--- Track incoming webhook deliveries for debugging
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS webhook_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -606,7 +658,7 @@ async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Pr
 
   for (const bucket of buckets) {
     try {
-      await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+      const res = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${serviceKey}`,
@@ -619,9 +671,19 @@ async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Pr
           public: bucket.public,
         }),
       });
-      console.log(`Created bucket: ${bucket.name}`);
+
+      if (res.ok) {
+        console.log(`Created bucket: ${bucket.name}`);
+      } else {
+        const error = await res.text();
+        if (error.includes('already exists')) {
+          console.log(`Bucket ${bucket.name} already exists`);
+        } else {
+          console.warn(`Bucket ${bucket.name} creation warning:`, error.slice(0, 100));
+        }
+      }
     } catch (err) {
-      console.warn(`Bucket ${bucket.name} may already exist`);
+      console.warn(`Bucket ${bucket.name} error:`, err);
     }
   }
 }
