@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = body.supabase?.url || body.envVars?.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = body.supabase?.anonKey || body.envVars?.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     const supabaseServiceKey = body.supabase?.serviceKey || body.envVars?.SUPABASE_SERVICE_ROLE_KEY || '';
-    const elevenlabsAgentId = body.elevenlabs?.agentId || body.envVars?.ELEVENLABS_AGENT_ID || '';
+    const elevenlabsAgentId = body.elevenlabs?.agentId || body.envVars?.NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID || body.envVars?.ELEVENLABS_AGENT_ID || '';
 
     if (!platformName || !githubRepoName) {
       return NextResponse.json(
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     const vercelTeamId = process.env.VERCEL_TEAM_ID;
     const githubOwner = process.env.GITHUB_OWNER || 'dennissolver';
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!vercelToken) {
       return NextResponse.json({ error: 'VERCEL_TOKEN not configured' }, { status: 500 });
@@ -44,7 +45,8 @@ export async function POST(request: NextRequest) {
       NEXT_PUBLIC_PLATFORM_NAME: platformName,
       NEXT_PUBLIC_COMPANY_NAME: companyName || platformName,
       ELEVENLABS_API_KEY: elevenlabsApiKey || '',
-      ELEVENLABS_AGENT_ID: elevenlabsAgentId,
+      NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID: elevenlabsAgentId,
+      ANTHROPIC_API_KEY: anthropicApiKey || '',
     };
 
     // Check if project already exists
