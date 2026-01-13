@@ -303,6 +303,25 @@ function SetupWizard() {
 
       setCreationStatus(prev => ({ ...prev, vercel: 'done', elevenlabs: 'creating' }));
 
+      // ========== Step 3b: Trigger Vercel Deployment ==========
+      console.log('Triggering Vercel deployment...');
+
+      const triggerRes = await fetch('/api/setup/trigger-deployment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoName: githubRepoName,
+          projectName: projectSlug,
+        }),
+      });
+
+      if (!triggerRes.ok) {
+        console.warn('Initial deployment trigger failed, continuing...');
+      } else {
+        const triggerData = await triggerRes.json();
+        console.log('✓ Deployment triggered:', triggerData.deploymentId || triggerData.commitSha);
+      }
+
       // ========== Step 4: Create ElevenLabs Agent (AFTER Vercel so webhook URL is valid) ==========
       console.log('Creating ElevenLabs agent...');
 
