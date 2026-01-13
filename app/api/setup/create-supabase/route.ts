@@ -154,6 +154,80 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================================
+// DELETE - Remove Supabase project
+// ============================================================================
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { projectId, projectRef, projectName } = await request.json();
+
+    const supabaseAccessToken = process.env.SUPABASE_ACCESS_TOKEN;
+
+    if (!supabaseAccessToken) {
+      return NextResponse.json({ error: 'SUPABASE_ACCESS_TOKEN not configured' }, { status: 500 });
+    }
+
+    // Try to find project by ID, ref, or name
+    let idToDelete = projectId || projectRef;
+
+    // If we only have a name, look up the project ID
+    if (!idToDelete && projectName) {
+      console.log('[Cleanup] Looking up Supabase project by name:', projectName);
+
+      const listRes = await fetch('https://api.supabase.com/v1/projects', {
+        headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+      });
+
+      if (listRes.ok) {
+        const projects = await listRes.json();
+        const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+        const found = projects.find((p: any) => p.name === safeName || p.id === projectName);
+
+        if (found) {
+          idToDelete = found.id;
+        }
+      }
+    }
+
+    if (!idToDelete) {
+      console.log('[Cleanup] No Supabase project identifier provided');
+      return NextResponse.json({ success: true, alreadyDeleted: true });
+    }
+
+    console.log('[Cleanup] Deleting Supabase project:', idToDelete);
+
+    // Check if project exists
+    const checkRes = await fetch(`https://api.supabase.com/v1/projects/${idToDelete}`, {
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+
+    if (!checkRes.ok) {
+      console.log('[Cleanup] Supabase project not found:', idToDelete);
+      return NextResponse.json({ success: true, alreadyDeleted: true });
+    }
+
+    // Delete the project
+    const deleteRes = await fetch(`https://api.supabase.com/v1/projects/${idToDelete}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+
+    if (!deleteRes.ok && deleteRes.status !== 404) {
+      const error = await deleteRes.json().catch(() => ({}));
+      console.error('[Cleanup] Failed to delete Supabase project:', error);
+      return NextResponse.json({ error: 'Failed to delete project' }, { status: 400 });
+    }
+
+    console.log('[Cleanup] Supabase project deleted:', idToDelete);
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error('[Cleanup] Supabase delete error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 

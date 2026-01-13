@@ -4,12 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     // Accept multiple parameter formats from provision page
     const platformName = body.platformName || body.projectName;
     const githubRepoName = body.githubRepoName || body.githubRepo;
     const companyName = body.companyName || body.envVars?.NEXT_PUBLIC_COMPANY_NAME;
-    
+
     // Accept env vars in different formats
     const supabaseUrl = body.supabase?.url || body.envVars?.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = body.supabase?.anonKey || body.envVars?.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -59,10 +59,10 @@ export async function POST(request: NextRequest) {
     if (checkRes.ok) {
       const existing = await checkRes.json();
       console.log('Vercel project already exists:', safeName);
-      
+
       // Update env vars on existing project
       await updateEnvVars(vercelToken, existing.id, envVars, vercelTeamId);
-      
+
       return NextResponse.json({
         success: true,
         projectId: existing.id,
@@ -152,16 +152,16 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { projectId, envVars } = await request.json();
-    
+
     const vercelToken = process.env.VERCEL_TOKEN;
     const vercelTeamId = process.env.VERCEL_TEAM_ID;
-    
+
     if (!vercelToken || !projectId) {
       return NextResponse.json({ error: 'Token and project ID required' }, { status: 400 });
     }
-    
+
     await updateEnvVars(vercelToken, projectId, envVars, vercelTeamId);
-    
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Update env vars error:', error);
@@ -169,17 +169,79 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+// ============================================================================
+// DELETE - Remove Vercel project
+// ============================================================================
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { projectId, projectName } = await request.json();
+
+    const idToDelete = projectId || projectName;
+
+    if (!idToDelete) {
+      return NextResponse.json({ error: 'Project ID or name required' }, { status: 400 });
+    }
+
+    const vercelToken = process.env.VERCEL_TOKEN;
+    const vercelTeamId = process.env.VERCEL_TEAM_ID;
+
+    if (!vercelToken) {
+      return NextResponse.json({ error: 'VERCEL_TOKEN not configured' }, { status: 500 });
+    }
+
+    const teamQuery = vercelTeamId ? `?teamId=${vercelTeamId}` : '';
+
+    console.log('[Cleanup] Deleting Vercel project:', idToDelete);
+
+    // Check if project exists
+    const checkRes = await fetch(
+      `https://api.vercel.com/v9/projects/${idToDelete}${teamQuery}`,
+      {
+        headers: { Authorization: `Bearer ${vercelToken}` },
+      }
+    );
+
+    if (!checkRes.ok) {
+      console.log('[Cleanup] Vercel project not found:', idToDelete);
+      return NextResponse.json({ success: true, alreadyDeleted: true });
+    }
+
+    // Delete the project
+    const deleteRes = await fetch(
+      `https://api.vercel.com/v9/projects/${idToDelete}${teamQuery}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${vercelToken}` },
+      }
+    );
+
+    if (!deleteRes.ok && deleteRes.status !== 404) {
+      const error = await deleteRes.json().catch(() => ({}));
+      console.error('[Cleanup] Failed to delete Vercel project:', error);
+      return NextResponse.json({ error: 'Failed to delete project' }, { status: 400 });
+    }
+
+    console.log('[Cleanup] Vercel project deleted:', idToDelete);
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error('[Cleanup] Vercel delete error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 async function updateEnvVars(
-  token: string, 
-  projectId: string, 
+  token: string,
+  projectId: string,
   envVars: Record<string, string>,
   teamId?: string
 ): Promise<void> {
   const teamQuery = teamId ? `?teamId=${teamId}` : '';
-  
+
   for (const [key, value] of Object.entries(envVars)) {
     if (!value) continue;
-    
+
     try {
       // Try to create, if exists it will fail and we update
       const res = await fetch(
@@ -198,18 +260,18 @@ async function updateEnvVars(
           }),
         }
       );
-      
+
       if (!res.ok) {
         // Env var might already exist, try to get and update
         const listRes = await fetch(
           `https://api.vercel.com/v10/projects/${projectId}/env${teamQuery}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        
+
         if (listRes.ok) {
           const { envs } = await listRes.json();
           const existing = envs?.find((e: any) => e.key === key);
-          
+
           if (existing) {
             await fetch(
               `https://api.vercel.com/v10/projects/${projectId}/env/${existing.id}${teamQuery}`,

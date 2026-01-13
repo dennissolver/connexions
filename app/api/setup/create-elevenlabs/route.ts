@@ -25,7 +25,7 @@ Say: "Perfect! I've got everything I need. Check your screen for the summary!"`;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     // Accept multiple parameter formats
     const platformName = body.platformName || body.projectName || body.formData?.platformName;
     const companyName = body.companyName || body.formData?.companyName || platformName;
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Check for existing agent
     console.log('Checking for existing ElevenLabs agent:', agentDisplayName);
-    
+
     const listRes = await fetch('https://api.elevenlabs.io/v1/convai/agents', {
       headers: { 'xi-api-key': elevenlabsApiKey },
     });
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     if (listRes.ok) {
       const data = await listRes.json();
       const existing = data.agents?.find((a: any) => a.name === agentDisplayName);
-      
+
       if (existing) {
         console.log('Found existing agent:', existing.agent_id);
         return NextResponse.json({
@@ -129,5 +129,56 @@ export async function POST(request: NextRequest) {
       { error: error.message || 'Failed to create ElevenLabs agent' },
       { status: 500 }
     );
+  }
+}
+
+// ============================================================================
+// DELETE - Remove ElevenLabs agent
+// ============================================================================
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { agentId } = await request.json();
+
+    if (!agentId) {
+      return NextResponse.json({ error: 'Agent ID required' }, { status: 400 });
+    }
+
+    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
+
+    if (!elevenlabsApiKey) {
+      return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
+    }
+
+    console.log('[Cleanup] Deleting ElevenLabs agent:', agentId);
+
+    // Check if agent exists
+    const checkRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
+      headers: { 'xi-api-key': elevenlabsApiKey },
+    });
+
+    if (!checkRes.ok) {
+      console.log('[Cleanup] ElevenLabs agent not found:', agentId);
+      return NextResponse.json({ success: true, alreadyDeleted: true });
+    }
+
+    // Delete the agent
+    const deleteRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
+      method: 'DELETE',
+      headers: { 'xi-api-key': elevenlabsApiKey },
+    });
+
+    if (!deleteRes.ok && deleteRes.status !== 404) {
+      const error = await deleteRes.json().catch(() => ({}));
+      console.error('[Cleanup] Failed to delete ElevenLabs agent:', error);
+      return NextResponse.json({ error: 'Failed to delete agent' }, { status: 400 });
+    }
+
+    console.log('[Cleanup] ElevenLabs agent deleted:', agentId);
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error('[Cleanup] ElevenLabs delete error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
