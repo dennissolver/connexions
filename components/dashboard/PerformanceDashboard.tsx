@@ -2,17 +2,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  TrendingUp,
+  TrendingDown,
   Minus,
   RefreshCw,
   ChevronRight,
-  Bell
+  Bell,
+  Rocket
 } from 'lucide-react';
 
 interface AgentPerformance {
@@ -128,12 +129,63 @@ export function PerformanceDashboard({ onAgentSelect }: PerformanceDashboardProp
       <div className="text-center py-12">
         <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
         <p className="text-gray-400">{error || 'No data available'}</p>
-        <button 
+        <button
           onClick={fetchData}
           className="mt-4 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
         >
           Retry
         </button>
+      </div>
+    );
+  }
+
+  // Show onboarding if no agents
+  if (data.platform.total_agents === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-16">
+          <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Rocket className="w-10 h-10 text-purple-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-4">Welcome to Connexions!</h1>
+          <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+            Your AI interview platform is ready. Let&apos;s set up your first interview panel to get started.
+          </p>
+          <a
+            href="/factory/provision"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl text-white font-semibold text-lg transition-all transform hover:scale-105"
+          >
+            <Rocket className="w-5 h-5" />
+            Set Up Your Platform
+          </a>
+          <p className="text-gray-500 text-sm mt-6">
+            This will take about 2 minutes
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">1</span>
+            </div>
+            <h3 className="font-semibold text-white mb-2">Configure Platform</h3>
+            <p className="text-gray-400 text-sm">Set up your branding, company details, and interview preferences</p>
+          </div>
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">2</span>
+            </div>
+            <h3 className="font-semibold text-white mb-2">Create Interview Panels</h3>
+            <p className="text-gray-400 text-sm">Design AI interviewers with custom questions and personas</p>
+          </div>
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">3</span>
+            </div>
+            <h3 className="font-semibold text-white mb-2">Invite Participants</h3>
+            <p className="text-gray-400 text-sm">Send interview invites and track responses in real-time</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -213,8 +265,14 @@ export function PerformanceDashboard({ onAgentSelect }: PerformanceDashboardProp
 
       {/* Agents List */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-700">
+        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
           <h2 className="font-semibold text-white">All Agents</h2>
+          <a
+            href="/factory/provision"
+            className="text-sm text-purple-400 hover:text-purple-300"
+          >
+            + Create New Panel
+          </a>
         </div>
         <div className="divide-y divide-slate-700">
           {data.agents.map((agent) => (
