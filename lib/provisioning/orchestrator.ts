@@ -1,4 +1,5 @@
 ﻿// lib/provisioning/orchestrator.ts
+
 import { executeProvisionStep } from './executeStep';
 import {
   getProvisionRun,
@@ -12,12 +13,24 @@ import {
   recordRetry,
 } from '@/lib/provisioning/retry';
 
-
+/**
+ * Orchestration contract:
+ *
+ * - This function MAY execute provisioning steps
+ * - ONLY when run.status === 'provisioning_requested'
+ * - Reading state must NEVER cause execution
+ * - Observers may call this safely
+ */
 export async function runProvisioningStep(
   projectSlug: string,
   publicBaseUrl: string
 ) {
   const run = await getProvisionRun(projectSlug);
+
+  // 🔒 HARD GUARD — NO INTENT, NO EXECUTION
+  if (!run || run.status !== 'provisioning_requested') {
+    return run;
+  }
 
   try {
     const result = await executeProvisionStep(run.state, {
@@ -28,16 +41,20 @@ export async function runProvisioningStep(
       metadata: run.metadata ?? {},
     });
 
-    if (!result.nextState) return run;
+    // No transition = no mutation
+    if (!result?.nextState) {
+      return run;
+    }
 
     await advanceState(
       projectSlug,
       run.state,
       result.nextState,
-      result.metadata
+      result.metadata ?? run.metadata
     );
 
-    return getProvisionRun(projectSlug);
+    return await getProvisionRun(projectSlug);
+
   } catch (err: any) {
     captureProvisioningError({
       projectSlug,
@@ -46,23 +63,22 @@ export async function runProvisioningStep(
       metadata: run.metadata,
     });
 
-    const retry = await shouldRetryProvisioning(projectSlug);
+    const retryAllowed = await shouldRetryProvisioning(projectSlug);
 
-    if (retry) {
+    if (retryAllowed) {
       await recordRetry(projectSlug);
       return run;
     }
 
-    await failRun(projectSlug, err.message);
+    await failRun(projectSlug, err?.message ?? 'Provisioning failed');
 
     await sendProvisioningAlert({
       projectSlug,
       state: run.state,
-      error: err.message,
+      error: err?.message ?? 'Provisioning failed',
       metadata: run.metadata,
     });
 
     throw err;
   }
 }
-
