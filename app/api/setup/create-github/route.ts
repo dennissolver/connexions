@@ -1229,7 +1229,7 @@ export async function POST(request: NextRequest) {
       console.log('[Webhook] Processing INTERVIEW call');
       
       // Find the agent/panel
-      const { data: agent } = await supabase
+      const { data: agent } = await getSupabase()
         .from('agents')
         .select('*')
         .eq('elevenlabs_agent_id', agentId)
