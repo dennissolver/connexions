@@ -1,26 +1,36 @@
 // app/api/setup/create-elevenlabs/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent for the Connexions AI Interview Platform. Your goal is to gather information from the user to create their custom AI interviewer.
+// Template with placeholders - {{AGENT_NAME}} and {{PLATFORM_NAME}} get replaced
+const SETUP_AGENT_PROMPT_TEMPLATE = `You are {{AGENT_NAME}}, a warm and curious AI assistant helping people design their perfect interview or survey experience on the {{PLATFORM_NAME}} platform.
 
-## Ask these questions conversationally (one at a time):
-1. What name do you want for your Interview session?
-2. What type of interviews do you want to conduct? (job interviews, customer research, surveys, etc.)
-3. Who will be interviewed? (job candidates, customers, users, etc.)
-4. What tone should the interviewer have? (professional, casual, friendly, formal)
-5. How long should interviews typically last? (5 mins, 10 mins, 15 mins, etc.)
-6. What are 3-5 key questions or topics the interviewer should cover?
+## Your Approach
+You're having a genuine conversation to understand what they're trying to achieve. Don't follow a rigid script - listen, ask follow-up questions, and help them clarify their vision.
 
-## Rules
-- Be conversational and natural
-- ONE question at a time
-- Under 30 words per response
-- Confirm understanding after each answer
-- Keep the conversation under 10 minutes
+## Discovery Areas (explore naturally, not as a checklist)
+- What's the goal? Understanding the "why" helps you design better questions
+- Who are they talking to? (candidates, customers, users, patients, etc.)
+- What do they most want to learn or discover?
+- What tone fits their brand and audience?
+- How much of someone's time can they realistically ask for?
 
-## Wrap Up
-When you have all the information, summarize what you'll create and thank them.
-Say: "Perfect! I've got everything I need. Check your screen for the summary!"`;
+## Conversation Style
+- Be genuinely curious - ask "tell me more about that" when something's interesting
+- Mirror their energy - if they're casual, be casual; if formal, match that
+- Offer suggestions when helpful: "Some clients in your space find it useful to ask about..."
+- Keep responses concise (under 40 words) but warm
+- ONE question or thought at a time
+
+## Helpful Prompts When They're Stuck
+- "What would success look like after running these interviews?"
+- "If you could only ask three questions, what would matter most?"
+- "What do you wish you knew about your [customers/candidates/users]?"
+
+## Wrapping Up
+When you have a clear picture, summarize it back conversationally:
+"So let me make sure I've got this right... [summary]. Does that capture it?"
+
+Then say: "Perfect! I've got everything I need to create this for you. Check your screen for the summary!"`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +40,7 @@ export async function POST(request: NextRequest) {
     const platformName = body.platformName || body.projectName || body.formData?.platformName;
     const companyName = body.companyName || body.formData?.companyName || platformName;
     const voiceGender = body.voiceGender || body.formData?.voiceGender || 'female';
+    const agentName = body.agentName || body.formData?.agentName || (voiceGender === 'male' ? 'Alex' : 'Sarah');
     const webhookUrl = body.webhookUrl || '';
 
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
@@ -43,6 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     const agentDisplayName = `${companyName || platformName} Setup Agent`;
+
+    // Replace placeholders in prompt
+    const prompt = SETUP_AGENT_PROMPT_TEMPLATE
+      .replace(/\{\{AGENT_NAME\}\}/g, agentName)
+      .replace(/\{\{PLATFORM_NAME\}\}/g, platformName);
 
     // Check for existing agent
     console.log('Checking for existing ElevenLabs agent:', agentDisplayName);
@@ -67,17 +83,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Select voice based on gender
+    // Female: Sarah (EXAVITQu4vr4xnSDxMaL), Male: Adam (pNInz6obpgDQGcFmaJgB)
     const voiceId = voiceGender === 'male' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL';
 
-    console.log('Creating ElevenLabs agent:', agentDisplayName);
+    console.log('Creating ElevenLabs agent:', agentDisplayName, '| Voice:', agentName, '| Gender:', voiceGender);
 
-    // Build agent config - using eleven_flash_v2 for English
+    // Build first message with agent name
+    const firstMessage = `Hi there! I'm ${agentName}, and I'll be helping you set up your interview experience today. What kind of interviews or surveys are you looking to run?`;
+
+    // Build agent config
     const agentConfig: any = {
       name: agentDisplayName,
       conversation_config: {
         agent: {
-          prompt: { prompt: SETUP_AGENT_PROMPT },
-          first_message: "Hello! I'm Sandra, your Connexions AI Interview Platform setup assistant. How can we help you today?",
+          prompt: { prompt },
+          first_message: firstMessage,
           language: 'en',
         },
         tts: {
@@ -121,6 +141,7 @@ export async function POST(request: NextRequest) {
       success: true,
       agentId: agent.agent_id,
       agentName: agent.name || agentDisplayName,
+      voiceName: agentName,
     });
 
   } catch (error: any) {

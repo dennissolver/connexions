@@ -35,6 +35,100 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 }
 
 // =============================================================================
+// BUILD STATUS POLLING
+// =============================================================================
+
+interface BuildResult {
+  success: boolean;
+  status: string;
+  url?: string;
+  error?: string;
+  duration?: number;
+}
+
+async function pollBuildStatus(
+  deploymentId: string,
+  projectName: string,
+  onStatusUpdate: (status: string, message: string) => void
+): Promise<BuildResult> {
+  const startTime = Date.now();
+  const maxWaitTime = 180000; // 3 minutes max
+  const pollInterval = 5000; // Check every 5 seconds
+
+  let lastStatus = '';
+
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      const res = await fetch(`/api/setup/check-build-status?deploymentId=${deploymentId}&projectName=${projectName}`);
+
+      if (!res.ok) {
+        console.warn('[BuildPoll] API error:', res.status);
+        await sleep(pollInterval);
+        continue;
+      }
+
+      const data = await res.json();
+      const status = data.status?.toUpperCase() || 'UNKNOWN';
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+
+      // Update UI with current status
+      if (status !== lastStatus) {
+        lastStatus = status;
+
+        if (status === 'BUILDING') {
+          onStatusUpdate('creating', `Building... (${elapsed}s)`);
+        } else if (status === 'QUEUED') {
+          onStatusUpdate('creating', `Queued... (${elapsed}s)`);
+        } else if (status === 'INITIALIZING') {
+          onStatusUpdate('creating', `Initializing... (${elapsed}s)`);
+        }
+      } else {
+        // Same status, just update time
+        onStatusUpdate('creating', `${status === 'BUILDING' ? 'Building' : status}... (${elapsed}s)`);
+      }
+
+      // Check terminal states
+      if (status === 'READY') {
+        return {
+          success: true,
+          status: 'READY',
+          url: data.url,
+          duration: elapsed,
+        };
+      }
+
+      if (status === 'ERROR' || status === 'CANCELED') {
+        return {
+          success: false,
+          status,
+          error: data.error || `Deployment ${status.toLowerCase()}`,
+          duration: elapsed,
+        };
+      }
+
+      // Wait before next poll
+      await sleep(pollInterval);
+
+    } catch (err: any) {
+      console.warn('[BuildPoll] Poll error:', err.message);
+      await sleep(pollInterval);
+    }
+  }
+
+  // Timeout
+  return {
+    success: false,
+    status: 'TIMEOUT',
+    error: 'Build verification timed out after 3 minutes',
+    duration: Math.floor((Date.now() - startTime) / 1000),
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -107,6 +201,7 @@ const getInitialCreateSteps = (): CreateStep[] => [
   { id: 'github', name: 'Create GitHub Repository', icon: Github, status: 'pending' },
   { id: 'vercel', name: 'Deploy to Vercel', icon: Globe, status: 'pending' },
   { id: 'deployment', name: 'Trigger Deployment', icon: Rocket, status: 'pending' },
+  { id: 'build', name: 'Verify Build', icon: CheckCircle, status: 'pending' },
   { id: 'email', name: 'Send Welcome Email', icon: Mail, status: 'pending' },
 ];
 
@@ -660,6 +755,7 @@ function SetupWizard() {
       updateCreateStep('deployment', { status: 'creating', message: 'Triggering deployment...' });
       console.log('[Provision] Triggering Vercel deployment...');
 
+      let deploymentId = '';
       const triggerRes = await fetchWithTimeout('/api/setup/trigger-deployment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -674,11 +770,36 @@ function SetupWizard() {
         updateCreateStep('deployment', { status: 'warning', message: 'Manual deployment may be needed' });
       } else {
         const triggerData = await triggerRes.json();
+        deploymentId = triggerData.deploymentId || '';
         updateCreateStep('deployment', { status: 'ready', message: 'Deployment triggered' });
         console.log('[Provision] Deployment triggered:', triggerData);
       }
 
-      // ========== Step 6: Send Welcome Email ==========
+      // ========== Step 6: Verify Build ==========
+      if (deploymentId) {
+        updateCreateStep('build', { status: 'creating', message: 'Building... (this may take 1-2 minutes)' });
+        console.log('[Provision] Waiting for build to complete:', deploymentId);
+
+        const buildResult = await pollBuildStatus(deploymentId, projectSlug, (status, message) => {
+          updateCreateStep('build', { status: status as CreateStatus, message });
+        });
+
+        if (buildResult.success) {
+          updateCreateStep('build', { status: 'ready', message: `Build complete (${buildResult.duration}s)` });
+          console.log('[Provision] Build succeeded:', buildResult);
+          // Update URL from actual deployment if available
+          if (buildResult.url) {
+            vercelUrl = buildResult.url.startsWith('http') ? buildResult.url : `https://${buildResult.url}`;
+          }
+        } else {
+          updateCreateStep('build', { status: 'error', message: buildResult.error || 'Build failed' });
+          throw new Error(`Build failed: ${buildResult.error}. Check Vercel dashboard for details.`);
+        }
+      } else {
+        updateCreateStep('build', { status: 'warning', message: 'Could not verify build - check Vercel dashboard' });
+      }
+
+      // ========== Step 7: Send Welcome Email ==========
       updateCreateStep('email', { status: 'creating', message: 'Sending welcome email...' });
       console.log('[Provision] Sending welcome email...');
 
@@ -993,7 +1114,7 @@ function SetupWizard() {
             icon={Sparkles}
             isActive={currentPhase === 'create'}
             isComplete={allDone && !hasError}
-            count={`${createReadyCount}/6 ready`}
+            count={`${createReadyCount}/7 ready`}
           />
           <div className="space-y-3">
             {createSteps.map(step => (
