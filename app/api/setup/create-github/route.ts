@@ -21,6 +21,7 @@ const TEMPLATE_FILES: Record<string, string> = {
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@elevenlabs/client": "^0.12.2",
+    "@elevenlabs/react": "^0.0.2",
     "@google/generative-ai": "^0.24.1",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
