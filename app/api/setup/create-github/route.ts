@@ -550,21 +550,21 @@ export default function PanelDetailPage() {
     const supabase = createClient();
     supabase.from('agents').select('*').eq('slug', slug).single().then(async ({ data: panelData }) => {
       if (panelData) {
-        setPanel(panelData);
+        setPanel(panelData as Panel);
         const { data: interviewData } = await supabase
           .from('interviews')
           .select('*')
-          .eq('agent_id', panelData.id)
+          .eq('agent_id', (panelData as Panel).id)
           .eq('status', 'completed')
           .order('completed_at', { ascending: false });
-        setInterviews(interviewData || []);
+        setInterviews((interviewData || []) as Interview[]);
       }
       setLoading(false);
     });
   }, [slug]);
 
   const copyInterviewLink = () => {
-    const link = \`\${window.location.origin}/interview/\${panel?.elevenlabs_agent_id}\`;
+    const link = \`\${window.location.origin}/interview/\${panel?.slug}\`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -760,10 +760,10 @@ export default function InterviewPage() {
     supabase.from('agents').select('*').eq('slug', slug).single().then(({ data, error: err }) => {
       if (err || !data) {
         setError('Interview panel not found');
-      } else if (!data.elevenlabs_agent_id) {
+      } else if (!(data as Panel).elevenlabs_agent_id) {
         setError('Interview not configured');
       } else {
-        setPanel(data);
+        setPanel(data as Panel);
       }
       setLoading(false);
     });
