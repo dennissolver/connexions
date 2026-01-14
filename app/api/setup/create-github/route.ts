@@ -1189,68 +1189,6 @@ Transcript:
 // ELEVENLABS AGENT CREATION
 // ============================================================================
 
-async function createSetupAgent(platformName: string, webhookUrl: string, elevenLabsApiKey: string): Promise<string> {
-  const prompt = \`You are an AI assistant helping users create interview panels for "\${platformName}".
-
-## Your Role
-You help users design and configure interview panels by having a natural conversation with them.
-
-## Information to Collect
-Guide the user through providing these details:
-1. **Panel Name**: What should this interview/survey be called?
-2. **Description**: What is the purpose of this panel?
-3. **Background Context**: What background information should the interviewer know?
-4. **Objectives**: What are the main goals of these interviews?
-5. **Key Insights Needed**: What specific information are we trying to uncover?
-6. **Target Audience**: Who will be interviewed?
-7. **Interview Type**: Is this a survey, interview, feedback session, etc.?
-8. **Tone**: Should it be formal, conversational, friendly, professional?
-9. **Duration**: How long should each interview take (in minutes)?
-10. **Questions**: What are the main questions to ask? (Get 3-10 questions)
-11. **Follow-up Guidance**: How should follow-up questions be handled?
-12. **Topics to Avoid**: Are there any sensitive topics to avoid?
-13. **Greeting**: How should the interviewer greet participants?
-14. **Closing Message**: How should interviews end?
-
-## Guidelines
-- Ask questions one at a time
-- Be conversational and helpful
-- Suggest improvements or clarifications when appropriate
-- Summarize the panel configuration at the end for confirmation\`;
-
-  const response = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
-    method: 'POST',
-    headers: { 
-      'xi-api-key': elevenLabsApiKey, 
-      'Content-Type': 'application/json' 
-    },
-    body: JSON.stringify({ 
-      name: \`\${platformName} - Setup Agent\`, 
-      conversation_config: { 
-        agent: { 
-          prompt: { prompt }, 
-          first_message: \`Welcome! I'm here to help you create an interview panel for \${platformName}. Let's start by giving your panel a name. What would you like to call it?\`,
-          language: 'en' 
-        }, 
-        asr: { quality: 'high', provider: 'elevenlabs' }, 
-        turn: { turn_timeout: 15, mode: 'turn_based' }, 
-        tts: { voice_id: 'JBFqnCBsd6RMkjVDRZzb' },
-        conversation: { max_duration_seconds: 3600 },
-        webhooks: {
-          post_call: { url: webhookUrl }
-        }
-      }, 
-      platform_settings: { auth: { enable_auth: false } } 
-    }),
-  });
-  
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(\`ElevenLabs setup agent creation error: \${err}\`);
-  }
-  return (await response.json()).agent_id;
-}
-
 async function createInterviewAgent(panel: ParsedPanel, webhookUrl: string): Promise<string> {
   const prompt = \`You are an AI interviewer conducting "\${panel.name}".
 
@@ -1555,6 +1493,72 @@ export async function GET() {
   return NextResponse.json({ status: 'active', timestamp: new Date().toISOString() }); 
 }`,
 };
+
+// ============================================================================
+// ELEVENLABS SETUP AGENT CREATION (for provisioning)
+// ============================================================================
+
+async function createSetupAgent(platformName: string, webhookUrl: string, elevenLabsApiKey: string): Promise<string> {
+  const prompt = `You are an AI assistant helping users create interview panels for "${platformName}".
+
+## Your Role
+You help users design and configure interview panels by having a natural conversation with them.
+
+## Information to Collect
+Guide the user through providing these details:
+1. **Panel Name**: What should this interview/survey be called?
+2. **Description**: What is the purpose of this panel?
+3. **Background Context**: What background information should the interviewer know?
+4. **Objectives**: What are the main goals of these interviews?
+5. **Key Insights Needed**: What specific information are we trying to uncover?
+6. **Target Audience**: Who will be interviewed?
+7. **Interview Type**: Is this a survey, interview, feedback session, etc.?
+8. **Tone**: Should it be formal, conversational, friendly, professional?
+9. **Duration**: How long should each interview take (in minutes)?
+10. **Questions**: What are the main questions to ask? (Get 3-10 questions)
+11. **Follow-up Guidance**: How should follow-up questions be handled?
+12. **Topics to Avoid**: Are there any sensitive topics to avoid?
+13. **Greeting**: How should the interviewer greet participants?
+14. **Closing Message**: How should interviews end?
+
+## Guidelines
+- Ask questions one at a time
+- Be conversational and helpful
+- Suggest improvements or clarifications when appropriate
+- Summarize the panel configuration at the end for confirmation`;
+
+  const response = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
+    method: 'POST',
+    headers: {
+      'xi-api-key': elevenLabsApiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: `${platformName} - Setup Agent`,
+      conversation_config: {
+        agent: {
+          prompt: { prompt },
+          first_message: `Welcome! I'm here to help you create an interview panel for ${platformName}. Let's start by giving your panel a name. What would you like to call it?`,
+          language: 'en'
+        },
+        asr: { quality: 'high', provider: 'elevenlabs' },
+        turn: { turn_timeout: 15, mode: 'turn_based' },
+        tts: { voice_id: 'JBFqnCBsd6RMkjVDRZzb' },
+        conversation: { max_duration_seconds: 3600 },
+        webhooks: {
+          post_call: { url: webhookUrl }
+        }
+      },
+      platform_settings: { auth: { enable_auth: false } }
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`ElevenLabs setup agent creation error: ${err}`);
+  }
+  return (await response.json()).agent_id;
+}
 
 // ============================================================================
 // DYNAMIC CONFIG FILE
