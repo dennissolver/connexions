@@ -7,33 +7,21 @@ import {
   failRun,
 } from './engine';
 import { sendProvisioningAlert } from './alerts';
-import { captureProvisioningError } from '@/lib/provisioning/sentry';
+import { captureProvisioningError } from './sentry';
 import {
   shouldRetryProvisioning,
   recordRetry,
-} from '@/lib/provisioning/retry';
+} from './retry';
+import { ProvisionState } from './states';
 
-/**
- * Orchestration contract:
- *
- * - This function MAY execute provisioning steps
- * - ONLY when run.status === 'provisioning_requested'
- * - Reading state must NEVER cause execution
- * - Observers may call this safely
- */
 export async function runProvisioningStep(
   projectSlug: string,
   publicBaseUrl: string
 ) {
   const run = await getProvisionRun(projectSlug);
 
-  // 🔒 HARD GUARD — NO INTENT, NO EXECUTION
-  if (!run || run.status !== 'provisioning_requested') {
-    return run;
-  }
-
   try {
-    const result = await executeProvisionStep(run.state, {
+    const result = await executeProvisionStep(run.state as ProvisionState, {
       projectSlug,
       publicBaseUrl,
       supabaseToken: process.env.SUPABASE_ACCESS_TOKEN!,
@@ -41,20 +29,16 @@ export async function runProvisioningStep(
       metadata: run.metadata ?? {},
     });
 
-    // No transition = no mutation
-    if (!result?.nextState) {
-      return run;
-    }
+    if (!result.nextState) return run;
 
     await advanceState(
       projectSlug,
-      run.state,
+      run.state as ProvisionState,
       result.nextState,
-      result.metadata ?? run.metadata
+      result.metadata
     );
 
-    return await getProvisionRun(projectSlug);
-
+    return getProvisionRun(projectSlug);
   } catch (err: any) {
     captureProvisioningError({
       projectSlug,
@@ -63,22 +47,33 @@ export async function runProvisioningStep(
       metadata: run.metadata,
     });
 
-    const retryAllowed = await shouldRetryProvisioning(projectSlug);
+    const retry = await shouldRetryProvisioning(projectSlug);
 
-    if (retryAllowed) {
+    if (retry) {
       await recordRetry(projectSlug);
       return run;
     }
 
-    await failRun(projectSlug, err?.message ?? 'Provisioning failed');
+    await failRun(projectSlug, err.message);
 
     await sendProvisioningAlert({
       projectSlug,
       state: run.state,
-      error: err?.message ?? 'Provisioning failed',
+      error: err.message,
       metadata: run.metadata,
     });
 
     throw err;
   }
+}
+
+/**
+ * ✅ COMPATIBILITY EXPORT
+ * Keeps existing API routes working
+ */
+export async function runOrchestrator(
+  projectSlug: string,
+  publicBaseUrl: string
+) {
+  return runProvisioningStep(projectSlug, publicBaseUrl);
 }

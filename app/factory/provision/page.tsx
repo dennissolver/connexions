@@ -1,46 +1,14 @@
-﻿// app/factory/provision/page.tsx
-'use client';
+﻿'use client';
 
-import { useProvisioning } from '@/app/hooks/useProvisioning';
-import { ProvisioningStatus } from '@/app/components/ProvisioningStatus';
-import { ProvisioningProgress } from '@/app/components/ProvisioningProgress';
+import { Suspense } from 'react';
+import ProvisionClient from './provision-client';
+
+export const dynamic = 'force-dynamic';
 
 export default function ProvisionPage() {
-  const platformName = 'demo-platform'; // replace dynamically
-  const publicBaseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-
-
-  const {
-    state,
-    metadata,
-    loading,
-    error,
-    isComplete,
-  } = useProvisioning(platformName, publicBaseUrl);
-
   return (
-    <div className="max-w-xl mx-auto py-12 space-y-6">
-      <h1 className="text-2xl font-semibold">
-        Platform Provisioning
-      </h1>
-
-      <ProvisioningProgress state={state} />
-
-      <ProvisioningStatus state={state} error={error} />
-
-      {isComplete && (
-        <pre className="bg-muted p-4 rounded text-xs overflow-auto">
-          {JSON.stringify(metadata, null, 2)}
-        </pre>
-      )}
-
-      {loading && (
-        <div className="text-sm text-muted-foreground">
-          Checking statusâ€¦
-        </div>
-      )}
-    </div>
+    <Suspense fallback={<div className="p-6">Loading provisioning…</div>}>
+      <ProvisionClient />
+    </Suspense>
   );
 }
-

@@ -2,20 +2,29 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ProvisionState, ALLOWED_TRANSITIONS } from './states';
 
+/* ======================================================
+   READ ONLY — SAFE — NO SIDE EFFECTS
+====================================================== */
 export async function getProvisionRun(projectSlug: string) {
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
     .select('*')
     .eq('project_slug', projectSlug)
-    .single();
+    .maybeSingle();
 
-  if (data) return data;
+  if (error) throw error;
 
-  if (error && error.code !== 'PGRST116') {
-    throw error;
-  }
+  return data; // may be null
+}
 
-  const { data: created, error: insertError } = await supabaseAdmin
+/* ======================================================
+   EXPLICIT CREATION — CALLED ONCE FROM SETUP FLOW
+====================================================== */
+export async function createProvisionRun(projectSlug: string) {
+  const existing = await getProvisionRun(projectSlug);
+  if (existing) return existing;
+
+  const { data, error } = await supabaseAdmin
     .from('provision_runs')
     .insert({
       project_slug: projectSlug,
@@ -25,11 +34,14 @@ export async function getProvisionRun(projectSlug: string) {
     .select()
     .single();
 
-  if (insertError) throw insertError;
+  if (error) throw error;
 
-  return created;
+  return data;
 }
 
+/* ======================================================
+   STATE MACHINE — ORCHESTRATOR ONLY
+====================================================== */
 export async function advanceState(
   projectSlug: string,
   from: ProvisionState,
@@ -37,10 +49,10 @@ export async function advanceState(
   metadata?: Record<string, any>
 ) {
   if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
-    throw new Error(`Invalid transition ${from} â†’ ${to}`);
+    throw new Error(`Invalid transition ${from} → ${to}`);
   }
 
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('provision_runs')
     .update({
       state: to,
@@ -48,11 +60,19 @@ export async function advanceState(
       updated_at: new Date().toISOString(),
     })
     .eq('project_slug', projectSlug)
-    .eq('state', from);
+    .eq('state', from)
+    .select()
+    .single();
 
   if (error) throw error;
+  if (!data) throw new Error('State transition race condition');
+
+  return data;
 }
 
+/* ======================================================
+   TERMINAL FAILURE
+====================================================== */
 export async function failRun(
   projectSlug: string,
   errorMessage: string
@@ -68,4 +88,3 @@ export async function failRun(
 
   if (error) throw error;
 }
-
