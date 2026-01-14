@@ -467,10 +467,21 @@ CREATE TABLE IF NOT EXISTS interviews (
   interviewee_id UUID,
   status TEXT DEFAULT 'pending',
   source TEXT DEFAULT 'voice',
+  -- Participant Demographics
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  mobile TEXT,
+  company_name TEXT,
+  city TEXT,
+  state TEXT,
+  -- Legacy fields (kept for compatibility)
   interviewee_name TEXT,
   interviewee_email TEXT,
   interviewee_profile JSONB DEFAULT '{}',
+  -- Conversation Data
   conversation_id TEXT,
+  elevenlabs_conversation_id TEXT,
   messages JSONB DEFAULT '[]',
   transcript TEXT,
   transcript_url TEXT,
@@ -478,13 +489,24 @@ CREATE TABLE IF NOT EXISTS interviews (
   summary TEXT,
   feedback JSONB DEFAULT '{}',
   extracted_data JSONB DEFAULT '{}',
+  extracted_answers JSONB DEFAULT '{}',
   transcript_received BOOLEAN DEFAULT FALSE,
+  -- Timing
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   duration_seconds INT,
+  -- Notifications
+  notification_sent BOOLEAN DEFAULT FALSE,
+  notification_sent_at TIMESTAMPTZ,
+  -- Metadata
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
+CREATE INDEX IF NOT EXISTS idx_interviews_email ON interviews(email);
+CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
 
 -- ============================================================================
 -- RESPONSES TABLE

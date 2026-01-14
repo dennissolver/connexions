@@ -319,50 +319,975 @@ export default function CreatePage() {
     'app/panels/page.tsx': `// app/panels/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Users, BarChart3, ExternalLink } from 'lucide-react';
+import { Plus, Users, BarChart3, ExternalLink, Mail, Phone, Building, MapPin, Clock, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
-interface Panel { id: string; name: string; description: string; status: string; total_interviews: number; completed_interviews: number; slug: string; }
+interface Panel { 
+  id: string; 
+  name: string; 
+  description: string; 
+  status: string; 
+  total_interviews: number; 
+  completed_interviews: number; 
+  slug: string; 
+  created_at: string;
+}
+
+interface Interview {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  company_name: string;
+  city: string;
+  state: string;
+  completed_at: string;
+  duration_seconds: number;
+  summary: string;
+  agent_id: string;
+}
 
 export default function PanelsPage() {
   const [panels, setPanels] = useState<Panel[]>([]);
+  const [recentInterviews, setRecentInterviews] = useState<Interview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'panels' | 'responses'>('panels');
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from('agents').select('*').order('created_at', { ascending: false }).then(({ data }) => { setPanels(data || []); setLoading(false); });
+    Promise.all([
+      supabase.from('agents').select('*').order('created_at', { ascending: false }),
+      supabase.from('interviews').select('*').eq('status', 'completed').order('completed_at', { ascending: false }).limit(50)
+    ]).then(([panelsRes, interviewsRes]) => {
+      setPanels(panelsRes.data || []);
+      setRecentInterviews(interviewsRes.data || []);
+      setLoading(false);
+    });
   }, []);
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>;
 
+  const totalResponses = recentInterviews.length;
+
+  return (
+    <div className="min-h-screen bg-slate-950 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+            <p className="text-slate-400 mt-1">{panels.length} panels · {totalResponses} responses</p>
+          </div>
+          <a href="/create" className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors">
+            <Plus className="w-5 h-5" /> Create Panel
+          </a>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <div className="text-3xl font-bold text-white">{panels.length}</div>
+            <div className="text-slate-400 text-sm">Interview Panels</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <div className="text-3xl font-bold text-purple-400">{totalResponses}</div>
+            <div className="text-slate-400 text-sm">Total Responses</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <div className="text-3xl font-bold text-green-400">{panels.filter(p => p.status === 'active').length}</div>
+            <div className="text-slate-400 text-sm">Active Panels</div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-4 mb-6 border-b border-slate-800">
+          <button onClick={() => setActiveTab('panels')} className={\`pb-3 px-1 font-medium transition-colors \${activeTab === 'panels' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'}\`}>
+            Panels ({panels.length})
+          </button>
+          <button onClick={() => setActiveTab('responses')} className={\`pb-3 px-1 font-medium transition-colors \${activeTab === 'responses' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'}\`}>
+            All Responses ({totalResponses})
+          </button>
+        </div>
+
+        {activeTab === 'panels' ? (
+          /* Panels Grid */
+          panels.length === 0 ? (
+            <div className="text-center py-16 bg-slate-900 rounded-xl border border-slate-800">
+              <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <h2 className="text-xl font-medium text-white mb-2">No panels yet</h2>
+              <p className="text-slate-400 mb-6">Create your first interview panel to get started.</p>
+              <a href="/create" className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors">
+                <Plus className="w-5 h-5" /> Create Panel
+              </a>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {panels.map(panel => (
+                <a key={panel.id} href={\`/panel/\${panel.slug}\`} className="block bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-purple-500/50 transition-colors group">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-lg font-semibold text-white group-hover:text-purple-400 transition-colors">{panel.name}</h3>
+                    <span className={\`px-2 py-1 rounded text-xs \${panel.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}\`}>
+                      {panel.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-sm mb-4 line-clamp-2">{panel.description || 'No description'}</p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <Users className="w-4 h-4" /> {panel.completed_interviews || 0} responses
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400 transition-colors" />
+                  </div>
+                </a>
+              ))}
+            </div>
+          )
+        ) : (
+          /* All Responses Table */
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            {recentInterviews.length === 0 ? (
+              <div className="text-center py-16">
+                <Users className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400">No responses yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-800/50">
+                    <tr>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Participant</th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Contact</th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Company</th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Location</th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Completed</th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {recentInterviews.map(interview => (
+                      <tr key={interview.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-white">{interview.first_name} {interview.last_name}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm">
+                            {interview.email && <div className="flex items-center gap-1 text-slate-300"><Mail className="w-3 h-3" /> {interview.email}</div>}
+                            {interview.mobile && <div className="flex items-center gap-1 text-slate-400 mt-1"><Phone className="w-3 h-3" /> {interview.mobile}</div>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {interview.company_name && <div className="flex items-center gap-1 text-slate-300"><Building className="w-3 h-3" /> {interview.company_name}</div>}
+                        </td>
+                        <td className="px-6 py-4">
+                          {(interview.city || interview.state) && (
+                            <div className="flex items-center gap-1 text-slate-400"><MapPin className="w-3 h-3" /> {[interview.city, interview.state].filter(Boolean).join(', ')}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-400">
+                          {interview.completed_at ? new Date(interview.completed_at).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-400">
+                          {interview.duration_seconds ? \`\${Math.round(interview.duration_seconds / 60)}m\` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}`,
+
+    'app/panel/[slug]/page.tsx': `// app/panel/[slug]/page.tsx
+'use client';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Users, Mail, Phone, Building, MapPin, Clock, FileText, Copy, ExternalLink, Play } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { useParams } from 'next/navigation';
+
+interface Panel {
+  id: string;
+  name: string;
+  description: string;
+  slug: string;
+  elevenlabs_agent_id: string;
+  greeting: string;
+  questions: string[];
+  settings: any;
+  completed_interviews: number;
+}
+
+interface Interview {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  company_name: string;
+  city: string;
+  state: string;
+  completed_at: string;
+  duration_seconds: number;
+  summary: string;
+  transcript: string;
+  extracted_answers: { question: string; answer: string }[];
+}
+
+export default function PanelDetailPage() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from('agents').select('*').eq('slug', slug).single().then(async ({ data: panelData }) => {
+      if (panelData) {
+        setPanel(panelData);
+        const { data: interviewData } = await supabase
+          .from('interviews')
+          .select('*')
+          .eq('agent_id', panelData.id)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false });
+        setInterviews(interviewData || []);
+      }
+      setLoading(false);
+    });
+  }, [slug]);
+
+  const copyInterviewLink = () => {
+    const link = \`\${window.location.origin}/interview/\${panel?.elevenlabs_agent_id}\`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>;
+  if (!panel) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="text-red-400">Panel not found</div></div>;
+
+  return (
+    <div className="min-h-screen bg-slate-950">
+      {/* Header */}
+      <div className="border-b border-slate-800 bg-slate-900/50">
+        <div className="max-w-7xl mx-auto px-8 py-6">
+          <a href="/panels" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Panels
+          </a>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold text-white">{panel.name}</h1>
+              <p className="text-slate-400 mt-1">{panel.description}</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={copyInterviewLink} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+                {copied ? 'Copied!' : <><Copy className="w-4 h-4" /> Copy Interview Link</>}
+              </button>
+              <a href={\`/interview/\${panel.elevenlabs_agent_id}\`} target="_blank" className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors">
+                <Play className="w-4 h-4" /> Start Interview
+              </a>
+            </div>
+          </div>
+          <div className="flex gap-6 mt-6 text-sm">
+            <div className="flex items-center gap-2 text-slate-400">
+              <Users className="w-4 h-4" />
+              <span className="text-white font-medium">{interviews.length}</span> responses
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <Clock className="w-4 h-4" />
+              <span className="text-white font-medium">{panel.settings?.duration_minutes || 10}</span> min avg
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-8 py-8">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Responses List */}
+          <div className="lg:col-span-1">
+            <h2 className="text-lg font-semibold text-white mb-4">Responses ({interviews.length})</h2>
+            {interviews.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+                <Users className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No responses yet</p>
+                <p className="text-slate-500 text-sm mt-1">Share the interview link to collect responses</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {interviews.map(interview => (
+                  <button
+                    key={interview.id}
+                    onClick={() => setSelectedInterview(interview)}
+                    className={\`w-full text-left p-4 rounded-xl border transition-colors \${
+                      selectedInterview?.id === interview.id 
+                        ? 'bg-purple-600/20 border-purple-500' 
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                    }\`}
+                  >
+                    <div className="font-medium text-white">{interview.first_name} {interview.last_name}</div>
+                    <div className="text-sm text-slate-400 mt-1">{interview.company_name || 'No company'}</div>
+                    <div className="text-xs text-slate-500 mt-2">
+                      {interview.completed_at ? new Date(interview.completed_at).toLocaleDateString() : ''}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Response Detail */}
+          <div className="lg:col-span-2">
+            {selectedInterview ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                {/* Participant Info */}
+                <div className="p-6 border-b border-slate-800">
+                  <h3 className="text-xl font-semibold text-white mb-4">
+                    {selectedInterview.first_name} {selectedInterview.last_name}
+                  </h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {selectedInterview.email && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Mail className="w-4 h-4 text-slate-500" /> {selectedInterview.email}
+                      </div>
+                    )}
+                    {selectedInterview.mobile && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Phone className="w-4 h-4 text-slate-500" /> {selectedInterview.mobile}
+                      </div>
+                    )}
+                    {selectedInterview.company_name && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Building className="w-4 h-4 text-slate-500" /> {selectedInterview.company_name}
+                      </div>
+                    )}
+                    {(selectedInterview.city || selectedInterview.state) && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <MapPin className="w-4 h-4 text-slate-500" /> {[selectedInterview.city, selectedInterview.state].filter(Boolean).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Summary */}
+                {selectedInterview.summary && (
+                  <div className="p-6 border-b border-slate-800">
+                    <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Summary</h4>
+                    <p className="text-white leading-relaxed">{selectedInterview.summary}</p>
+                  </div>
+                )}
+
+                {/* Q&A */}
+                <div className="p-6 border-b border-slate-800">
+                  <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">Responses</h4>
+                  {selectedInterview.extracted_answers?.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedInterview.extracted_answers.map((qa, i) => (
+                        <div key={i} className="border-l-2 border-purple-500 pl-4">
+                          <p className="text-purple-400 text-sm font-medium mb-1">{qa.question}</p>
+                          <p className="text-white">{qa.answer}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500">No extracted answers available</p>
+                  )}
+                </div>
+
+                {/* Transcript */}
+                {selectedInterview.transcript && (
+                  <div className="p-6">
+                    <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Full Transcript</h4>
+                    <pre className="text-slate-300 text-sm whitespace-pre-wrap font-mono bg-slate-950 p-4 rounded-lg max-h-96 overflow-y-auto">
+                      {selectedInterview.transcript}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-16 text-center">
+                <FileText className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+                <p className="text-slate-400">Select a response to view details</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    'app/panel/[slug]/page.tsx': `// app/panel/[slug]/page.tsx
+'use client';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, Users, Clock, Mail, Phone, Building, MapPin, ChevronDown, ChevronUp, Play, Copy, Check } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+
+interface Interview {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  company_name: string;
+  city: string;
+  state: string;
+  summary: string;
+  transcript: string;
+  extracted_answers: { question: string; answer: string }[];
+  duration_seconds: number;
+  completed_at: string;
+  created_at: string;
+}
+
+interface Panel {
+  id: string;
+  name: string;
+  description: string;
+  slug: string;
+  elevenlabs_agent_id: string;
+  questions: string[];
+  completed_interviews: number;
+}
+
+export default function PanelDetailPage() {
+  const params = useParams();
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const slug = params.slug as string;
+    
+    // Fetch panel
+    supabase.from('agents').select('*').eq('slug', slug).single().then(({ data: panelData }) => {
+      if (panelData) {
+        setPanel(panelData);
+        // Fetch interviews for this panel
+        supabase.from('interviews')
+          .select('*')
+          .eq('agent_id', panelData.id)
+          .order('completed_at', { ascending: false })
+          .then(({ data: interviewData }) => {
+            setInterviews(interviewData || []);
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
+      }
+    });
+  }, [params.slug]);
+
+  const copyInterviewLink = () => {
+    if (!panel) return;
+    const link = \`\${window.location.origin}/interview/\${panel.slug}\`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds) return 'N/A';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return \`\${mins}m \${secs}s\`;
+  };
+
+  const formatDate = (date: string) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', { 
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>;
+  if (!panel) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="text-red-400">Panel not found</div></div>;
+
   return (
     <div className="min-h-screen bg-slate-950 p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Interview Panels</h1>
-          <a href="/create" className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors"><Plus className="w-5 h-5" /> Create Panel</a>
+        {/* Header */}
+        <div className="mb-8">
+          <a href="/panels" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4">
+            <ArrowLeft className="w-4 h-4" /> Back to Panels
+          </a>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">{panel.name}</h1>
+              <p className="text-slate-400">{panel.description}</p>
+            </div>
+            <button onClick={copyInterviewLink} className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors">
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Copied!' : 'Copy Interview Link'}
+            </button>
+          </div>
         </div>
-        {panels.length === 0 ? (
-          <div className="text-center py-16 bg-slate-900 rounded-xl border border-slate-800">
-            <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <h2 className="text-xl font-medium text-white mb-2">No panels yet</h2>
-            <p className="text-slate-400 mb-6">Create your first interview panel to get started.</p>
-            <a href="/create" className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors"><Plus className="w-5 h-5" /> Create Panel</a>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div className="text-2xl font-bold text-white">{interviews.length}</div>
+            <div className="text-slate-400 text-sm">Total Responses</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div className="text-2xl font-bold text-white">{interviews.filter(i => i.completed_at).length}</div>
+            <div className="text-slate-400 text-sm">Completed</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div className="text-2xl font-bold text-white">
+              {interviews.length ? formatDuration(Math.round(interviews.reduce((a, b) => a + (b.duration_seconds || 0), 0) / interviews.length)) : 'N/A'}
+            </div>
+            <div className="text-slate-400 text-sm">Avg Duration</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div className="text-2xl font-bold text-white">{panel.questions?.length || 0}</div>
+            <div className="text-slate-400 text-sm">Questions</div>
+          </div>
+        </div>
+
+        {/* Respondents List */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-slate-800">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Users className="w-5 h-5" /> Respondents ({interviews.length})
+            </h2>
+          </div>
+          
+          {interviews.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">
+              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>No responses yet. Share the interview link to collect responses.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800">
+              {interviews.map((interview) => (
+                <div key={interview.id} className="hover:bg-slate-800/50 transition-colors">
+                  {/* Summary Row */}
+                  <div 
+                    className="p-4 cursor-pointer"
+                    onClick={() => setExpandedId(expandedId === interview.id ? null : interview.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-purple-600/20 rounded-full flex items-center justify-center">
+                          <span className="text-purple-400 font-medium">
+                            {(interview.first_name?.[0] || '?').toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-white font-medium">
+                            {interview.first_name} {interview.last_name || ''}
+                            {!interview.first_name && <span className="text-slate-500">Anonymous</span>}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-slate-400">
+                            {interview.company_name && (
+                              <span className="flex items-center gap-1"><Building className="w-3 h-3" /> {interview.company_name}</span>
+                            )}
+                            {interview.city && (
+                              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {interview.city}, {interview.state}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <div className="text-slate-400 text-sm flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {formatDuration(interview.duration_seconds)}
+                          </div>
+                          <div className="text-slate-500 text-xs">{formatDate(interview.completed_at)}</div>
+                        </div>
+                        {expandedId === interview.id ? (
+                          <ChevronUp className="w-5 h-5 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Details */}
+                  {expandedId === interview.id && (
+                    <div className="px-4 pb-4 border-t border-slate-800 bg-slate-900/50">
+                      {/* Contact Info */}
+                      <div className="grid md:grid-cols-2 gap-4 py-4">
+                        <div className="space-y-2">
+                          {interview.email && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Mail className="w-4 h-4 text-slate-500" />
+                              <a href={\`mailto:\${interview.email}\`} className="text-purple-400 hover:text-purple-300">{interview.email}</a>
+                            </div>
+                          )}
+                          {interview.mobile && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="w-4 h-4 text-slate-500" />
+                              <a href={\`tel:\${interview.mobile}\`} className="text-purple-400 hover:text-purple-300">{interview.mobile}</a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Summary */}
+                      {interview.summary && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-medium text-slate-300 mb-2">Summary</h4>
+                          <p className="text-slate-400 text-sm bg-slate-800/50 rounded-lg p-3">{interview.summary}</p>
+                        </div>
+                      )}
+
+                      {/* Q&A */}
+                      {interview.extracted_answers && interview.extracted_answers.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-medium text-slate-300 mb-2">Responses</h4>
+                          <div className="space-y-3">
+                            {interview.extracted_answers.map((qa, idx) => (
+                              <div key={idx} className="bg-slate-800/50 rounded-lg p-3">
+                                <div className="text-purple-400 text-sm font-medium mb-1">{qa.question}</div>
+                                <div className="text-white text-sm">{qa.answer}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Full Transcript Toggle */}
+                      {interview.transcript && (
+                        <details className="mt-4">
+                          <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
+                            View Full Transcript
+                          </summary>
+                          <pre className="mt-2 text-xs text-slate-400 bg-slate-800/50 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                            {interview.transcript}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    'app/interview/[slug]/page.tsx': `// app/interview/[slug]/page.tsx
+'use client';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
+import { useConversation } from '@elevenlabs/react';
+import { createClient } from '@/lib/supabase/client';
+
+interface Panel {
+  id: string;
+  name: string;
+  description: string;
+  elevenlabs_agent_id: string;
+  greeting: string;
+  primary_color: string;
+}
+
+export default function InterviewPage() {
+  const params = useParams();
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [callEnded, setCallEnded] = useState(false);
+
+  const conversation = useConversation({
+    onConnect: () => console.log('Connected to interview'),
+    onDisconnect: () => { console.log('Interview ended'); setCallEnded(true); },
+    onError: (err) => { console.error('Interview error:', err); setError(err.message); },
+  });
+
+  useEffect(() => {
+    const supabase = createClient();
+    const slug = params.slug as string;
+    
+    supabase.from('agents').select('*').eq('slug', slug).single().then(({ data, error: err }) => {
+      if (err || !data) {
+        setError('Interview panel not found');
+      } else if (!data.elevenlabs_agent_id) {
+        setError('Interview not configured');
+      } else {
+        setPanel(data);
+      }
+      setLoading(false);
+    });
+  }, [params.slug]);
+
+  const startInterview = useCallback(async () => {
+    if (!panel?.elevenlabs_agent_id) return;
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      await conversation.startSession({ agentId: panel.elevenlabs_agent_id });
+    } catch (err: any) {
+      setError(err.message || 'Failed to start interview');
+    }
+  }, [panel, conversation]);
+
+  const endInterview = useCallback(async () => {
+    await conversation.endSession();
+    setCallEnded(true);
+  }, [conversation]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-slate-400">Loading interview...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">{error}</div>
+          <a href="/" className="text-purple-400 hover:text-purple-300">Return Home</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (callEnded) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">✓</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-4">Thank You!</h1>
+          <p className="text-slate-400">Your interview has been completed and recorded. We appreciate your time and feedback.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8">
+      <div className="max-w-lg w-full text-center">
+        <h1 className="text-3xl font-bold text-white mb-4">{panel?.name}</h1>
+        <p className="text-slate-400 mb-8">{panel?.description}</p>
+
+        {conversation.status === 'connected' ? (
+          <div className="space-y-8">
+            <div className="relative">
+              <div className="w-32 h-32 mx-auto bg-purple-600/20 rounded-full flex items-center justify-center animate-pulse">
+                <Mic className="w-12 h-12 text-purple-400" />
+              </div>
+              {conversation.isSpeaking && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-40 h-40 bg-purple-500/10 rounded-full animate-ping" />
+                </div>
+              )}
+            </div>
+            <div className="text-slate-300">
+              {conversation.isSpeaking ? 'AI is speaking...' : 'Listening...'}
+            </div>
+            <button
+              onClick={endInterview}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors"
+            >
+              <PhoneOff className="w-5 h-5" /> End Interview
+            </button>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {panels.map(panel => (
-              <div key={panel.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
-                <h3 className="text-lg font-semibold text-white mb-2">{panel.name}</h3>
-                <p className="text-slate-400 text-sm mb-4 line-clamp-2">{panel.description || 'No description'}</p>
-                <div className="flex items-center gap-4 text-sm text-slate-500 mb-4">
-                  <span className="flex items-center gap-1"><BarChart3 className="w-4 h-4" /> {panel.completed_interviews || 0} completed</span>
-                </div>
-                <a href={\`/panel/\${panel.slug}\`} className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm font-medium">View Panel <ExternalLink className="w-4 h-4" /></a>
-              </div>
-            ))}
+          <div className="space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+              <h3 className="text-lg font-medium text-white mb-2">Before you begin</h3>
+              <ul className="text-slate-400 text-sm text-left space-y-2">
+                <li>• Find a quiet place with minimal background noise</li>
+                <li>• The interview takes about 10-15 minutes</li>
+                <li>• Speak clearly and naturally</li>
+                <li>• Your responses will be recorded</li>
+              </ul>
+            </div>
+            <button
+              onClick={startInterview}
+              disabled={conversation.status === 'connecting'}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 text-white rounded-full text-lg font-medium transition-colors"
+            >
+              {conversation.status === 'connecting' ? (
+                <>Connecting...</>
+              ) : (
+                <><Phone className="w-5 h-5" /> Start Interview</>
+              )}
+            </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}`,
+
+    'app/interview/[agentId]/page.tsx': `// app/interview/[agentId]/page.tsx
+'use client';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { Mic, MicOff, Phone, PhoneOff, Loader2 } from 'lucide-react';
+import { useConversation } from '@elevenlabs/react';
+
+export default function InterviewPage() {
+  const params = useParams();
+  const agentId = params.agentId as string;
+  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'ended'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const conversation = useConversation({
+    onConnect: () => {
+      console.log('Connected to agent');
+      setStatus('connected');
+    },
+    onDisconnect: () => {
+      console.log('Disconnected from agent');
+      setStatus('ended');
+    },
+    onError: (err) => {
+      console.error('Conversation error:', err);
+      setError(err.message || 'Connection error');
+      setStatus('idle');
+    },
+  });
+
+  const startInterview = useCallback(async () => {
+    try {
+      setStatus('connecting');
+      setError(null);
+      
+      // Request microphone permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Start the conversation
+      await conversation.startSession({ agentId });
+    } catch (err: any) {
+      console.error('Failed to start interview:', err);
+      setError(err.message || 'Failed to start interview');
+      setStatus('idle');
+    }
+  }, [agentId, conversation]);
+
+  const endInterview = useCallback(async () => {
+    try {
+      await conversation.endSession();
+      setStatus('ended');
+    } catch (err) {
+      console.error('Failed to end interview:', err);
+    }
+  }, [conversation]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        {/* Logo/Branding */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-white mb-2">AI Interview</h1>
+          <p className="text-slate-400">Voice-powered conversation</p>
+        </div>
+
+        {/* Main Card */}
+        <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-2xl p-8">
+          {status === 'idle' && (
+            <div className="text-center">
+              <div className="w-24 h-24 bg-purple-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Mic className="w-12 h-12 text-purple-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-3">Ready to Begin</h2>
+              <p className="text-slate-400 mb-6">
+                Click the button below to start your interview. Make sure your microphone is enabled.
+              </p>
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+              <button
+                onClick={startInterview}
+                className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <Phone className="w-5 h-5" />
+                Start Interview
+              </button>
+            </div>
+          )}
+
+          {status === 'connecting' && (
+            <div className="text-center py-8">
+              <Loader2 className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-spin" />
+              <h2 className="text-xl font-semibold text-white mb-2">Connecting...</h2>
+              <p className="text-slate-400">Setting up your interview session</p>
+            </div>
+          )}
+
+          {status === 'connected' && (
+            <div className="text-center">
+              {/* Animated Speaking Indicator */}
+              <div className="relative w-32 h-32 mx-auto mb-6">
+                <div className="absolute inset-0 bg-purple-600/20 rounded-full animate-pulse" />
+                <div className="absolute inset-4 bg-purple-600/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <div className="absolute inset-8 bg-purple-600 rounded-full flex items-center justify-center">
+                  {conversation.isSpeaking ? (
+                    <Mic className="w-8 h-8 text-white animate-pulse" />
+                  ) : (
+                    <MicOff className="w-8 h-8 text-white/60" />
+                  )}
+                </div>
+              </div>
+              
+              <h2 className="text-xl font-semibold text-white mb-2">
+                {conversation.isSpeaking ? 'AI is speaking...' : 'Listening...'}
+              </h2>
+              <p className="text-slate-400 mb-8">
+                {conversation.isSpeaking ? 'Wait for the AI to finish' : 'Speak now to respond'}
+              </p>
+              
+              <button
+                onClick={endInterview}
+                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <PhoneOff className="w-5 h-5" />
+                End Interview
+              </button>
+            </div>
+          )}
+
+          {status === 'ended' && (
+            <div className="text-center py-8">
+              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-3">Interview Complete!</h2>
+              <p className="text-slate-400 mb-6">
+                Thank you for your time. Your responses have been recorded.
+              </p>
+              <button
+                onClick={() => setStatus('idle')}
+                className="text-purple-400 hover:text-purple-300 font-medium"
+              >
+                Start Another Interview
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-slate-500 text-sm mt-6">
+          Powered by AI Interview Platform
+        </p>
       </div>
     </div>
   );
@@ -405,51 +1330,383 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-interface ParsedPanel { name: string; description: string; tone: string; duration_minutes: number; target_audience: string; interview_type: string; greeting: string; questions: string[]; closing_message: string; }
+// ============================================================================
+// TYPES
+// ============================================================================
 
-async function parseTranscriptWithLLM(transcript: string): Promise<ParsedPanel> {
+interface ParsedPanel { 
+  name: string; 
+  description: string; 
+  tone: string; 
+  duration_minutes: number; 
+  target_audience: string; 
+  interview_type: string; 
+  greeting: string; 
+  questions: string[]; 
+  closing_message: string; 
+}
+
+interface ParsedInterview {
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  company_name: string;
+  city: string;
+  state: string;
+  answers: { question: string; answer: string }[];
+  summary: string;
+}
+
+// ============================================================================
+// LLM PARSING
+// ============================================================================
+
+async function parseSetupTranscript(transcript: string): Promise<ParsedPanel> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'content-type': 'application/json', 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: \`Parse this setup transcript and return ONLY JSON: {"name":"panel name","description":"1-2 sentences","tone":"professional/friendly","duration_minutes":15,"target_audience":"who","interview_type":"type","greeting":"opening message","questions":["q1","q2","q3"],"closing_message":"thank you"}
+    headers: { 
+      'x-api-key': process.env.ANTHROPIC_API_KEY!, 
+      'content-type': 'application/json', 
+      'anthropic-version': '2023-06-01' 
+    },
+    body: JSON.stringify({ 
+      model: 'claude-sonnet-4-20250514', 
+      max_tokens: 2000, 
+      messages: [{ 
+        role: 'user', 
+        content: \`Parse this setup transcript and return ONLY valid JSON (no markdown):
+{"name":"panel name","description":"1-2 sentences","tone":"professional/friendly/casual","duration_minutes":15,"target_audience":"who will be interviewed","interview_type":"survey/job interview/feedback/research","greeting":"opening message","questions":["q1","q2","q3","q4","q5"],"closing_message":"thank you message"}
 
 Transcript:
-\${transcript}\` }] }),
+\${transcript}\` 
+      }] 
+    }),
   });
   if (!response.ok) throw new Error('Claude API error');
   const data = await response.json();
-  return JSON.parse(data.content[0].text);
+  const text = data.content[0].text.replace(/\\\`\\\`\\\`json?|\\n|\\\`\\\`\\\`/g, '').trim();
+  return JSON.parse(text);
 }
 
-async function createElevenLabsAgent(panel: ParsedPanel): Promise<string> {
-  const prompt = \`You are an AI interviewer for "\${panel.name}". Context: \${panel.description}. Tone: \${panel.tone}. Questions: \${panel.questions.map((q,i)=>\`\${i+1}. \${q}\`).join('; ')}. Opening: "\${panel.greeting}" Closing: "\${panel.closing_message}"\`;
+async function parseInterviewTranscript(transcript: string): Promise<ParsedInterview> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 
+      'x-api-key': process.env.ANTHROPIC_API_KEY!, 
+      'content-type': 'application/json', 
+      'anthropic-version': '2023-06-01' 
+    },
+    body: JSON.stringify({ 
+      model: 'claude-sonnet-4-20250514', 
+      max_tokens: 3000, 
+      messages: [{ 
+        role: 'user', 
+        content: \`Extract participant info and Q&A from this interview transcript. Return ONLY valid JSON (no markdown):
+{
+  "first_name": "extracted first name or empty string",
+  "last_name": "extracted last name or empty string", 
+  "email": "extracted email or empty string",
+  "mobile": "extracted phone/mobile or empty string",
+  "company_name": "extracted company or empty string",
+  "city": "extracted city or empty string",
+  "state": "extracted state or empty string",
+  "answers": [{"question": "q1", "answer": "a1"}, {"question": "q2", "answer": "a2"}],
+  "summary": "2-3 sentence summary of key insights from this interview"
+}
+
+Transcript:
+\${transcript}\` 
+      }] 
+    }),
+  });
+  if (!response.ok) throw new Error('Claude API error');
+  const data = await response.json();
+  const text = data.content[0].text.replace(/\\\`\\\`\\\`json?|\\n|\\\`\\\`\\\`/g, '').trim();
+  return JSON.parse(text);
+}
+
+// ============================================================================
+// ELEVENLABS AGENT CREATION
+// ============================================================================
+
+async function createInterviewAgent(panel: ParsedPanel, webhookUrl: string): Promise<string> {
+  const prompt = \`You are an AI interviewer conducting "\${panel.name}".
+
+## Your Role
+\${panel.description}. Your tone should be \${panel.tone}.
+
+## IMPORTANT: Collect Participant Info First
+Before starting the interview questions, you MUST collect:
+1. First name
+2. Last name  
+3. Email address
+4. Mobile/phone number
+5. Company name
+6. Location (city and state)
+
+Say something like: "Before we begin, I just need to collect a few details. Could you tell me your first name?"
+Then continue collecting each piece of info naturally.
+
+## Interview Questions
+Once you have their info, proceed with these questions:
+\${panel.questions.map((q,i)=>\`\${i+1}. \${q}\`).join('\\n')}
+
+## Guidelines
+- Ask ONE question at a time
+- Listen actively and ask brief follow-ups if needed
+- Keep the conversation natural and \${panel.tone}
+- Target duration: \${panel.duration_minutes} minutes
+
+## Closing
+When finished: "\${panel.closing_message}"\`;
+
   const response = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
     method: 'POST',
-    headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY!, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: panel.name, conversation_config: { agent: { prompt: { prompt }, first_message: panel.greeting, language: 'en' }, asr: { quality: 'high', provider: 'elevenlabs' }, turn: { turn_timeout: 10, mode: 'turn_based' }, tts: { voice_id: 'JBFqnCBsd6RMkjVDRZzb' } }, platform_settings: { auth: { enable_auth: false } } }),
+    headers: { 
+      'xi-api-key': process.env.ELEVENLABS_API_KEY!, 
+      'Content-Type': 'application/json' 
+    },
+    body: JSON.stringify({ 
+      name: panel.name, 
+      conversation_config: { 
+        agent: { 
+          prompt: { prompt }, 
+          first_message: panel.greeting, 
+          language: 'en' 
+        }, 
+        asr: { quality: 'high', provider: 'elevenlabs' }, 
+        turn: { turn_timeout: 15, mode: 'turn_based' }, 
+        tts: { voice_id: 'JBFqnCBsd6RMkjVDRZzb' },
+        webhooks: {
+          post_call: { url: webhookUrl }
+        }
+      }, 
+      platform_settings: { auth: { enable_auth: false } } 
+    }),
   });
-  if (!response.ok) throw new Error('ElevenLabs error');
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(\`ElevenLabs error: \${err}\`);
+  }
   return (await response.json()).agent_id;
 }
+
+// ============================================================================
+// EMAIL NOTIFICATION
+// ============================================================================
+
+async function sendInterviewNotification(interview: any, agent: any, parsed: ParsedInterview) {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) {
+    console.log('[Webhook] No RESEND_API_KEY, skipping notification');
+    return;
+  }
+
+  // Get platform owner email from clients table or use fallback
+  const { data: client } = await supabase.from('clients').select('email, name').limit(1).single();
+  const ownerEmail = client?.email || process.env.ADMIN_EMAIL;
+  
+  if (!ownerEmail) {
+    console.log('[Webhook] No owner email configured');
+    return;
+  }
+
+  const platformUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
+  
+  const emailHtml = \`
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+    <div style="background:#1e293b;border-radius:16px;padding:32px;">
+      <h1 style="color:#a78bfa;font-size:24px;margin:0 0 24px;">New Interview Completed! 🎉</h1>
+      
+      <div style="background:#0f172a;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <h3 style="color:#fff;margin:0 0 16px;">Panel: \${agent.name}</h3>
+        <table style="width:100%;color:#94a3b8;font-size:14px;">
+          <tr><td style="padding:4px 0;">Name:</td><td style="color:#fff;">\${parsed.first_name} \${parsed.last_name}</td></tr>
+          <tr><td style="padding:4px 0;">Email:</td><td style="color:#fff;">\${parsed.email || 'Not provided'}</td></tr>
+          <tr><td style="padding:4px 0;">Mobile:</td><td style="color:#fff;">\${parsed.mobile || 'Not provided'}</td></tr>
+          <tr><td style="padding:4px 0;">Company:</td><td style="color:#fff;">\${parsed.company_name || 'Not provided'}</td></tr>
+          <tr><td style="padding:4px 0;">Location:</td><td style="color:#fff;">\${parsed.city ? \`\${parsed.city}, \${parsed.state}\` : 'Not provided'}</td></tr>
+        </table>
+      </div>
+
+      <div style="background:#0f172a;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <h3 style="color:#fff;margin:0 0 12px;">Summary</h3>
+        <p style="color:#94a3b8;margin:0;line-height:1.6;">\${parsed.summary}</p>
+      </div>
+
+      <div style="background:#0f172a;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <h3 style="color:#fff;margin:0 0 12px;">Responses</h3>
+        \${parsed.answers.map(a => \`
+          <div style="margin-bottom:16px;border-left:2px solid #8b5cf6;padding-left:12px;">
+            <p style="color:#a78bfa;margin:0 0 4px;font-size:13px;">\${a.question}</p>
+            <p style="color:#fff;margin:0;">\${a.answer}</p>
+          </div>
+        \`).join('')}
+      </div>
+
+      <a href="https://\${platformUrl}/panels" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">
+        View All Responses →
+      </a>
+    </div>
+  </div>
+</body>
+</html>\`;
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: \`Bearer \${resendKey}\`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Interview Platform <noreply@updates.corporateaisolutions.com>',
+        to: ownerEmail,
+        subject: \`New Interview: \${parsed.first_name} \${parsed.last_name} - \${agent.name}\`,
+        html: emailHtml,
+      }),
+    });
+    console.log('[Webhook] Notification sent to:', ownerEmail);
+  } catch (err) {
+    console.error('[Webhook] Failed to send notification:', err);
+  }
+}
+
+// ============================================================================
+// MAIN WEBHOOK HANDLER
+// ============================================================================
 
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
+    console.log('[Webhook] Received:', payload.type);
+    
+    // Extract transcript
     let transcript = '';
+    let conversationId = '';
+    
     if (payload.type === 'post_call_transcription' && payload.data?.transcript) {
       transcript = payload.data.transcript.map((t: any) => \`\${t.role}: \${t.message}\`).join('\\n');
+      conversationId = payload.data.conversation_id || payload.conversation_id || '';
+    } else if (payload.transcript) {
+      transcript = Array.isArray(payload.transcript) 
+        ? payload.transcript.map((t: any) => \`\${t.role}: \${t.message}\`).join('\\n')
+        : payload.transcript;
+      conversationId = payload.conversation_id || '';
     }
-    if (!transcript) return NextResponse.json({ success: true, message: 'No transcript' });
-    const config = await parseTranscriptWithLLM(transcript);
-    const agentId = await createElevenLabsAgent(config);
-    const slug = config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
-    const { data: agent, error } = await supabase.from('agents').insert({ name: config.name, slug, description: config.description, elevenlabs_agent_id: agentId, greeting: config.greeting, questions: config.questions, settings: { tone: config.tone, duration_minutes: config.duration_minutes, target_audience: config.target_audience, interview_type: config.interview_type, closing_message: config.closing_message }, status: 'active' }).select().single();
-    if (error) throw error;
-    return NextResponse.json({ success: true, agentId: agent.id });
-  } catch (error: any) { console.error('Webhook error:', error); return NextResponse.json({ error: error.message }, { status: 500 }); }
+    
+    if (!transcript) {
+      return NextResponse.json({ success: true, message: 'No transcript to process' });
+    }
+
+    // Determine if this is a SETUP call or an INTERVIEW call
+    const agentId = payload.agent_id || payload.data?.agent_id;
+    const isSetupAgent = agentId === process.env.NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID;
+
+    if (isSetupAgent) {
+      // ========== SETUP CALL: Create new interview panel ==========
+      console.log('[Webhook] Processing SETUP call');
+      const config = await parseSetupTranscript(transcript);
+      
+      // Create interview agent with webhook pointing back here
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || \`https://\${process.env.VERCEL_URL}\`;
+      const interviewAgentId = await createInterviewAgent(config, \`\${baseUrl}/api/webhooks/elevenlabs\`);
+      
+      const slug = config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
+      
+      const { data: agent, error } = await supabase.from('agents').insert({ 
+        name: config.name, 
+        slug, 
+        description: config.description, 
+        elevenlabs_agent_id: interviewAgentId, 
+        greeting: config.greeting, 
+        questions: config.questions, 
+        settings: { 
+          tone: config.tone, 
+          duration_minutes: config.duration_minutes, 
+          target_audience: config.target_audience, 
+          interview_type: config.interview_type, 
+          closing_message: config.closing_message 
+        }, 
+        status: 'active' 
+      }).select().single();
+      
+      if (error) throw error;
+      console.log('[Webhook] Created panel:', agent.name, '| Agent:', interviewAgentId);
+      
+      return NextResponse.json({ success: true, panelId: agent.id, agentId: interviewAgentId });
+      
+    } else {
+      // ========== INTERVIEW CALL: Store responses ==========
+      console.log('[Webhook] Processing INTERVIEW call');
+      
+      // Find the agent/panel
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('elevenlabs_agent_id', agentId)
+        .single();
+      
+      if (!agent) {
+        console.log('[Webhook] Agent not found for:', agentId);
+        return NextResponse.json({ success: true, message: 'Agent not found' });
+      }
+      
+      // Parse interview for participant data and answers
+      const parsed = await parseInterviewTranscript(transcript);
+      
+      // Store interview
+      const { data: interview, error } = await supabase.from('interviews').insert({
+        agent_id: agent.id,
+        elevenlabs_conversation_id: conversationId,
+        status: 'completed',
+        first_name: parsed.first_name,
+        last_name: parsed.last_name,
+        email: parsed.email,
+        mobile: parsed.mobile,
+        company_name: parsed.company_name,
+        city: parsed.city,
+        state: parsed.state,
+        interviewee_name: \`\${parsed.first_name} \${parsed.last_name}\`.trim(),
+        interviewee_email: parsed.email,
+        transcript,
+        summary: parsed.summary,
+        extracted_answers: parsed.answers,
+        extracted_data: parsed,
+        transcript_received: true,
+        completed_at: new Date().toISOString(),
+        duration_seconds: payload.data?.call_duration_secs || payload.call_duration_secs || 0,
+      }).select().single();
+      
+      if (error) throw error;
+      
+      // Update agent stats
+      await supabase.from('agents').update({
+        completed_interviews: agent.completed_interviews + 1,
+        total_interviews: agent.total_interviews + 1,
+      }).eq('id', agent.id);
+      
+      // Send notification email
+      await sendInterviewNotification(interview, agent, parsed);
+      
+      console.log('[Webhook] Stored interview:', interview.id);
+      return NextResponse.json({ success: true, interviewId: interview.id });
+    }
+    
+  } catch (error: any) { 
+    console.error('[Webhook] Error:', error); 
+    return NextResponse.json({ error: error.message }, { status: 500 }); 
+  }
 }
 
-export async function GET() { return NextResponse.json({ status: 'active' }); }`,
+export async function GET() { 
+  return NextResponse.json({ status: 'active', timestamp: new Date().toISOString() }); 
+}`,
 };
 
 // ============================================================================

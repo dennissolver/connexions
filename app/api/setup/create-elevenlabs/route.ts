@@ -14,6 +14,11 @@ You're having a genuine conversation to understand what they're trying to achiev
 - What tone fits their brand and audience?
 - How much of someone's time can they realistically ask for?
 
+## Automatic Features (mention these when relevant)
+- Participant info (name, email, phone, company, location) is collected automatically at the start of each interview
+- They'll receive email notifications when someone completes an interview
+- Full transcripts and AI-generated summaries are available in their dashboard
+
 ## Conversation Style
 - Be genuinely curious - ask "tell me more about that" when something's interesting
 - Mirror their energy - if they're casual, be casual; if formal, match that
@@ -30,7 +35,7 @@ You're having a genuine conversation to understand what they're trying to achiev
 When you have a clear picture, summarize it back conversationally:
 "So let me make sure I've got this right... [summary]. Does that capture it?"
 
-Then say: "Perfect! I've got everything I need to create this for you. Check your screen for the summary!"`;
+Then say: "Perfect! I've got everything I need to create this for you. The AI will automatically collect contact info from each participant before asking your questions. Check your screen for the summary!"`;
 
 export async function POST(request: NextRequest) {
   try {

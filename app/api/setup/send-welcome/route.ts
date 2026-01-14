@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Normalize URL
     const cleanUrl = platformUrl.startsWith('http') ? platformUrl : `https://${platformUrl}`;
-    const dashboardUrl = `${cleanUrl}/dashboard`;
+    const dashboardUrl = `${cleanUrl}/panels`; // /panels is the dashboard in child platforms
 
     const emailHtml = `
 <!DOCTYPE html>
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       <!-- CTA Buttons -->
       <div style="margin-bottom:24px;">
         <a href="${dashboardUrl}" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:16px 40px;border-radius:12px;font-weight:600;font-size:16px;">
-          View Dashboard →
+          View Interview Panels →
         </a>
       </div>
       <div>
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
       <!-- URL Box -->
       <div style="margin-top:32px;padding:16px;background:#0f172a;border-radius:8px;">
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Dashboard URL:</p>
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Panels URL:</p>
         <a href="${dashboardUrl}" style="color:#a78bfa;font-size:14px;word-break:break-all;">${dashboardUrl}</a>
       </div>
     </div>
@@ -91,14 +91,14 @@ export async function POST(request: NextRequest) {
       <ol style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;">
         <li><strong>Create your AI interviewer</strong> - Click "Start Setup Call" to design your interview</li>
         <li><strong>Share interview links</strong> - Send participants their unique interview URL</li>
-        <li><strong>View results in Dashboard</strong> - See all responses, transcripts and analytics</li>
+        <li><strong>View results in Panels</strong> - See all responses, transcripts and analytics</li>
         <li><strong>Export data</strong> - Download interview data for further analysis</li>
       </ol>
     </div>
 
-    <!-- Dashboard Features -->
+    <!-- Panel Features -->
     <div style="margin-top:16px;padding:24px;background:rgba(30,41,59,0.5);border-radius:12px;">
-      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">📊 Your Dashboard Includes</h3>
+      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">📊 Your Panels Include</h3>
       <ul style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;list-style:none;">
         <li>✅ Real-time interview tracking</li>
         <li>✅ Full conversation transcripts</li>
