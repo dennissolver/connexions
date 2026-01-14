@@ -1,9 +1,11 @@
-// vercel.json
 {
-  "crons": [
-    {
-      "path": "/api/cron/provision",
-      "schedule": "*/2 * * * *"
+  "functions": {
+    "api/cron/provision/route.js": {
+      "memory": 256,
+      "maxDuration": 10,
+      "cron": {
+        "schedule": "*/2 * * * *"
+      }
     }
-  ]
+  }
 }
