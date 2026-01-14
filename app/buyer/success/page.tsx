@@ -57,7 +57,7 @@ function SuccessContent() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
         <div className="max-w-md text-center">
           <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">âš ï¸</span>
+            <span className="text-3xl"></span>
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Something went wrong</h1>
           <p className="text-slate-400 mb-6">{error}</p>
@@ -84,11 +84,12 @@ function SuccessContent() {
         </div>
 
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-          Welcome to Connexions! ðŸŽ‰
+          Welcome to Connexions!
         </h1>
 
         <p className="text-slate-400 text-lg mb-8">
-          Your subscription is active. We're setting up your private platform now.
+          Your subscription is active. You're ready to set up your private platform.
+
         </p>
 
         {customerEmail && (
@@ -118,10 +119,17 @@ function SuccessContent() {
           </ol>
         </div>
 
+
         <Link
-          href={`/factory/provision${leadId ? `?leadId=${leadId}` : ''}`}
+          href={`/setup${leadId ? `?leadId=${leadId}` : ''}`}
           className="inline-flex items-center gap-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-8 py-4 rounded-xl font-semibold text-lg transition-all"
         >
+          <Rocket className="w-5 h-5" />
+          Start Platform Setup
+          <ArrowRight className="w-5 h-5" />
+        </Link>
+
+
           <Rocket className="w-5 h-5" />
           Continue to Platform Setup
           <ArrowRight className="w-5 h-5" />
