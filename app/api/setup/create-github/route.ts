@@ -302,7 +302,7 @@ export default function CreatePage() {
         .select('slug, name')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .single() as { data: { slug: string; name: string } | null };
       
       if (data?.slug) {
         setNewPanelSlug(data.slug);
