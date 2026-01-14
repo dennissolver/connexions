@@ -909,7 +909,9 @@ export function createClient() {
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+function getSupabase() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
 
 // ============================================================================
 // TYPES
@@ -1085,7 +1087,7 @@ async function sendInterviewNotification(interview: any, agent: any, parsed: Par
   }
 
   // Get platform owner email from clients table or use fallback
-  const { data: client } = await supabase.from('clients').select('email, name').limit(1).single();
+  const { data: client } = await getSupabase().from('clients').select('email, name').limit(1).single();
   const ownerEmail = client?.email || process.env.ADMIN_EMAIL;
   
   if (!ownerEmail) {
@@ -1200,7 +1202,7 @@ export async function POST(request: NextRequest) {
       
       const slug = config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
       
-      const { data: agent, error } = await supabase.from('agents').insert({ 
+      const { data: agent, error } = await getSupabase().from('agents').insert({ 
         name: config.name, 
         slug, 
         description: config.description, 
@@ -1242,7 +1244,7 @@ export async function POST(request: NextRequest) {
       const parsed = await parseInterviewTranscript(transcript);
       
       // Store interview
-      const { data: interview, error } = await supabase.from('interviews').insert({
+      const { data: interview, error } = await getSupabase().from('interviews').insert({
         agent_id: agent.id,
         elevenlabs_conversation_id: conversationId,
         status: 'completed',
@@ -1267,7 +1269,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error;
       
       // Update agent stats
-      await supabase.from('agents').update({
+      await getSupabase().from('agents').update({
         completed_interviews: agent.completed_interviews + 1,
         total_interviews: agent.total_interviews + 1,
       }).eq('id', agent.id);
