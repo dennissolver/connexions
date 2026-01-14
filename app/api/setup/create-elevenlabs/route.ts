@@ -1,7 +1,12 @@
 // app/api/setup/create-elevenlabs/route.ts
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 
-// Template with placeholders - {{AGENT_NAME}} and {{PLATFORM_NAME}} get replaced
+// ============================================================================
+// Prompt template
+// ============================================================================
+
 const SETUP_AGENT_PROMPT_TEMPLATE = `You are {{AGENT_NAME}}, a warm and curious AI assistant helping people design their perfect interview or survey experience on the {{PLATFORM_NAME}} platform.
 
 ## Your Approach
@@ -15,71 +20,95 @@ You're having a genuine conversation to understand what they're trying to achiev
 - How much of someone's time can they realistically ask for?
 
 ## Automatic Features (mention these when relevant)
-- Participant info (name, email, phone, company, location) is collected automatically at the start of each interview
-- They'll receive email notifications when someone completes an interview
-- Full transcripts and AI-generated summaries are available in their dashboard
+- Participant info (name, email, phone, company, location) is collected automatically
+- Email notifications are sent on interview completion
+- Full transcripts and AI summaries are available in the dashboard
 
 ## Conversation Style
-- Be genuinely curious - ask "tell me more about that" when something's interesting
-- Mirror their energy - if they're casual, be casual; if formal, match that
-- Offer suggestions when helpful: "Some clients in your space find it useful to ask about..."
-- Keep responses concise (under 40 words) but warm
-- ONE question or thought at a time
-
-## Helpful Prompts When They're Stuck
-- "What would success look like after running these interviews?"
-- "If you could only ask three questions, what would matter most?"
-- "What do you wish you knew about your [customers/candidates/users]?"
+- Be genuinely curious
+- Mirror their energy
+- Offer suggestions when helpful
+- Keep responses under 40 words
+- ONE question at a time
 
 ## Wrapping Up
-When you have a clear picture, summarize it back conversationally:
-"So let me make sure I've got this right... [summary]. Does that capture it?"
+"So let me make sure I've got this right... [summary]. Does that capture it?"`;
 
-Then say: "Perfect! I've got everything I need to create this for you. The AI will automatically collect contact info from each participant before asking your questions. Check your screen for the summary!"`;
+
+// ============================================================================
+// POST – Create / reuse ElevenLabs setup agent
+// ============================================================================
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Accept multiple parameter formats
-    const platformName = body.platformName || body.projectName || body.formData?.platformName;
-    const companyName = body.companyName || body.formData?.companyName || platformName;
-    const projectSlug = body.projectSlug || body.slug || platformName?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-    const voiceGender = body.voiceGender || body.formData?.voiceGender || 'female';
-    const agentName = body.agentName || body.formData?.agentName || (voiceGender === 'male' ? 'Alex' : 'Sarah');
-    const webhookUrl = body.webhookUrl || '';
-
-    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
-
-    if (!elevenlabsApiKey) {
-      return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
-    }
+    const platformName =
+      body.platformName ||
+      body.projectName ||
+      body.formData?.platformName;
 
     if (!platformName) {
-      return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Platform name required' },
+        { status: 400 }
+      );
     }
 
-    // Use projectSlug for unique agent naming (prevents conflicts between platforms)
+    const projectSlug =
+      body.projectSlug ||
+      body.slug ||
+      platformName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40);
+
+    const voiceGender =
+      body.voiceGender ||
+      body.formData?.voiceGender ||
+      'female';
+
+    const agentName =
+      body.agentName ||
+      body.formData?.agentName ||
+      (voiceGender === 'male' ? 'Alex' : 'Sarah');
+
+    const webhookUrl =
+      typeof body.webhookUrl === 'string'
+        ? body.webhookUrl.replace(/\/$/, '')
+        : '';
+
+    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
+    if (!elevenlabsApiKey) {
+      return NextResponse.json(
+        { error: 'ELEVENLABS_API_KEY not configured' },
+        { status: 500 }
+      );
+    }
+
     const agentDisplayName = `${projectSlug}-setup-agent`;
 
-    // Replace placeholders in prompt
     const prompt = SETUP_AGENT_PROMPT_TEMPLATE
       .replace(/\{\{AGENT_NAME\}\}/g, agentName)
       .replace(/\{\{PLATFORM_NAME\}\}/g, platformName);
 
+    // ------------------------------------------------------------------------
     // Check for existing agent
-    console.log('Checking for existing ElevenLabs agent:', agentDisplayName);
+    // ------------------------------------------------------------------------
 
-    const listRes = await fetch('https://api.elevenlabs.io/v1/convai/agents', {
-      headers: { 'xi-api-key': elevenlabsApiKey },
-    });
+    const listRes = await fetch(
+      'https://api.elevenlabs.io/v1/convai/agents',
+      { headers: { 'xi-api-key': elevenlabsApiKey } }
+    );
 
     if (listRes.ok) {
       const data = await listRes.json();
-      const existing = data.agents?.find((a: any) => a.name === agentDisplayName);
+      const existing = data?.agents?.find(
+        (a: any) => a.name === agentDisplayName
+      );
 
       if (existing) {
-        console.log('Found existing agent:', existing.agent_id);
         return NextResponse.json({
           success: true,
           agentId: existing.agent_id,
@@ -89,16 +118,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Select voice based on gender
-    // Female: Sarah (EXAVITQu4vr4xnSDxMaL), Male: Adam (pNInz6obpgDQGcFmaJgB)
-    const voiceId = voiceGender === 'male' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL';
+    // ------------------------------------------------------------------------
+    // Create agent
+    // ------------------------------------------------------------------------
 
-    console.log('Creating ElevenLabs agent:', agentDisplayName, '| Voice:', agentName, '| Gender:', voiceGender);
+    const voiceId =
+      voiceGender === 'male'
+        ? 'pNInz6obpgDQGcFmaJgB'
+        : 'EXAVITQu4vr4xnSDxMaL';
 
-    // Build first message with agent name
-    const firstMessage = `Hi there! I'm ${agentName}, and I'll be helping you set up your interview experience today. What kind of interviews or surveys are you looking to run?`;
+    const firstMessage =
+      `Hi there! I'm ${agentName}, and I'll help you set up your interview experience. What are you looking to run?`;
 
-    // Build agent config
     const agentConfig: any = {
       name: agentDisplayName,
       conversation_config: {
@@ -116,33 +147,34 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Add webhook if provided
     if (webhookUrl) {
       agentConfig.conversation_config.webhooks = {
         post_call: { url: webhookUrl },
       };
     }
 
-    const createRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': elevenlabsApiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(agentConfig),
-    });
+    const createRes = await fetch(
+      'https://api.elevenlabs.io/v1/convai/agents/create',
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': elevenlabsApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(agentConfig),
+      }
+    );
 
     if (!createRes.ok) {
-      const error = await createRes.json();
-      console.error('ElevenLabs creation failed:', error);
+      const text = await createRes.text();
+      console.error('[ElevenLabs] Create failed:', text);
       return NextResponse.json(
-        { error: error.detail?.message || error.detail || JSON.stringify(error) },
+        { error: 'Failed to create agent', detail: text },
         { status: 400 }
       );
     }
 
     const agent = await createRes.json();
-    console.log('ElevenLabs agent created:', agent.agent_id);
 
     return NextResponse.json({
       success: true,
@@ -152,16 +184,16 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Create ElevenLabs error:', error);
+    console.error('[Create ElevenLabs] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create ElevenLabs agent' },
+      { error: error?.message || 'Failed to create ElevenLabs agent' },
       { status: 500 }
     );
   }
 }
 
 // ============================================================================
-// DELETE - Remove ElevenLabs agent
+// DELETE – Remove ElevenLabs agent
 // ============================================================================
 
 export async function DELETE(request: NextRequest) {
@@ -169,44 +201,44 @@ export async function DELETE(request: NextRequest) {
     const { agentId } = await request.json();
 
     if (!agentId) {
-      return NextResponse.json({ error: 'Agent ID required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Agent ID required' },
+        { status: 400 }
+      );
     }
 
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
-
     if (!elevenlabsApiKey) {
-      return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'ELEVENLABS_API_KEY not configured' },
+        { status: 500 }
+      );
     }
 
-    console.log('[Cleanup] Deleting ElevenLabs agent:', agentId);
-
-    // Check if agent exists
-    const checkRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
-      headers: { 'xi-api-key': elevenlabsApiKey },
-    });
-
-    if (!checkRes.ok) {
-      console.log('[Cleanup] ElevenLabs agent not found:', agentId);
-      return NextResponse.json({ success: true, alreadyDeleted: true });
-    }
-
-    // Delete the agent
-    const deleteRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
-      method: 'DELETE',
-      headers: { 'xi-api-key': elevenlabsApiKey },
-    });
+    const deleteRes = await fetch(
+      `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
+      {
+        method: 'DELETE',
+        headers: { 'xi-api-key': elevenlabsApiKey },
+      }
+    );
 
     if (!deleteRes.ok && deleteRes.status !== 404) {
-      const error = await deleteRes.json().catch(() => ({}));
-      console.error('[Cleanup] Failed to delete ElevenLabs agent:', error);
-      return NextResponse.json({ error: 'Failed to delete agent' }, { status: 400 });
+      const text = await deleteRes.text();
+      console.error('[ElevenLabs] Delete failed:', text);
+      return NextResponse.json(
+        { error: 'Failed to delete agent' },
+        { status: 400 }
+      );
     }
 
-    console.log('[Cleanup] ElevenLabs agent deleted:', agentId);
     return NextResponse.json({ success: true });
 
   } catch (error: any) {
-    console.error('[Cleanup] ElevenLabs delete error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[Delete ElevenLabs] Error:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Delete failed' },
+      { status: 500 }
+    );
   }
 }

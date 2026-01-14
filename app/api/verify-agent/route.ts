@@ -1,50 +1,46 @@
+// app/api/verify-agent/route.ts
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/verify-agent
- * Verifies that an ElevenLabs agent is accessible and ready
+ * Verifies that an ElevenLabs agent exists and is accessible
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { agentId, elevenLabsAgentId } = body;
+    const elevenLabsAgentId =
+      body.elevenLabsAgentId || body.agentId;
 
     if (!elevenLabsAgentId) {
       return NextResponse.json(
-        { error: 'ElevenLabs agent ID required' },
+        { error: 'ElevenLabs agent ID required', verified: false },
         { status: 400 }
       );
     }
 
     const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
-    
     if (!elevenLabsKey) {
-      // If no API key, skip verification but return success
-      // The agent may still work
-      return NextResponse.json({ 
-        verified: true, 
-        message: 'Verification skipped - no API key' 
+      return NextResponse.json({
+        verified: true,
+        message: 'Verification skipped – no API key configured',
       });
     }
 
-    // Try to get the agent details from ElevenLabs
     const response = await fetch(
       `https://api.elevenlabs.io/v1/convai/agents/${elevenLabsAgentId}`,
       {
-        method: 'GET',
-        headers: {
-          'xi-api-key': elevenLabsKey,
-        },
+        headers: { 'xi-api-key': elevenLabsKey },
       }
     );
 
     if (!response.ok) {
-      // Agent not found or not ready
-      const error = await response.json().catch(() => ({}));
-      console.error('ElevenLabs verification failed:', error);
-      
+      const text = await response.text();
+      console.error('[Verify ElevenLabs] Failed:', text);
+
       return NextResponse.json(
-        { error: 'Agent not ready', verified: false },
+        { verified: false, error: 'Agent not ready' },
         { status: 503 }
       );
     }
@@ -54,13 +50,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       verified: true,
       agentId: elevenLabsAgentId,
-      agentName: agentData.name,
+      agentName: agentData?.name,
     });
 
   } catch (error) {
-    console.error('Verification error:', error);
+    console.error('[Verify ElevenLabs] Error:', error);
     return NextResponse.json(
-      { error: 'Verification failed', verified: false },
+      { verified: false, error: 'Verification failed' },
       { status: 500 }
     );
   }

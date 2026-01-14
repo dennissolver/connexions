@@ -1,15 +1,29 @@
 // app/api/webhooks/register-agent/route.ts
-// API to register agent_id → platform_url mappings for webhook routing
+// Registers agent_id → platform mappings and resolves any unrouted webhook backlog
+
+export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// -----------------------------------------------------------------------------
+// Supabase helper
+// -----------------------------------------------------------------------------
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing Supabase credentials');
+
+  if (!url || !key) {
+    throw new Error('Missing Supabase credentials');
+  }
+
   return createClient(url, key);
 }
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 interface RegisterAgentRequest {
   agent_id: string;
@@ -20,11 +34,14 @@ interface RegisterAgentRequest {
   api_key?: string;
 }
 
+// -----------------------------------------------------------------------------
+// POST – Register or update agent routing
+// -----------------------------------------------------------------------------
+
 export async function POST(request: NextRequest) {
   try {
     const body: RegisterAgentRequest = await request.json();
 
-    // Validate required fields
     if (!body.agent_id || !body.platform_url || !body.platform_name) {
       return NextResponse.json(
         { error: 'Missing required fields: agent_id, platform_url, platform_name' },
@@ -34,39 +51,46 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Upsert the agent route
     const { data, error } = await supabase
       .from('agent_routes')
-      .upsert({
-        agent_id: body.agent_id,
-        platform_url: body.platform_url.replace(/\/$/, ''), // Remove trailing slash
-        platform_name: body.platform_name,
-        platform_id: body.platform_id || null,
-        agent_type: body.agent_type || 'interview',
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'agent_id'
-      })
+      .upsert(
+        {
+          agent_id: body.agent_id,
+          platform_url: body.platform_url.replace(/\/$/, ''),
+          platform_name: body.platform_name,
+          platform_id: body.platform_id ?? null,
+          agent_type: body.agent_type ?? 'interview',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'agent_id' }
+      )
       .select()
       .single();
 
     if (error) {
-      console.error('[Register] Database error:', error);
+      console.error('[register-agent] Upsert failed:', error);
       return NextResponse.json(
         { error: 'Failed to register agent route', details: error.message },
         { status: 500 }
       );
     }
 
-    console.log(`[Register] Agent ${body.agent_id} registered for ${body.platform_name}`);
-
-    // Also resolve any unrouted webhooks for this agent
-    await supabase
+    // Fire-and-forget cleanup of unrouted webhook backlog
+    const { error: resolveError } = await supabase
       .from('unrouted_webhooks')
-      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+      })
       .eq('agent_id', body.agent_id)
-      .eq('resolved', false)
-      .catch(() => {});
+      .eq('resolved', false);
+
+    if (resolveError) {
+      console.warn(
+        '[register-agent] Failed to resolve unrouted webhooks:',
+        resolveError.message
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -75,20 +99,26 @@ export async function POST(request: NextRequest) {
         agent_id: data.agent_id,
         platform_name: data.platform_name,
         platform_url: data.platform_url,
-        agent_type: data.agent_type
-      }
+        agent_type: data.agent_type,
+      },
     });
 
   } catch (error) {
-    console.error('[Register] Unexpected error:', error);
+    console.error('[register-agent] Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown' },
+      {
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown',
+      },
       { status: 500 }
     );
   }
 }
 
-// Get route info for an agent
+// -----------------------------------------------------------------------------
+// GET – Fetch route(s)
+// -----------------------------------------------------------------------------
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -105,7 +135,10 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (error || !data) {
-        return NextResponse.json({ error: 'Agent route not found' }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Agent route not found' },
+          { status: 404 }
+        );
       }
 
       return NextResponse.json({ route: data });
@@ -119,13 +152,15 @@ export async function GET(request: NextRequest) {
         .order('created_at', { ascending: false });
 
       if (error) {
-        return NextResponse.json({ error: 'Failed to fetch routes' }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Failed to fetch routes' },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({ routes: data || [] });
     }
 
-    // List all routes (admin view)
     const { data, error } = await supabase
       .from('agent_routes')
       .select('*')
@@ -133,25 +168,37 @@ export async function GET(request: NextRequest) {
       .limit(100);
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to fetch routes' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch routes' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ routes: data || [] });
 
   } catch (error) {
-    console.error('[Register GET] Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[register-agent GET] Error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-// Delete an agent route
+// -----------------------------------------------------------------------------
+// DELETE – Remove agent route
+// -----------------------------------------------------------------------------
+
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const agentId = searchParams.get('agent_id');
 
     if (!agentId) {
-      return NextResponse.json({ error: 'Missing agent_id parameter' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Missing agent_id parameter' },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
@@ -162,15 +209,23 @@ export async function DELETE(request: NextRequest) {
       .eq('agent_id', agentId);
 
     if (error) {
-      console.error('[Register DELETE] Error:', error);
-      return NextResponse.json({ error: 'Failed to delete route' }, { status: 500 });
+      console.error('[register-agent DELETE] Error:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete route' },
+        { status: 500 }
+      );
     }
 
-    console.log(`[Register] Deleted route for agent ${agentId}`);
-    return NextResponse.json({ success: true, message: `Route for agent ${agentId} deleted` });
+    return NextResponse.json({
+      success: true,
+      message: `Route for agent ${agentId} deleted`,
+    });
 
   } catch (error) {
-    console.error('[Register DELETE] Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[register-agent DELETE] Unexpected error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
