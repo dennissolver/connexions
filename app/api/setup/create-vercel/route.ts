@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
 
     // Accept multiple parameter formats from provision page
     const platformName = body.platformName || body.projectName;
-    const githubRepoName = body.githubRepoName || body.githubRepo;
+    const githubRepoName = body.githubRepoName || body.githubRepo || body.repoName;
     const companyName = body.companyName || body.envVars?.NEXT_PUBLIC_COMPANY_NAME;
 
     // Accept env vars in different formats
