@@ -1,4 +1,4 @@
-// app/api/store-transcript/route.ts
+﻿// app/api/store-transcript/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -172,3 +172,4 @@ function formatTranscript(messages: any[]): string {
     })
     .join('\n\n');
 }
+

@@ -1,4 +1,4 @@
-export interface FinalInterviewSpec {
+﻿export interface FinalInterviewSpec {
   interview_type: "interview" | "survey";
   goal: string;
   target_participant: string;
@@ -38,3 +38,4 @@ export function parseFinalSpec(raw: string): FinalInterviewSpec {
 
   return spec;
 }
+

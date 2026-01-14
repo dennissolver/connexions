@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { runInterviewEvaluation } from "@/lib/evaluation/runInterviewEvaluation";
 
@@ -23,3 +23,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ status: "ok" });
 }
+

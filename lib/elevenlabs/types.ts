@@ -1,4 +1,4 @@
-// lib/elevenlabs/types.ts
+﻿// lib/elevenlabs/types.ts
 export interface ElevenLabsConversation {
   conversationId: string;
   agentId: string;
@@ -10,3 +10,4 @@ export interface ElevenLabsConversation {
     timestamp?: string;
   }>;
 }
+

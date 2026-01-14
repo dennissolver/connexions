@@ -24,3 +24,4 @@ export type AgentConfig = {
   created_at: string
   updated_at: string
 }
+

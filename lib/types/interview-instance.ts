@@ -1,4 +1,4 @@
-// lib/types/interview-instance.ts
+﻿// lib/types/interview-instance.ts
 
 /**
  * Represents a live or historical interview session.
@@ -23,3 +23,4 @@ export interface InterviewInstance {
   created_at: string;
   updated_at: string;
 }
+

@@ -1,4 +1,4 @@
-// app/api/setup/trigger-deployment/route.ts
+﻿// app/api/setup/trigger-deployment/route.ts
 // ============================================================================
 // TRIGGER DEPLOYMENT - Calls Vercel API directly to create deployment
 //

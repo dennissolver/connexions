@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -150,7 +150,7 @@ export default function CreateAgentPage() {
               </div>
               <h2 className="text-2xl font-bold mb-4">Ready to design your AI interviewer</h2>
               <p className="text-slate-400 mb-8">
-                Start a voice conversation with our Setup Agent. Just tell us what you need — 
+                Start a voice conversation with our Setup Agent. Just tell us what you need â€” 
                 we'll design a custom AI interviewer based on your requirements.
               </p>
               <button
@@ -187,7 +187,7 @@ export default function CreateAgentPage() {
               </div>
               <h2 className="text-2xl font-bold mb-4 text-green-400">Call in progress</h2>
               <p className="text-slate-400 mb-8">
-                Speak naturally — the Setup Agent is listening
+                Speak naturally â€” the Setup Agent is listening
               </p>
               
               {/* Call Controls */}
@@ -274,3 +274,4 @@ export default function CreateAgentPage() {
     </div>
   );
 }
+

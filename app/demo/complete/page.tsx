@@ -1,4 +1,4 @@
-// app/demo/complete/page.tsx
+﻿// app/demo/complete/page.tsx
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
@@ -39,7 +39,7 @@ function DemoCompleteContent() {
           </h1>
           <p className="text-xl text-slate-400 mb-6 max-w-2xl mx-auto">
             That AI interview you just had? Imagine every candidate going through the same 
-            consistent, professional screening — automatically.
+            consistent, professional screening â€” automatically.
           </p>
 
           {leadData && (
@@ -65,7 +65,7 @@ function DemoCompleteContent() {
               </div>
               <h3 className="font-semibold mb-2">Natural Conversation</h3>
               <p className="text-sm text-slate-400">
-                AI that listens, responds, and adapts in real-time — just like a human interviewer.
+                AI that listens, responds, and adapts in real-time â€” just like a human interviewer.
               </p>
             </div>
             
@@ -108,7 +108,7 @@ function DemoCompleteContent() {
             ].map((item, i) => (
               <div key={i} className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-lg">
                 <div className="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-red-400 text-xs font-bold">✕</span>
+                  <span className="text-red-400 text-xs font-bold">âœ•</span>
                 </div>
                 <div>
                   <div className="font-medium text-red-300">{item.problem}</div>
@@ -198,13 +198,13 @@ function DemoCompleteContent() {
           
           <div className="space-y-4">
             {[
-              { icon: Database, text: 'Your own database — all interview data belongs to you' },
+              { icon: Database, text: 'Your own database â€” all interview data belongs to you' },
               { icon: Mic, text: 'Unlimited AI interview agents with custom voices' },
               { icon: Users, text: '100 interviews per month included' },
               { icon: Globe, text: 'Your own deployment with custom domain option' },
               { icon: BarChart3, text: 'Full analytics dashboard with exports' },
               { icon: Shield, text: 'Automatic evaluation and drift detection' },
-              { icon: Lock, text: 'Private GitHub repository — full source code' },
+              { icon: Lock, text: 'Private GitHub repository â€” full source code' },
               { icon: Sparkles, text: 'Setup in 3 minutes, cancel anytime' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-4 p-4 bg-slate-900 border border-slate-800 rounded-lg">
@@ -231,7 +231,7 @@ function DemoCompleteContent() {
               <span className="text-5xl font-bold">$150</span>
               <span className="text-slate-400 text-xl">/month</span>
             </div>
-            <p className="text-slate-400 mb-6">100 interviews included · $4 per additional</p>
+            <p className="text-slate-400 mb-6">100 interviews included Â· $4 per additional</p>
             
             <div className="flex items-center justify-center gap-6 text-sm text-slate-400 mb-8">
               <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ function DemoCompleteContent() {
             </div>
             
             <div className="flex items-center justify-center">
-              <div className="text-4xl font-bold text-slate-600">→</div>
+              <div className="text-4xl font-bold text-slate-600">â†’</div>
             </div>
             
             <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6">
@@ -299,7 +299,7 @@ function DemoCompleteContent() {
             className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 px-10 py-4 rounded-xl font-semibold text-lg transition-all hover:scale-[1.02] shadow-lg shadow-purple-500/20"
           >
             <Rocket className="w-5 h-5" />
-            Create My Platform — $150/month
+            Create My Platform â€” $150/month
             <ArrowRight className="w-5 h-5" />
           </Link>
 

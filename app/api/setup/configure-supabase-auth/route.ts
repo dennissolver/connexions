@@ -1,4 +1,4 @@
-// app/api/setup/configure-supabase-auth/route.ts
+﻿// app/api/setup/configure-supabase-auth/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -28,10 +28,10 @@ export async function POST(request: NextRequest) {
         message: 'SUPABASE_ACCESS_TOKEN not set. Configure manually.',
         requiredUrls: redirectUrls,
         instructions: [
-          '1. Go to Supabase Dashboard → Authentication → URL Configuration',
+          '1. Go to Supabase Dashboard â†’ Authentication â†’ URL Configuration',
           `2. Set Site URL: ${siteUrl}`,
           '3. Add Redirect URLs:',
-          ...redirectUrls.map(url => `   • ${url}`),
+          ...redirectUrls.map(url => `   â€¢ ${url}`),
         ],
       });
     }
@@ -82,3 +82,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

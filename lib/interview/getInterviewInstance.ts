@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase/service";
+﻿import { supabaseService } from "@/lib/supabase/service";
 
 export type InterviewInstance = {
   id: string;
@@ -22,3 +22,4 @@ export async function getInterviewInstance(
 
   return data;
 }
+

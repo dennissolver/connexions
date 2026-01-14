@@ -1,4 +1,4 @@
-// app/api/setup/save-platform-setup/route.ts
+﻿// app/api/setup/save-platform-setup/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -60,3 +60,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message });
   }
 }
+

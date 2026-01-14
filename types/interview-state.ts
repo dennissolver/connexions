@@ -1,4 +1,4 @@
-export type InterviewPhase =
+﻿export type InterviewPhase =
   | "intro"
   | "context"
   | "core"
@@ -23,3 +23,4 @@ export interface InterviewState {
   created_at: string;
   updated_at: string;
 }
+

@@ -1,4 +1,4 @@
-// app/api/admin/alerts/route.ts
+﻿// app/api/admin/alerts/route.ts
 // SUPERADMIN: Manage alerts across all clients
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -182,3 +182,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update alerts' }, { status: 500 });
   }
 }
+

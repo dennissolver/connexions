@@ -1,4 +1,4 @@
-// app/page.tsx
+﻿// app/page.tsx
 import Link from 'next/link';
 import {
   Mic, BarChart3, Shield, Clock, Users, Zap,
@@ -70,7 +70,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-4 text-sm text-neutral-500">
-            No credit card required for demo • Platform subscription $150/month
+            No credit card required for demo â€¢ Platform subscription $150/month
           </p>
         </div>
       </section>
@@ -378,7 +378,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-center text-xs text-neutral-600 mt-6">
-            © 2024 Corporate AI Solutions. Built for production use.
+            Â© 2024 Corporate AI Solutions. Built for production use.
           </p>
         </div>
       </footer>

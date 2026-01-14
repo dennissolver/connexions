@@ -1,4 +1,4 @@
-// lib/prompts/parseSetupConversation.ts
+﻿// lib/prompts/parseSetupConversation.ts
 export const PARSE_SETUP_CONVERSATION_PROMPT = `
 You are a system that extracts structured interview requirements
 from a voice-based setup conversation.
@@ -34,3 +34,4 @@ Schema:
   "output_expectations": string[]
 }
 `;
+

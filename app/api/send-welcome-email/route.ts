@@ -1,4 +1,4 @@
-// app/api/setup/send-welcome/route.ts
+﻿// app/api/setup/send-welcome/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       
       <!-- Success Icon -->
       <div style="width:64px;height:64px;background:rgba(34,197,94,0.2);border-radius:50%;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#22c55e;font-size:32px;">✓</span>
+        <span style="color:#22c55e;font-size:32px;">âœ“</span>
       </div>
 
       <h2 style="color:#22c55e;font-size:28px;margin:0 0 16px;">Platform Created!</h2>
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
       <!-- CTA Button -->
       <a href="${platformUrl}" style="display:inline-block;background:#22c55e;color:#fff;text-decoration:none;padding:16px 40px;border-radius:12px;font-weight:600;font-size:16px;">
-        Visit Your Platform →
+        Visit Your Platform â†’
       </a>
 
       <!-- URL Box -->
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           from: process.env.EMAIL_FROM || 'AI Interview Agents <hello@corporateaisolutions.com>',
           to: [email],
-          subject: `✓ Your AI Interview Platform is Ready - ${companyName}`,
+          subject: `âœ“ Your AI Interview Platform is Ready - ${companyName}`,
           html: emailHtml,
         }),
       });
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           personalizations: [{ to: [{ email }] }],
           from: { email: process.env.EMAIL_FROM_ADDRESS || 'hello@corporateaisolutions.com' },
-          subject: `✓ Your AI Interview Platform is Ready - ${companyName}`,
+          subject: `âœ“ Your AI Interview Platform is Ready - ${companyName}`,
           content: [{ type: 'text/html', value: emailHtml }],
         }),
       });
@@ -131,3 +131,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message });
   }
 }
+

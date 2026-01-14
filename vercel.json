@@ -1,1 +1,9 @@
-{"framework":"nextjs"}
+// vercel.json
+{
+  "crons": [
+    {
+      "path": "/api/cron/provision",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}

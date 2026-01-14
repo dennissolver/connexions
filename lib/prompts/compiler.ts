@@ -1,4 +1,4 @@
-// lib/prompts/compiler.ts
+﻿// lib/prompts/compiler.ts
 
 export type InterviewPhase =
   | "intro"
@@ -57,3 +57,4 @@ Proceed accordingly.
 
 // Backwards-compatible alias
 export const compileInterviewerPrompt = compileInterviewerSystemPrompt;
+

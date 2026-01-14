@@ -1,4 +1,4 @@
-// config/client.ts
+﻿// config/client.ts
 // ============================================================================
 // CLIENT CONFIGURATION
 // Platform defaults & product identity
@@ -38,3 +38,4 @@ export const getPlatformInfo = () => clientConfig.platform;
 export const getCompanyInfo = () => clientConfig.company;
 
 export type ClientConfig = typeof clientConfig;
+

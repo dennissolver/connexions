@@ -1,4 +1,4 @@
-// components/dashboard/AgentDrilldown.tsx
+﻿// components/dashboard/AgentDrilldown.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -253,7 +253,7 @@ export function AgentDrilldown({ agentId, onBack }: AgentDrilldownProps) {
         <div className="md:col-span-2 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
           <div className="text-gray-400 text-sm mb-2">Overall Score</div>
           <div className={`text-5xl font-bold ${summary.avg_scores ? getScoreColor(summary.avg_scores.overall) : 'text-gray-400'}`}>
-            {summary.avg_scores ? `${summary.avg_scores.overall}%` : '—'}
+            {summary.avg_scores ? `${summary.avg_scores.overall}%` : 'â€”'}
           </div>
           <div className="mt-4 text-sm text-gray-400">
             {summary.evaluated_interviews} interviews evaluated
@@ -444,7 +444,7 @@ export function AgentDrilldown({ agentId, onBack }: AgentDrilldownProps) {
                     {rec.priority.toUpperCase()}
                   </span>
                   <span className="text-xs text-gray-500 capitalize">{rec.type.replace(/_/g, ' ')}</span>
-                  <span className="text-xs text-gray-600">• Suggested {rec.frequency}x</span>
+                  <span className="text-xs text-gray-600">â€¢ Suggested {rec.frequency}x</span>
                 </div>
                 <p className="text-white">{rec.suggestion}</p>
                 <p className="text-sm text-gray-400 mt-2">Expected impact: {rec.expected_impact}</p>
@@ -500,3 +500,4 @@ export function AgentDrilldown({ agentId, onBack }: AgentDrilldownProps) {
 }
 
 export default AgentDrilldown;
+

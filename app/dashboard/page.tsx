@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx
+﻿// app/dashboard/page.tsx
 // Main evaluation dashboard page
 
 'use client';
@@ -27,3 +27,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

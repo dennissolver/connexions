@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { initialiseInterviewState } from "@/lib/interview/initialiseInterviewState";
 
@@ -143,3 +143,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

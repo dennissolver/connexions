@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+﻿import { supabaseAdmin } from "@/lib/supabase/admin";
 import { FinalInterviewSpec } from "./parseFinalSpec";
 
 export async function createDemoInterview({
@@ -28,3 +28,4 @@ export async function createDemoInterview({
 
   return data.id;
 }
+

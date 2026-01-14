@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_LIMITS } from "@/types/factory";
+﻿import { DEFAULT_FACTORY_LIMITS } from "@/types/factory";
 
 export function enforceFactoryPolicy({
   existingAgentCount,
@@ -29,3 +29,4 @@ export function enforceFactoryPolicy({
     throw new Error("Daily agent creation limit reached");
   }
 }
+

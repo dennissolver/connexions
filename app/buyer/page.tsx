@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+﻿import { Suspense } from "react";
 import BuyerClient from "./BuyerClient";
 
 export default function BuyerPage() {

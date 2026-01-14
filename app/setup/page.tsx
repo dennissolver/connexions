@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 
 export default function LandingPage() {
   async function startDemo(formData: FormData) {
@@ -36,7 +36,7 @@ export default function LandingPage() {
 
         <p className="mt-6 text-lg text-neutral-300 max-w-3xl">
           Create AI interviewers for research, discovery, exit interviews, audits,
-          compliance, or surveys — with observable quality, role adherence,
+          compliance, or surveys â€” with observable quality, role adherence,
           and measurable performance.
         </p>
 
@@ -49,7 +49,7 @@ export default function LandingPage() {
             Try a live demo
           </a>
           <p className="mt-2 text-sm text-neutral-400">
-            No credit card · Takes ~3 minutes
+            No credit card Â· Takes ~3 minutes
           </p>
         </div>
       </section>
@@ -58,7 +58,7 @@ export default function LandingPage() {
       <section className="border-t border-neutral-800 py-20">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-2xl font-semibold">
-            Interviews don’t scale. AI interviews drift.
+            Interviews donâ€™t scale. AI interviews drift.
           </h2>
 
           <p className="mt-6 text-neutral-300 max-w-3xl">
@@ -67,7 +67,7 @@ export default function LandingPage() {
           </p>
 
           <p className="mt-4 text-neutral-300 max-w-3xl">
-            Once deployed, you’re blind.
+            Once deployed, youâ€™re blind.
           </p>
         </div>
       </section>
@@ -76,19 +76,19 @@ export default function LandingPage() {
       <section className="border-t border-neutral-800 py-20">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-2xl font-semibold">
-            We don’t just run interviews — we evaluate them continuously.
+            We donâ€™t just run interviews â€” we evaluate them continuously.
           </h2>
 
           <ul className="mt-8 space-y-4 text-neutral-300">
-            <li>• Explicit interviewer role definition</li>
-            <li>• Evaluation after every interview</li>
-            <li>• Role adherence scoring</li>
-            <li>• Quality and goal-achievement metrics</li>
-            <li>• Drift detection and alerts over time</li>
+            <li>â€¢ Explicit interviewer role definition</li>
+            <li>â€¢ Evaluation after every interview</li>
+            <li>â€¢ Role adherence scoring</li>
+            <li>â€¢ Quality and goal-achievement metrics</li>
+            <li>â€¢ Drift detection and alerts over time</li>
           </ul>
 
           <p className="mt-6 text-neutral-300 max-w-3xl">
-            You don’t hope it works. You see how it’s performing.
+            You donâ€™t hope it works. You see how itâ€™s performing.
           </p>
         </div>
       </section>
@@ -117,11 +117,11 @@ export default function LandingPage() {
           <h2 className="text-2xl font-semibold">Who this is for</h2>
 
           <ul className="mt-6 space-y-2 text-neutral-300">
-            <li>• Founders running customer discovery</li>
-            <li>• HR teams doing exit or engagement interviews</li>
-            <li>• Legal and compliance teams gathering testimony</li>
-            <li>• Researchers running qualitative studies at scale</li>
-            <li>• Consultants interviewing repeatedly</li>
+            <li>â€¢ Founders running customer discovery</li>
+            <li>â€¢ HR teams doing exit or engagement interviews</li>
+            <li>â€¢ Legal and compliance teams gathering testimony</li>
+            <li>â€¢ Researchers running qualitative studies at scale</li>
+            <li>â€¢ Consultants interviewing repeatedly</li>
           </ul>
         </div>
       </section>
@@ -179,7 +179,7 @@ export default function LandingPage() {
             </button>
 
             <p className="text-sm text-neutral-400 text-center">
-              Demo data only · No commitment
+              Demo data only Â· No commitment
             </p>
           </form>
         </div>
@@ -188,9 +188,10 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="border-t border-neutral-800 py-10">
         <div className="max-w-5xl mx-auto px-6 text-sm text-neutral-500">
-          Built for production use · Designed for observability · No gimmicks
+          Built for production use Â· Designed for observability Â· No gimmicks
         </div>
       </footer>
     </main>
   );
 }
+

@@ -1,4 +1,4 @@
-import type { InterviewPhase as FlowPhase } from "@/lib/prompts/compiler";
+﻿import type { InterviewPhase as FlowPhase } from "@/lib/prompts/compiler";
 import type { InterviewPhase as PersistedPhase } from "@/types/interview-state";
 
 /**
@@ -21,3 +21,4 @@ export function mapFlowPhaseToPersistedPhase(
       return "intro";
   }
 }
+

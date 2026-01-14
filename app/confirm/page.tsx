@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -305,7 +305,7 @@ function ConfirmPageContent() {
               {corrections.map((c, i) => (
                 <li key={i} className="text-slate-300">
                   <span className="line-through text-slate-500">{c.original}</span>
-                  {' → '}
+                  {' â†’ '}
                   <span className="text-green-400">{c.corrected}</span>
                   <span className="text-slate-500 ml-2">({c.reason})</span>
                 </li>

@@ -1,4 +1,4 @@
-// app/api/stripe/webhook/route.ts
+﻿// app/api/stripe/webhook/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
@@ -107,7 +107,7 @@ async function handleCheckoutComplete(supabase: SupabaseClient, session: Stripe.
   const email = session.customer_email || session.customer_details?.email;
   const name = session.customer_details?.name;
 
-  console.log('✅ Checkout completed:', { customerId, subscriptionId, leadId, email });
+  console.log('âœ… Checkout completed:', { customerId, subscriptionId, leadId, email });
 
   if (!email) {
     console.error('No email found in checkout session');
@@ -152,7 +152,7 @@ async function handleCheckoutComplete(supabase: SupabaseClient, session: Stripe.
       console.error('Failed to create auth user:', createError);
     } else {
       authUserId = newUser.user?.id || null;
-      console.log('✅ Created auth user:', authUserId);
+      console.log('âœ… Created auth user:', authUserId);
     }
   }
 
@@ -189,7 +189,7 @@ async function handleCheckoutComplete(supabase: SupabaseClient, session: Stripe.
       current_period_start: new Date().toISOString(),
     });
 
-  console.log('✅ Created client and billing account:', newClient.id);
+  console.log('âœ… Created client and billing account:', newClient.id);
 
   // ========== Send Magic Link Email ==========
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -206,7 +206,7 @@ async function handleCheckoutComplete(supabase: SupabaseClient, session: Stripe.
   if (magicLinkError) {
     console.error('Failed to generate magic link:', magicLinkError);
   } else {
-    console.log('✅ Magic link generated for:', email);
+    console.log('âœ… Magic link generated for:', email);
 
     // Send welcome email with the magic link
     const magicLink = linkData?.properties?.action_link;
@@ -239,7 +239,7 @@ async function sendWelcomeEmailWithMagicLink(
       body: JSON.stringify({
         from: process.env.EMAIL_FROM || 'Connexions <noreply@connexions.ai>',
         to: email,
-        subject: `Welcome to Connexions${companyName ? ` - ${companyName}` : ''}! 🎉`,
+        subject: `Welcome to Connexions${companyName ? ` - ${companyName}` : ''}! ðŸŽ‰`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -254,25 +254,25 @@ async function sendWelcomeEmailWithMagicLink(
             <div style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
               <p style="color: white; margin: 0 0 16px 0; font-size: 16px;">Click below to access your dashboard:</p>
               <a href="${magicLink}" style="display: inline-block; background-color: white; color: #8B5CF6; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                🚀 Log In to Dashboard
+                ðŸš€ Log In to Dashboard
               </a>
             </div>
             
             <div style="background-color: #F3F4F6; border-radius: 8px; padding: 20px; margin: 24px 0;">
               <h3 style="color: #374151; margin: 0 0 12px 0;">Your Subscription Includes:</h3>
               <ul style="color: #4B5563; margin: 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;">✅ <strong>100 interviews</strong> per month</li>
-                <li style="margin-bottom: 8px;">✅ <strong>10 interview panels</strong></li>
-                <li style="margin-bottom: 8px;">✅ <strong>AI transcript analysis</strong></li>
-                <li style="margin-bottom: 8px;">✅ <strong>Custom branding</strong></li>
-                <li style="margin-bottom: 8px;">✅ <strong>Email invitations</strong></li>
-                <li>✅ <strong>Export & reporting</strong></li>
+                <li style="margin-bottom: 8px;">âœ… <strong>100 interviews</strong> per month</li>
+                <li style="margin-bottom: 8px;">âœ… <strong>10 interview panels</strong></li>
+                <li style="margin-bottom: 8px;">âœ… <strong>AI transcript analysis</strong></li>
+                <li style="margin-bottom: 8px;">âœ… <strong>Custom branding</strong></li>
+                <li style="margin-bottom: 8px;">âœ… <strong>Email invitations</strong></li>
+                <li>âœ… <strong>Export & reporting</strong></li>
               </ul>
             </div>
             
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; margin: 24px 0;">
               <p style="color: #92400E; margin: 0; font-size: 14px;">
-                <strong>🔐 Passwordless Login:</strong> This magic link expires in 24 hours. 
+                <strong>ðŸ” Passwordless Login:</strong> This magic link expires in 24 hours. 
                 You can always request a new one from the login page.
               </p>
             </div>
@@ -298,7 +298,7 @@ async function sendWelcomeEmailWithMagicLink(
     });
 
     if (response.ok) {
-      console.log('✅ Welcome email with magic link sent to:', email);
+      console.log('âœ… Welcome email with magic link sent to:', email);
     } else {
       const error = await response.text();
       console.error('Failed to send welcome email:', error);
@@ -312,7 +312,7 @@ async function handleSubscriptionChange(supabase: SupabaseClient, subscription: 
   const customerId = subscription.customer as string;
   const subData = subscription as any;
 
-  console.log('🔄 Subscription updated:', {
+  console.log('ðŸ”„ Subscription updated:', {
     subscriptionId: subscription.id,
     status: subscription.status,
     customerId,
@@ -353,7 +353,7 @@ async function handleSubscriptionChange(supabase: SupabaseClient, subscription: 
 async function handleSubscriptionCanceled(supabase: SupabaseClient, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
 
-  console.log('❌ Subscription canceled:', { customerId });
+  console.log('âŒ Subscription canceled:', { customerId });
 
   await supabase
     .from('clients')
@@ -367,7 +367,7 @@ async function handleInvoicePaid(supabase: SupabaseClient, invoice: Stripe.Invoi
   const invoiceData = invoice as any;
   const customerId = invoiceData.customer as string;
 
-  console.log('💵 Invoice paid:', {
+  console.log('ðŸ’µ Invoice paid:', {
     invoiceId: invoice.id,
     amount: invoiceData.amount_paid,
     customerId,
@@ -392,7 +392,7 @@ async function handleInvoicePaid(supabase: SupabaseClient, invoice: Stripe.Invoi
       })
       .eq('client_id', client.id);
 
-    console.log('🔄 Reset interview counter for client:', client.id);
+    console.log('ðŸ”„ Reset interview counter for client:', client.id);
   }
 }
 
@@ -400,7 +400,7 @@ async function handleInvoiceFailed(supabase: SupabaseClient, invoice: Stripe.Inv
   const invoiceData = invoice as any;
   const customerId = invoiceData.customer as string;
 
-  console.log('⚠️ Invoice payment failed:', { customerId });
+  console.log('âš ï¸ Invoice payment failed:', { customerId });
 
   await supabase
     .from('clients')

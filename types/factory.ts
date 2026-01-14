@@ -1,4 +1,4 @@
-export interface FactoryLimits {
+﻿export interface FactoryLimits {
   maxAgents: number;
   maxQuestionsPerAgent: number;
   maxInterviewDurationMins: number;
@@ -11,3 +11,4 @@ export const DEFAULT_FACTORY_LIMITS: FactoryLimits = {
   maxInterviewDurationMins: 60,
   maxAgentsPerDay: 5,
 };
+

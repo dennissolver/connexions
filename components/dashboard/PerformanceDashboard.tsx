@@ -1,4 +1,4 @@
-// components/dashboard/PerformanceDashboard.tsx
+﻿// components/dashboard/PerformanceDashboard.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -228,7 +228,7 @@ export function PerformanceDashboard({ onAgentSelect }: PerformanceDashboardProp
             Platform Score
           </div>
           <div className="text-3xl font-bold text-white">
-            {data.platform.avg_score !== null ? `${data.platform.avg_score}%` : '—'}
+            {data.platform.avg_score !== null ? `${data.platform.avg_score}%` : 'â€”'}
           </div>
         </div>
 
@@ -294,7 +294,7 @@ export function PerformanceDashboard({ onAgentSelect }: PerformanceDashboardProp
                       )}
                     </div>
                     <div className="text-sm text-gray-400">
-                      {agent.company_name} • {agent.evaluated_interviews} evaluated
+                      {agent.company_name} â€¢ {agent.evaluated_interviews} evaluated
                     </div>
                   </div>
                 </div>
@@ -328,7 +328,7 @@ export function PerformanceDashboard({ onAgentSelect }: PerformanceDashboardProp
                   <div className="text-right">
                     <div className="flex items-center gap-2">
                       <span className={`text-2xl font-bold ${getHealthColor(agent.health)}`}>
-                        {agent.avg_score !== null ? `${agent.avg_score}%` : '—'}
+                        {agent.avg_score !== null ? `${agent.avg_score}%` : 'â€”'}
                       </span>
                       {getTrendIcon(agent.trend)}
                     </div>

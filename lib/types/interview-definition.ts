@@ -1,4 +1,4 @@
-// lib/types/interviews-definition.ts
+﻿// lib/types/interviews-definition.ts
 export interface InterviewDefinition {
   mode: "interview" | "survey";
 
@@ -15,3 +15,4 @@ export interface InterviewDefinition {
 
   estimatedDurationMins?: number;
 }
+

@@ -1,4 +1,4 @@
-// app/api/get-transcript/route.ts
+﻿// app/api/get-transcript/route.ts
 // Retrieves transcript from ElevenLabs conversation or our DB
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -128,3 +128,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

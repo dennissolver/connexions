@@ -1,4 +1,4 @@
-// types/evaluation.ts
+﻿// types/evaluation.ts
 // Type definitions for the evaluation system
 
 export interface EvaluationResult {
@@ -265,3 +265,4 @@ export interface AlertsResponse {
     total: number;
   };
 }
+

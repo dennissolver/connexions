@@ -1,4 +1,4 @@
-// lib/llm/gemini.ts
+﻿// lib/llm/gemini.ts
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 

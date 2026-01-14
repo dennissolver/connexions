@@ -1,4 +1,4 @@
-// app/api/setup/check-build-status/route.ts
+﻿// app/api/setup/check-build-status/route.ts
 // ============================================================================
 // CHECK BUILD STATUS - Polls Vercel API to check deployment build status
 // ============================================================================

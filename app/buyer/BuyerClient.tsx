@@ -1,4 +1,4 @@
-// app/buyer/BuyerClient.tsx
+﻿// app/buyer/BuyerClient.tsx
 
 'use client';
 
@@ -122,7 +122,7 @@ export default function BuyerClient() {
               <span className="text-6xl font-bold">$150</span>
               <span className="text-slate-400 text-xl">/month</span>
             </div>
-            <p className="text-slate-500 mt-2">Cancel anytime • No setup fees</p>
+            <p className="text-slate-500 mt-2">Cancel anytime â€¢ No setup fees</p>
           </div>
 
           {/* What's included */}
@@ -163,7 +163,7 @@ export default function BuyerClient() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                <span><strong className="text-slate-300">100 included</strong> - for example, run 20 panels × 5 interviewees = 100 interviews</span>
+                <span><strong className="text-slate-300">100 included</strong> - for example, run 20 panels Ã— 5 interviewees = 100 interviews</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -249,7 +249,7 @@ export default function BuyerClient() {
 
           {/* Security note */}
           <p className="text-center text-slate-500 text-sm mt-4">
-            🔒 Secure payment via Stripe. Your card details never touch our servers.
+            ðŸ”’ Secure payment via Stripe. Your card details never touch our servers.
           </p>
         </div>
 

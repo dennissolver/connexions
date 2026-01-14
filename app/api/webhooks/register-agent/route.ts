@@ -1,5 +1,5 @@
-// app/api/webhooks/register-agent/route.ts
-// Registers agent_id → platform mappings and resolves any unrouted webhook backlog
+﻿// app/api/webhooks/register-agent/route.ts
+// Registers agent_id â†’ platform mappings and resolves any unrouted webhook backlog
 
 export const runtime = 'nodejs';
 
@@ -35,7 +35,7 @@ interface RegisterAgentRequest {
 }
 
 // -----------------------------------------------------------------------------
-// POST – Register or update agent routing
+// POST â€“ Register or update agent routing
 // -----------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 }
 
 // -----------------------------------------------------------------------------
-// GET – Fetch route(s)
+// GET â€“ Fetch route(s)
 // -----------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
 }
 
 // -----------------------------------------------------------------------------
-// DELETE – Remove agent route
+// DELETE â€“ Remove agent route
 // -----------------------------------------------------------------------------
 
 export async function DELETE(request: NextRequest) {
@@ -229,3 +229,4 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+

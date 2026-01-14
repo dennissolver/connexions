@@ -1,4 +1,4 @@
-// app/components/VoiceAvatar.tsx
+﻿// app/components/VoiceAvatar.tsx
 'use client';
 
 import Image from 'next/image';

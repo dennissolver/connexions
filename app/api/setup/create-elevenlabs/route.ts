@@ -1,11 +1,11 @@
-// app/api/setup/create-elevenlabs/route.ts
+﻿// app/api/setup/create-elevenlabs/route.ts
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // -----------------------------------------------------------------------------
-// Supabase (service role – setup only)
+// Supabase (service role â€“ setup only)
 // -----------------------------------------------------------------------------
 
 function getSupabase() {
@@ -26,7 +26,7 @@ function getSupabase() {
 const SETUP_AGENT_PROMPT_TEMPLATE = `You are {{AGENT_NAME}}, a warm and curious AI assistant helping people design their perfect interview or survey experience on the {{PLATFORM_NAME}} platform.`;
 
 // -----------------------------------------------------------------------------
-// POST – Setup interview agent + persist canonical public URL
+// POST â€“ Setup interview agent + persist canonical public URL
 // -----------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
 
     // -------------------------------------------------------------------------
-    // 1️⃣ Create or update agent record (authoritative setup write)
+    // 1ï¸âƒ£ Create or update agent record (authoritative setup write)
     // -------------------------------------------------------------------------
 
     const { data: agent, error: agentError } = await supabase
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // -------------------------------------------------------------------------
-    // 2️⃣ Create ElevenLabs agent
+    // 2ï¸âƒ£ Create ElevenLabs agent
     // -------------------------------------------------------------------------
 
     const prompt = SETUP_AGENT_PROMPT_TEMPLATE
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     const elevenlabsAgent = await createRes.json();
 
     // -------------------------------------------------------------------------
-    // 3️⃣ Persist ElevenLabs agent ID + mark ready
+    // 3ï¸âƒ£ Persist ElevenLabs agent ID + mark ready
     // -------------------------------------------------------------------------
 
     await supabase
@@ -187,3 +187,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

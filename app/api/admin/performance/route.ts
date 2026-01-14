@@ -1,4 +1,4 @@
-// app/api/admin/performance/route.ts
+﻿// app/api/admin/performance/route.ts
 // SUPERADMIN: Platform-wide performance across ALL clients and agents
 // This is for the master template operator (you), not for clients
 
@@ -216,3 +216,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

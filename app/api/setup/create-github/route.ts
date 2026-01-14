@@ -1,4 +1,4 @@
-// app/api/setup/create-github/route.ts
+﻿// app/api/setup/create-github/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 const GITHUB_API = 'https://api.github.com';
@@ -530,7 +530,7 @@ export default function PanelsPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-            <p className="text-slate-400 mt-1">{panels.length} panels · {totalResponses} responses</p>
+            <p className="text-slate-400 mt-1">{panels.length} panels Â· {totalResponses} responses</p>
           </div>
           <a href="/create" className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors">
             <Plus className="w-5 h-5" /> Create Panel
@@ -961,7 +961,7 @@ export default function InterviewPage() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-4xl">✓</span>
+            <span className="text-4xl">âœ“</span>
           </div>
           <h1 className="text-2xl font-bold text-white mb-4">Thank You!</h1>
           <p className="text-slate-400">Your interview has been completed and recorded. We appreciate your time and feedback.</p>
@@ -1003,10 +1003,10 @@ export default function InterviewPage() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
               <h3 className="text-lg font-medium text-white mb-2">Before you begin</h3>
               <ul className="text-slate-400 text-sm text-left space-y-2">
-                <li>• Find a quiet place with minimal background noise</li>
-                <li>• The interview takes about 10-15 minutes</li>
-                <li>• Speak clearly and naturally</li>
-                <li>• Your responses will be recorded</li>
+                <li>â€¢ Find a quiet place with minimal background noise</li>
+                <li>â€¢ The interview takes about 10-15 minutes</li>
+                <li>â€¢ Speak clearly and naturally</li>
+                <li>â€¢ Your responses will be recorded</li>
               </ul>
             </div>
             <button
@@ -1301,7 +1301,7 @@ async function sendInterviewNotification(interview: any, agent: any, parsed: Par
 <body style="margin:0;padding:0;background:#0f172a;font-family:system-ui,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
     <div style="background:#1e293b;border-radius:16px;padding:32px;">
-      <h1 style="color:#a78bfa;font-size:24px;margin:0 0 24px;">New Interview Completed! 🎉</h1>
+      <h1 style="color:#a78bfa;font-size:24px;margin:0 0 24px;">New Interview Completed! ðŸŽ‰</h1>
       
       <div style="background:#0f172a;border-radius:8px;padding:20px;margin-bottom:24px;">
         <h3 style="color:#fff;margin:0 0 16px;">Panel: \${agent.name}</h3>
@@ -1330,7 +1330,7 @@ async function sendInterviewNotification(interview: any, agent: any, parsed: Par
       </div>
 
       <a href="https://\${platformUrl}/panels" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">
-        View All Responses →
+        View All Responses â†’
       </a>
     </div>
   </div>

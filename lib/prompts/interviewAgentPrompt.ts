@@ -1,4 +1,4 @@
-// lib/prompts/interviewAgentPrompt.ts
+﻿// lib/prompts/interviewAgentPrompt.ts
 
 /**
  * Legacy prompt builder.
@@ -52,3 +52,4 @@ Rules:
 - Thank the participant at the end
 `.trim();
 }
+

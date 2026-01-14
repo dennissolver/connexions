@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+﻿import { supabaseAdmin } from "@/lib/supabase/admin";
 import { InterviewState } from "@/types/interview-state";
 
 export async function getInterviewState(
@@ -17,3 +17,4 @@ export async function getInterviewState(
 
   return data as InterviewState;
 }
+

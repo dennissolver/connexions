@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 // app/api/extract-setup-data/route.ts
 // Layer 2: Extract structured data from voice transcript using Claude
 
@@ -17,7 +17,7 @@ IMPORTANT: The transcript is from a voice call, so there may be:
 
 Your job is to:
 1. Extract ALL fields mentioned in the conversation
-2. Normalize the data (e.g., "acme dot com" → "acme.com")
+2. Normalize the data (e.g., "acme dot com" â†’ "acme.com")
 3. Fix obvious speech-to-text errors
 4. Return clean, validated JSON
 
@@ -60,15 +60,18 @@ Return ONLY valid JSON with this structure:
 }
 
 NORMALIZATION RULES:
-- Emails: "john at acme dot com" → "john@acme.com"
-- URLs: "acme dot com" → "https://acme.com"
-- Phonetics: "B as in Bravo" → just use "B"
-- Numbers: "fifteen" → 15
-- Duration: "ten minutes" → 10
-- Style: "conversation style" → "conversational"
-- Tone: "professional and friendly" → pick primary: "professional"`;
+- Emails: "john at acme dot com" â†’ "john@acme.com"
+- URLs: "acme dot com" â†’ "https://acme.com"
+- Phonetics: "B as in Bravo" â†’ just use "B"
+- Numbers: "fifteen" â†’ 15
+- Duration: "ten minutes" â†’ 10
+- Style: "conversation style" â†’ "conversational"
+- Tone: "professional and friendly" â†’ pick primary: "professional"`;
 
-export async function POST(request: NextRequest) {
+export async function extractSetupDataFromTranscript(transcript: string) {
+  // Your full extraction logic here...
+}
+ {
   try {
     const { transcript, conversationId } = await request.json();
 
@@ -248,3 +251,4 @@ function isValidUrl(url: string): boolean {
     return false;
   }
 }
+

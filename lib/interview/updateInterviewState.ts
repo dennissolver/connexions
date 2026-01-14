@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+﻿import { supabaseAdmin } from "@/lib/supabase/admin";
 import { InterviewState } from "@/types/interview-state";
 
 export async function updateInterviewState(
@@ -15,3 +15,4 @@ export async function updateInterviewState(
     throw error;
   }
 }
+

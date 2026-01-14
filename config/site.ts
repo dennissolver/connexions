@@ -1,4 +1,4 @@
-// config/site.ts
+﻿// config/site.ts
 // ============================================================================
 // SITE & SEO CONFIGURATION
 // Web-facing metadata only (no business logic)
@@ -26,3 +26,4 @@ export const siteConfig = {
 } as const;
 
 export type SiteConfig = typeof siteConfig;
+

@@ -1,4 +1,4 @@
-// app/api/dashboard/performance/route.ts
+﻿// app/api/dashboard/performance/route.ts
 // User-facing dashboard performance - requires logged-in session
 
 import { NextRequest, NextResponse } from 'next/server';

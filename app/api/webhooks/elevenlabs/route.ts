@@ -1,4 +1,4 @@
-// app/api/webhooks/elevenlabs/route.ts
+﻿// app/api/webhooks/elevenlabs/route.ts
 
 export const runtime = "nodejs";
 
@@ -23,18 +23,19 @@ export async function POST(req: NextRequest) {
 
   switch (event) {
     case "conversation.transcript":
-      // Transcript received — intentionally no-op for now
+      // Transcript received â€” intentionally no-op for now
       // Future: persist or queue for analysis
       break;
 
     case "conversation.ended":
-      // Conversation ended — intentionally no-op
+      // Conversation ended â€” intentionally no-op
       break;
 
     default:
-      // Unknown event — safely ignore
+      // Unknown event â€” safely ignore
       break;
   }
 
   return NextResponse.json({ ok: true });
 }
+

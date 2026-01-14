@@ -1,4 +1,4 @@
-// app/buyer/success/page.tsx
+﻿// app/buyer/success/page.tsx
 
 'use client';
 
@@ -57,7 +57,7 @@ function SuccessContent() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
         <div className="max-w-md text-center">
           <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">⚠️</span>
+            <span className="text-3xl">âš ï¸</span>
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Something went wrong</h1>
           <p className="text-slate-400 mb-6">{error}</p>
@@ -84,7 +84,7 @@ function SuccessContent() {
         </div>
 
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-          Welcome to Connexions! 🎉
+          Welcome to Connexions! ðŸŽ‰
         </h1>
 
         <p className="text-slate-400 text-lg mb-8">

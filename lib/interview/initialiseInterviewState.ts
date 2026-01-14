@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+﻿import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function initialiseInterviewState(
   interviewId: string,
@@ -23,3 +23,4 @@ export async function initialiseInterviewState(
     throw error;
   }
 }
+

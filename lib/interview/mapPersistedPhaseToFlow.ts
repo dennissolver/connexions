@@ -1,4 +1,4 @@
-import type { InterviewPhase } from "@/types/interview-state";
+﻿import type { InterviewPhase } from "@/types/interview-state";
 import type { InterviewFlowState } from "@/lib/prompts/compiler";
 
 /**
@@ -29,3 +29,4 @@ export function mapPersistedPhaseToFlow(
       return "intro";
   }
 }
+

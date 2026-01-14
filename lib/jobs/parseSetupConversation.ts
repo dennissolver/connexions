@@ -1,4 +1,4 @@
-// lib/jobs/parseSetupConversation.ts
+﻿// lib/jobs/parseSetupConversation.ts
 
 import type { ElevenLabsConversation } from "@/lib/elevenlabs/types";
 
@@ -25,3 +25,4 @@ export async function parseSetupConversation(
     ok: true,
   };
 }
+

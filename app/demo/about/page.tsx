@@ -1,4 +1,4 @@
-export default function DemoPage() {
+﻿export default function DemoPage() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-16 space-y-24">
 
@@ -10,12 +10,12 @@ export default function DemoPage() {
         <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
           This is not a chatbot demo.
           <br />
-          It’s interview infrastructure — observed in real time.
+          Itâ€™s interview infrastructure â€” observed in real time.
         </h1>
         <p className="max-w-3xl text-lg text-neutral-600">
           Connexions runs interviews and surveys as an observable system.
           This demo shows how a single interview behaves once real participants
-          interact with it — where intent holds, where it drifts, and where
+          interact with it â€” where intent holds, where it drifts, and where
           signal quality degrades.
         </p>
       </section>
@@ -29,7 +29,7 @@ export default function DemoPage() {
           },
           {
             title: "Observed behaviour",
-            body: "How participants actually respond — including misinterpretation, hesitation, fatigue, and deviation."
+            body: "How participants actually respond â€” including misinterpretation, hesitation, fatigue, and deviation."
           },
           {
             title: "Derived insight",
@@ -74,8 +74,8 @@ export default function DemoPage() {
         </div>
 
         <p className="max-w-3xl text-sm text-neutral-600">
-          These deviations rarely stop interviews from “working”.
-          They simply make the output less reliable — without anyone noticing.
+          These deviations rarely stop interviews from â€œworkingâ€.
+          They simply make the output less reliable â€” without anyone noticing.
         </p>
       </section>
 
@@ -90,7 +90,7 @@ export default function DemoPage() {
             Role drift detected
           </p>
           <p className="text-neutral-700">
-            After 14 interviews, the interviewer’s role shifted from
+            After 14 interviews, the interviewerâ€™s role shifted from
             <span className="font-medium"> neutral discovery </span>
             to
             <span className="font-medium"> solution-affirming</span>,
@@ -115,7 +115,7 @@ export default function DemoPage() {
           <p>
             Traditional interviews and surveys assume that if questions are asked
             correctly, the data is trustworthy. In reality, most research failure
-            doesn’t come from bad intent — it comes from invisible drift.
+            doesnâ€™t come from bad intent â€” it comes from invisible drift.
           </p>
           <p>
             As interviews scale, small shifts in role, tone, interpretation, or
@@ -125,7 +125,7 @@ export default function DemoPage() {
           <p>
             Connexions treats interviews as a system, not a conversation.
             It measures what changes, when it changes, and how that affects
-            confidence — making research observable instead of assumptive.
+            confidence â€” making research observable instead of assumptive.
           </p>
         </div>
       </section>
@@ -137,7 +137,7 @@ export default function DemoPage() {
         </h2>
         <p className="max-w-3xl text-neutral-600">
           Connexions is priced per completed interview or survey response.
-          You pay for interviews run, signal processed, and observability generated —
+          You pay for interviews run, signal processed, and observability generated â€”
           not seats, licences, or chatbots.
         </p>
       </section>
@@ -146,7 +146,7 @@ export default function DemoPage() {
       <section className="text-sm text-neutral-500 max-w-4xl">
         <p>
           <span className="font-medium text-neutral-700">Investor note:</span>{" "}
-          Connexions is building interview and survey infrastructure — not a
+          Connexions is building interview and survey infrastructure â€” not a
           research tool. As organisations move toward continuous insight programs,
           signal reliability becomes the bottleneck. Connexions addresses that gap
           with observability, not more conversations.
@@ -156,3 +156,4 @@ export default function DemoPage() {
     </main>
   );
 }
+

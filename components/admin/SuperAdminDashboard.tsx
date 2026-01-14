@@ -1,4 +1,4 @@
-// components/admin/SuperAdminDashboard.tsx
+﻿// components/admin/SuperAdminDashboard.tsx
 // SUPERADMIN: Platform operator view across ALL clients and agents
 'use client';
 
@@ -228,7 +228,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
             Platform Operations
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Monitoring {platform.total_clients} clients • {platform.total_agents} agents
+            Monitoring {platform.total_clients} clients â€¢ {platform.total_agents} agents
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -301,7 +301,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                 platform.platform_avg_score >= 80 ? 'healthy' : 
                 platform.platform_avg_score >= 60 ? 'needs_attention' : 'critical'
               ) : 'text-gray-400'}`}>
-                {platform.platform_avg_score ? `${platform.platform_avg_score}%` : '—'}
+                {platform.platform_avg_score ? `${platform.platform_avg_score}%` : 'â€”'}
               </div>
             </div>
 
@@ -443,7 +443,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                     <div>
                       <div className="font-medium text-white">{client.company_name || client.name}</div>
                       <div className="text-sm text-gray-400">
-                        {client.email} • {client.subscription_tier}
+                        {client.email} â€¢ {client.subscription_tier}
                       </div>
                     </div>
                   </div>
@@ -459,7 +459,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                     <div className="text-center">
                       <div className="text-gray-500">Score</div>
                       <div className={`font-bold ${client.avg_score ? getHealthColor(client.health) : 'text-gray-400'}`}>
-                        {client.avg_score ? `${client.avg_score}%` : '—'}
+                        {client.avg_score ? `${client.avg_score}%` : 'â€”'}
                       </div>
                     </div>
                     {client.open_alerts > 0 && (
@@ -499,7 +499,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                         </span>
                       </div>
                       <div className="text-sm text-gray-400">
-                        {agent.client?.company_name || agent.company_name} • {agent.evaluated_interviews} evaluated
+                        {agent.client?.company_name || agent.company_name} â€¢ {agent.evaluated_interviews} evaluated
                       </div>
                     </div>
                   </div>
@@ -527,7 +527,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                       </div>
                     )}
                     <div className={`text-2xl font-bold ${getHealthColor(agent.health)}`}>
-                      {agent.avg_score !== null ? `${agent.avg_score}%` : '—'}
+                      {agent.avg_score !== null ? `${agent.avg_score}%` : 'â€”'}
                     </div>
                     {agent.open_alerts > 0 && (
                       <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs">
@@ -575,7 +575,7 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
                         </div>
                         <p className="text-gray-400 text-sm">{alert.description}</p>
                         <div className="text-xs text-gray-500 mt-2">
-                          Agent: {alert.agents?.name} • {new Date(alert.created_at).toLocaleString()}
+                          Agent: {alert.agents?.name} â€¢ {new Date(alert.created_at).toLocaleString()}
                         </div>
                       </div>
                       <div className="flex gap-2 ml-4">
@@ -610,3 +610,4 @@ export function SuperAdminDashboard({ adminKey, onAgentSelect }: SuperAdminDashb
 }
 
 export default SuperAdminDashboard;
+

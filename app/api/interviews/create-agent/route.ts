@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { buildInterviewAgentPrompt } from "@/lib/prompts/interviewAgentPrompt";
 
 export async function POST(req: Request) {
@@ -54,3 +54,4 @@ export async function POST(req: Request) {
   const agent = await res.json();
   return NextResponse.json(agent);
 }
+

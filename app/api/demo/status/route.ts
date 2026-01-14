@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Demo interview status returned to the frontend
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const demo = await getDemoStatus(leadId);
 
-  // Explicit null guard — critical for TypeScript narrowing
+  // Explicit null guard â€” critical for TypeScript narrowing
   if (!demo) {
     return NextResponse.json({
       status: "idle",
@@ -54,3 +54,4 @@ async function getDemoStatus(
   // Currently no demo session exists
   return null;
 }
+

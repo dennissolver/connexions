@@ -1,4 +1,4 @@
-// app/admin/page.tsx
+﻿// app/admin/page.tsx
 // SUPERADMIN: Platform operations dashboard
 // Access: Only platform operator (you)
 
@@ -111,7 +111,7 @@ export default function AdminPage() {
             <div className="p-1.5 bg-purple-600/20 rounded">
               <Lock className="w-4 h-4 text-purple-400" />
             </div>
-            <span className="text-white font-medium">AI Interview Agents • Platform Admin</span>
+            <span className="text-white font-medium">AI Interview Agents â€¢ Platform Admin</span>
           </div>
           <button
             onClick={handleLogout}
@@ -139,3 +139,4 @@ export default function AdminPage() {
     </div>
   );
 }
+

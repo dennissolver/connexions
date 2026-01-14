@@ -1,4 +1,4 @@
-// app/api/interviews/complete/route.ts
+﻿// app/api/interviews/complete/route.ts
 // UPDATED: Now triggers evaluation after marking interviews complete
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -137,3 +137,4 @@ async function triggerEvaluation(interviewId: string): Promise<void> {
     // Don't throw - we don't want to break the completion flow
   }
 }
+

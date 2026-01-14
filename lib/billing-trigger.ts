@@ -1,4 +1,4 @@
-// lib/billing-trigger.ts
+﻿// lib/billing-trigger.ts
 
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
@@ -90,7 +90,7 @@ export async function recordInterviewAndBill(
     const isBillable = newCount > includedFree;
     const remainingFree = Math.max(0, includedFree - newCount);
 
-    console.log(`📊 Interview #${newCount} for ${client.company_name || clientId}`, {
+    console.log(`ðŸ“Š Interview #${newCount} for ${client.company_name || clientId}`, {
       included: includedFree,
       isBillable,
       remainingFree,
@@ -197,7 +197,7 @@ async function reportToStripeMeter(
       timestamp: Math.floor(Date.now() / 1000),
     });
 
-    console.log(`💰 Billed interview to Stripe:`, {
+    console.log(`ðŸ’° Billed interview to Stripe:`, {
       customer: stripeCustomerId,
       interview: interviewId,
       eventId: meterEvent.identifier,
@@ -274,6 +274,6 @@ export async function resetUsageCounter(stripeCustomerId: string) {
     })
     .eq('client_id', client.id);
 
-  console.log(`🔄 Reset usage counter for client ${client.id}`);
+  console.log(`ðŸ”„ Reset usage counter for client ${client.id}`);
   return true;
 }

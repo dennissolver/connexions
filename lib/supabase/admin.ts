@@ -1,8 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+﻿// lib/supabase/admin.ts
+import { createClient } from '@supabase/supabase-js';
 
 export const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // 🔴 REQUIRED
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     auth: {
       persistSession: false,
@@ -10,3 +11,4 @@ export const supabaseAdmin = createClient(
     },
   }
 );
+

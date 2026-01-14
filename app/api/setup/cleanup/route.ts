@@ -1,4 +1,4 @@
-// app/api/setup/cleanup/route.ts
+﻿// app/api/setup/cleanup/route.ts
 // ============================================================================
 // CLEANUP - Rollback on failure
 //
@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const log = (msg: string) => console.log(`[Cleanup] ${msg}`);
-const logError = (msg: string) => console.error(`[Cleanup] ❌ ${msg}`);
+const logError = (msg: string) => console.error(`[Cleanup] âŒ ${msg}`);
 
 interface CleanupRequest {
   projectSlug?: string;

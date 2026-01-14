@@ -1,4 +1,4 @@
-// lib/llm/openai.ts
+﻿// lib/llm/openai.ts
 
 import OpenAI from "openai";
 
@@ -14,3 +14,4 @@ export const openai = new OpenAI({
 export function getOpenAIClient() {
   return openai;
 }
+

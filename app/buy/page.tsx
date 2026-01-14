@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 interface BuyPageProps {
@@ -30,16 +30,16 @@ export default async function BuyPage({ searchParams }: BuyPageProps) {
 
         <p className="text-neutral-300 mb-10">
           You just experienced your own AI interview agent in action.
-          Here’s what happens when you make it permanent.
+          Hereâ€™s what happens when you make it permanent.
         </p>
 
         {/* VALUE RECAP */}
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 mb-10">
           <ul className="space-y-3 text-neutral-300">
-            <li>✔ Agent: <strong>{agent.name}</strong></li>
-            <li>✔ Avg interview length: {agent.estimated_duration_mins} mins</li>
-            <li>✔ Automatic evaluation after every interview</li>
-            <li>✔ Role adherence & quality tracking</li>
+            <li>âœ” Agent: <strong>{agent.name}</strong></li>
+            <li>âœ” Avg interview length: {agent.estimated_duration_mins} mins</li>
+            <li>âœ” Automatic evaluation after every interview</li>
+            <li>âœ” Role adherence & quality tracking</li>
           </ul>
         </div>
 
@@ -52,7 +52,7 @@ export default async function BuyPage({ searchParams }: BuyPageProps) {
           </p>
 
           <ul className="space-y-2 text-neutral-300">
-            <li><strong>$150 / month</strong> — private interview factory</li>
+            <li><strong>$150 / month</strong> â€” private interview factory</li>
             <li>Includes <strong>200 interviewees</strong></li>
             <li><strong>$1.25</strong> per interviewee above that</li>
           </ul>
@@ -78,3 +78,4 @@ export default async function BuyPage({ searchParams }: BuyPageProps) {
     </main>
   );
 }
+

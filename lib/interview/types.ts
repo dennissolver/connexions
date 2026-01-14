@@ -1,4 +1,4 @@
-// lib/interviews/types.ts
+﻿// lib/interviews/types.ts
 export interface InterviewSpec {
   interview_name: string;
   purpose: string;
@@ -11,3 +11,4 @@ export interface InterviewSpec {
   delivery_mode: "voice";
   output_expectations: string[];
 }
+

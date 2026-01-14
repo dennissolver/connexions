@@ -1,4 +1,4 @@
-// app/auth/callback/route.ts
+﻿// app/auth/callback/route.ts
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 

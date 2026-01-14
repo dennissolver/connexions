@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+﻿import { supabaseAdmin } from "@/lib/supabase/admin";
 import { evaluateInterview } from "@/lib/llm/evaluateInterview";
 
 export async function runInterviewEvaluation(interview: any) {
@@ -30,3 +30,4 @@ export async function runInterviewEvaluation(interview: any) {
     drift_reason: evaluation.drift.reason,
   });
 }
+

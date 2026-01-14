@@ -1,4 +1,4 @@
-// app/api/verify-agent/route.ts
+﻿// app/api/verify-agent/route.ts
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     if (!elevenLabsKey) {
       return NextResponse.json({
         verified: true,
-        message: 'Verification skipped – no API key configured',
+        message: 'Verification skipped â€“ no API key configured',
       });
     }
 
@@ -61,3 +61,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

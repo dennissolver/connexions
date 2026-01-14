@@ -1,4 +1,4 @@
-// app/api/setup/send-welcome/route.ts
+﻿// app/api/setup/send-welcome/route.ts
 // ============================================================================
 // SEND WELCOME EMAIL - Sends onboarding email with dashboard link
 // ============================================================================
@@ -17,10 +17,10 @@ export async function POST(request: NextRequest) {
     const platformUrl = body.platformUrl || body.url;
 
     console.log('[send-welcome] Received:', {
-      email: email ? '✓' : '✗',
+      email: email ? 'âœ“' : 'âœ—',
       firstName,
       platformName,
-      platformUrl: platformUrl ? '✓' : '✗'
+      platformUrl: platformUrl ? 'âœ“' : 'âœ—'
     });
 
     if (!email || !platformUrl) {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       
       <!-- Success Icon -->
       <div style="width:64px;height:64px;background:rgba(139,92,246,0.2);border-radius:50%;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#a78bfa;font-size:32px;">✓</span>
+        <span style="color:#a78bfa;font-size:32px;">âœ“</span>
       </div>
 
       <h2 style="color:#a78bfa;font-size:28px;margin:0 0 16px;">Platform Created!</h2>
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       <!-- CTA Buttons -->
       <div style="margin-bottom:24px;">
         <a href="${dashboardUrl}" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:16px 40px;border-radius:12px;font-weight:600;font-size:16px;">
-          View Interview Panels →
+          View Interview Panels â†’
         </a>
       </div>
       <div>
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     <!-- Getting Started -->
     <div style="margin-top:24px;padding:24px;background:rgba(30,41,59,0.5);border-radius:12px;">
-      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">🚀 Getting Started</h3>
+      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">ðŸš€ Getting Started</h3>
       <ol style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;">
         <li><strong>Create your AI interviewer</strong> - Click "Start Setup Call" to design your interview</li>
         <li><strong>Share interview links</strong> - Send participants their unique interview URL</li>
@@ -98,12 +98,12 @@ export async function POST(request: NextRequest) {
 
     <!-- Panel Features -->
     <div style="margin-top:16px;padding:24px;background:rgba(30,41,59,0.5);border-radius:12px;">
-      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">📊 Your Panels Include</h3>
+      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">ðŸ“Š Your Panels Include</h3>
       <ul style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;list-style:none;">
-        <li>✅ Real-time interview tracking</li>
-        <li>✅ Full conversation transcripts</li>
-        <li>✅ Response analytics and insights</li>
-        <li>✅ Participant management</li>
+        <li>âœ… Real-time interview tracking</li>
+        <li>âœ… Full conversation transcripts</li>
+        <li>âœ… Response analytics and insights</li>
+        <li>âœ… Participant management</li>
       </ul>
     </div>
 
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           from: `Connexions <noreply@${fromDomain}>`,
           to: [email],
-          subject: `🎉 Your ${platformName} Interview Platform is Ready!`,
+          subject: `ðŸŽ‰ Your ${platformName} Interview Platform is Ready!`,
           html: emailHtml,
         }),
       });
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           personalizations: [{ to: [{ email }] }],
           from: { email: process.env.EMAIL_FROM_ADDRESS || 'hello@corporateaisolutions.com' },
-          subject: `🎉 Your ${platformName} Interview Platform is Ready!`,
+          subject: `ðŸŽ‰ Your ${platformName} Interview Platform is Ready!`,
           content: [{ type: 'text/html', value: emailHtml }],
         }),
       });

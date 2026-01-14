@@ -1,4 +1,4 @@
-// lib/eval-runner.ts
+﻿// lib/eval-runner.ts
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
@@ -102,5 +102,6 @@ Return JSON ONLY:
   };
 }
 
-// ✅ alias export MUST be top-level
+// âœ… alias export MUST be top-level
 export const evalRunner = runEvaluation;
+

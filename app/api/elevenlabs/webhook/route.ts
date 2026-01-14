@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import type { ElevenLabsConversation } from "@/lib/elevenlabs/types";
 import { supabaseService } from "@/lib/supabase/service";
 
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       "[ElevenLabs webhook] Failed to persist conversation",
       error
     );
-    // Do NOT fail the webhook — ElevenLabs will retry
+    // Do NOT fail the webhook â€” ElevenLabs will retry
   }
 
   /**
@@ -54,3 +54,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+

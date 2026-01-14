@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/send-email
@@ -185,7 +185,7 @@ function generateEmailHtml({ agentName, interviewUrl, companyName }: {
       
       <!-- Success Icon -->
       <div style="width: 64px; height: 64px; background-color: rgba(34, 197, 94, 0.2); border-radius: 50%; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center;">
-        <span style="color: #22c55e; font-size: 32px;">✓</span>
+        <span style="color: #22c55e; font-size: 32px;">âœ“</span>
       </div>
 
       <h2 style="color: #22c55e; font-size: 28px; margin: 0 0 16px;">Your AI Interviewer is Ready!</h2>
@@ -261,3 +261,4 @@ AI Interview Agents by Corporate AI Solutions
 dennis@corporateaisolutions.com
   `.trim();
 }
+

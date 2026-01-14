@@ -1,4 +1,4 @@
-// lib/llm/parseInterviewSpec.ts
+﻿// lib/llm/parseInterviewSpec.ts
 
 export function parseInterviewSpec(input: string) {
   return {
@@ -6,3 +6,4 @@ export function parseInterviewSpec(input: string) {
     parsedAt: new Date().toISOString(),
   };
 }
+
