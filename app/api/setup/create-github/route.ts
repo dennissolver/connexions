@@ -281,7 +281,7 @@ export default function CreatePage() {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       const agentId = process.env.NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID;
       if (!agentId) { alert('Setup agent not configured'); return; }
-      await conversation.startSession({ agentId });
+      await conversation.startSession({ agentId, connectionType: 'websocket' });
     } catch (error) { console.error('Failed to start:', error); alert('Could not access microphone'); }
   }, [conversation]);
 
@@ -773,7 +773,7 @@ export default function InterviewPage() {
     if (!panel?.elevenlabs_agent_id) return;
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      await conversation.startSession({ agentId: panel.elevenlabs_agent_id });
+      await conversation.startSession({ agentId: panel.elevenlabs_agent_id, connectionType: 'websocket' });
     } catch (err: any) {
       setError(err.message || 'Failed to start interview');
     }
