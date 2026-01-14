@@ -1,45 +1,36 @@
-﻿// app/api/dashboard/performance/route.ts
-
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('dashboard_performance')
-      .select(
-        `
-        total_agents,
-        total_interviews,
-        total_minutes
-        `
-      )
-      .limit(1)
-      .maybeSingle();
+export async function GET() {
+  const supabase = supabaseAdmin;
 
-    if (error) {
-      console.error('[dashboard/performance] query error', error);
-    }
+  const [
+    agentsRes,
+    interviewsRes,
+    minutesRes,
+  ] = await Promise.all([
+    supabase.from('agents').select('*', { count: 'exact', head: true }),
+    supabase.from('interviews').select('*', { count: 'exact', head: true }),
+    supabase.from('interviews').select('duration_minutes'),
+  ]);
 
-    /**
-     * 🔒 HARD GUARANTEED RESPONSE SHAPE
-     * These keys ALWAYS exist
-     */
-    return NextResponse.json({
-      total_agents: Number(data?.total_agents ?? 0),
-      total_interviews: Number(data?.total_interviews ?? 0),
-      total_minutes: Number(data?.total_minutes ?? 0),
-    });
-  } catch (err) {
-    console.error('[dashboard/performance] fatal error', err);
+  const totalMinutes =
+    minutesRes.data?.reduce(
+      (sum, row) => sum + (row.duration_minutes ?? 0),
+      0
+    ) ?? 0;
 
-    // Even on failure, NEVER break the UI
-    return NextResponse.json({
-      total_agents: 0,
-      total_interviews: 0,
-      total_minutes: 0,
-    });
-  }
+  const totalAgents = agentsRes.count ?? 0;
+  const totalInterviews = interviewsRes.count ?? 0;
+
+  return NextResponse.json({
+    totals: {
+      total_agents: totalAgents,
+      total_interviews: totalInterviews,
+      total_minutes: totalMinutes,
+    },
+    is_empty: totalAgents === 0 && totalInterviews === 0,
+  });
 }
