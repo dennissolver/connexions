@@ -8,7 +8,8 @@ import { ProvisioningProgress } from '@/app/components/ProvisioningProgress';
 export default function ProvisionPage() {
   const platformName = 'demo-platform'; // replace dynamically
   const publicBaseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ?? '';
+    process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+
 
   const {
     state,
