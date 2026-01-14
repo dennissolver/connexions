@@ -28,7 +28,7 @@ const TEMPLATE_FILES: Record<string, string> = {
     "@tailwindcss/typography": "^0.5.19",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
-    "next": "14.2.15",
+    "next": "14.2.35",
     "openai": "^6.14.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -750,7 +750,7 @@ export default function InterviewPage() {
   const conversation = useConversation({
     onConnect: () => console.log('Connected to interview'),
     onDisconnect: () => { console.log('Interview ended'); setCallEnded(true); },
-    onError: (err) => { console.error('Interview error:', err); setError(err.message); },
+    onError: (err) => { console.error('Interview error:', err); setError(typeof err === 'string' ? err : 'Connection error'); },
   });
 
   useEffect(() => {

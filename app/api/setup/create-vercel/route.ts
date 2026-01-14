@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
     const githubOwner = process.env.GITHUB_OWNER || 'dennissolver';
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const adminEmail = process.env.ADMIN_EMAIL;
 
     if (!vercelToken) {
       return NextResponse.json({ error: 'VERCEL_TOKEN not configured' }, { status: 500 });
@@ -49,6 +51,8 @@ export async function POST(request: NextRequest) {
       ANTHROPIC_API_KEY: anthropicApiKey || '',
       NEXT_PUBLIC_APP_URL: vercelUrl,
       NEXT_PUBLIC_SITE_URL: vercelUrl,
+      RESEND_API_KEY: resendApiKey || '',
+      ADMIN_EMAIL: adminEmail || '',
     };
 
     // Check if project already exists
