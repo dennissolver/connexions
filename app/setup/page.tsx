@@ -1,197 +1,207 @@
-﻿import { redirect } from "next/navigation";
+﻿// app/setup/page.tsx
+"use client";
 
-export default function LandingPage() {
-  async function startDemo(formData: FormData) {
-    "use server";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-    const payload = {
-      name: formData.get("name"),
-      company: formData.get("company"),
-      email: formData.get("email"),
-      website: formData.get("website"),
-    };
+type SetupData = {
+  platformName: string;
+  companyName: string;
+  publicUrl: string;
+  contactEmail: string;
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/demo/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
+  ownerName: string;
+  ownerRole: string;
 
-    if (!res.ok) {
-      throw new Error("Failed to start demo");
+  agentName: string;
+  agentPurpose: string;
+};
+
+const initialData: SetupData = {
+  platformName: "",
+  companyName: "",
+  publicUrl: "",
+  contactEmail: "",
+
+  ownerName: "",
+  ownerRole: "",
+
+  agentName: "",
+  agentPurpose: "",
+};
+
+export default function SetupPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState<SetupData>(initialData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function update<K extends keyof SetupData>(key: K, value: string) {
+    setData((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function next() {
+    setError(null);
+    setStep((s) => s + 1);
+  }
+
+  function back() {
+    setError(null);
+    setStep((s) => s - 1);
+  }
+
+  async function createPlatform() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/setup/start-provisioning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to start provisioning");
+      }
+
+      const { platformId } = await res.json();
+      router.push(`/factory/provision?platformId=${platformId}`);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+      setLoading(false);
     }
-
-    const { demoClientId } = await res.json();
-    redirect(`/demo?c=${demoClientId}`);
   }
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      {/* HERO */}
-      <section className="max-w-5xl mx-auto px-6 pt-28 pb-20">
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
-          Build interview agents that actually behave like your organisation.
-        </h1>
+      <div className="max-w-2xl mx-auto px-6 py-16 space-y-8">
 
-        <p className="mt-6 text-lg text-neutral-300 max-w-3xl">
-          Create AI interviewers for research, discovery, exit interviews, audits,
-          compliance, or surveys â€” with observable quality, role adherence,
-          and measurable performance.
-        </p>
-
-        <div className="mt-10">
-          <a
-            href="#demo"
-            className="inline-flex items-center rounded-lg bg-white px-6 py-3
-                       text-neutral-900 font-medium hover:bg-neutral-200 transition"
-          >
-            Try a live demo
-          </a>
-          <p className="mt-2 text-sm text-neutral-400">
-            No credit card Â· Takes ~3 minutes
+        {/* HEADER */}
+        <div>
+          <h1 className="text-3xl font-semibold">Set up your platform</h1>
+          <p className="text-neutral-400 mt-2">
+            Step {step} of 4
           </p>
         </div>
-      </section>
 
-      {/* PROBLEM */}
-      <section className="border-t border-neutral-800 py-20">
-        <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-2xl font-semibold">
-            Interviews donâ€™t scale. AI interviews drift.
-          </h2>
-
-          <p className="mt-6 text-neutral-300 max-w-3xl">
-            Most AI interview tools lose tone over time, ask inconsistent questions,
-            drift away from their intended role, and give you no way to measure quality.
-          </p>
-
-          <p className="mt-4 text-neutral-300 max-w-3xl">
-            Once deployed, youâ€™re blind.
-          </p>
-        </div>
-      </section>
-
-      {/* DIFFERENTIATION */}
-      <section className="border-t border-neutral-800 py-20">
-        <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-2xl font-semibold">
-            We donâ€™t just run interviews â€” we evaluate them continuously.
-          </h2>
-
-          <ul className="mt-8 space-y-4 text-neutral-300">
-            <li>â€¢ Explicit interviewer role definition</li>
-            <li>â€¢ Evaluation after every interview</li>
-            <li>â€¢ Role adherence scoring</li>
-            <li>â€¢ Quality and goal-achievement metrics</li>
-            <li>â€¢ Drift detection and alerts over time</li>
-          </ul>
-
-          <p className="mt-6 text-neutral-300 max-w-3xl">
-            You donâ€™t hope it works. You see how itâ€™s performing.
-          </p>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section className="border-t border-neutral-800 py-20">
-        <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-2xl font-semibold">How it works</h2>
-
-          <ol className="mt-8 space-y-3 text-neutral-300">
-            <li>1. Define the interview purpose</li>
-            <li>2. Define how the interviewer should behave</li>
-            <li>3. Let the agent conduct interviews</li>
-            <li>4. Review performance, issues, and drift</li>
-          </ol>
-
-          <p className="mt-6 text-neutral-400">
-            No prompt babysitting. No silent failures.
-          </p>
-        </div>
-      </section>
-
-      {/* WHO IT'S FOR */}
-      <section className="border-t border-neutral-800 py-20">
-        <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-2xl font-semibold">Who this is for</h2>
-
-          <ul className="mt-6 space-y-2 text-neutral-300">
-            <li>â€¢ Founders running customer discovery</li>
-            <li>â€¢ HR teams doing exit or engagement interviews</li>
-            <li>â€¢ Legal and compliance teams gathering testimony</li>
-            <li>â€¢ Researchers running qualitative studies at scale</li>
-            <li>â€¢ Consultants interviewing repeatedly</li>
-          </ul>
-        </div>
-      </section>
-
-      {/* DEMO FORM */}
-      <section
-        id="demo"
-        className="border-t border-neutral-800 py-24 bg-neutral-900"
-      >
-        <div className="max-w-xl mx-auto px-6">
-          <h2 className="text-2xl font-semibold">
-            Try the live demo
-          </h2>
-
-          <p className="mt-4 text-neutral-300">
-            Create a real interview agent, interview yourself,
-            and see how it evaluates behaviour and quality.
-          </p>
-
-          <form action={startDemo} className="mt-10 space-y-4">
+        {/* STEP 1 — PLATFORM */}
+        {step === 1 && (
+          <div className="space-y-4">
             <input
-              name="name"
-              placeholder="Your name"
-              required
-              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3 text-neutral-100"
+              placeholder="Platform name"
+              value={data.platformName}
+              onChange={(e) => update("platformName", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
             />
-
             <input
-              name="company"
-              placeholder="Company"
-              required
-              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3 text-neutral-100"
+              placeholder="Company name"
+              value={data.companyName}
+              onChange={(e) => update("companyName", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
             />
-
             <input
-              name="email"
+              placeholder="Public website URL"
+              value={data.publicUrl}
+              onChange={(e) => update("publicUrl", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
+            />
+            <input
               type="email"
-              placeholder="Email"
-              required
-              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3 text-neutral-100"
+              placeholder="Primary contact email"
+              value={data.contactEmail}
+              onChange={(e) => update("contactEmail", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
             />
+          </div>
+        )}
 
+        {/* STEP 2 — PERSONAL */}
+        {step === 2 && (
+          <div className="space-y-4">
             <input
-              name="website"
-              placeholder="Website (optional)"
-              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3 text-neutral-100"
+              placeholder="Your name"
+              value={data.ownerName}
+              onChange={(e) => update("ownerName", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
             />
+            <input
+              placeholder="Your role"
+              value={data.ownerRole}
+              onChange={(e) => update("ownerRole", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
+            />
+          </div>
+        )}
 
-            <button
-              type="submit"
-              className="mt-4 w-full rounded-lg bg-white px-6 py-3
-                         text-neutral-900 font-medium hover:bg-neutral-200 transition"
-            >
-              Start demo interview
-            </button>
+        {/* STEP 3 — AGENT */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <input
+              placeholder="Agent name"
+              value={data.agentName}
+              onChange={(e) => update("agentName", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3"
+            />
+            <textarea
+              placeholder="What should this agent do?"
+              value={data.agentPurpose}
+              onChange={(e) => update("agentPurpose", e.target.value)}
+              className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-3 min-h-[120px]"
+            />
+          </div>
+        )}
 
-            <p className="text-sm text-neutral-400 text-center">
-              Demo data only Â· No commitment
+        {/* STEP 4 — CONFIRM */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <pre className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 text-sm overflow-auto">
+{JSON.stringify(data, null, 2)}
+            </pre>
+            <p className="text-neutral-400 text-sm">
+              Review your details. This will create your platform and begin provisioning.
             </p>
-          </form>
-        </div>
-      </section>
+          </div>
+        )}
 
-      {/* FOOTER */}
-      <footer className="border-t border-neutral-800 py-10">
-        <div className="max-w-5xl mx-auto px-6 text-sm text-neutral-500">
-          Built for production use Â· Designed for observability Â· No gimmicks
+        {/* ERROR */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* ACTIONS */}
+        <div className="flex justify-between pt-4">
+          {step > 1 ? (
+            <button
+              onClick={back}
+              className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition"
+            >
+              Back
+            </button>
+          ) : <div />}
+
+          {step < 4 ? (
+            <button
+              onClick={next}
+              className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 transition font-semibold"
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              onClick={createPlatform}
+              disabled={loading}
+              className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 transition font-semibold disabled:opacity-50"
+            >
+              {loading ? "Creating…" : "Create platform"}
+            </button>
+          )}
         </div>
-      </footer>
+
+      </div>
     </main>
   );
 }
-
