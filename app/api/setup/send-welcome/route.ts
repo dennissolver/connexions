@@ -1,13 +1,39 @@
 // app/api/setup/send-welcome/route.ts
+// ============================================================================
+// SEND WELCOME EMAIL - Sends onboarding email with dashboard link
+// ============================================================================
+
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, firstName, companyName, platformUrl } = await request.json();
+    const body = await request.json();
+
+    // Accept multiple parameter formats for flexibility
+    const email = body.email || body.to || body.adminEmail;
+    const firstName = body.firstName || body.adminName?.split(' ')[0] || body.adminFirstName || 'there';
+    const companyName = body.companyName || body.platformName || 'Your Company';
+    const platformName = body.platformName || companyName;
+    const platformUrl = body.platformUrl || body.url;
+
+    console.log('[send-welcome] Received:', {
+      email: email ? '✓' : '✗',
+      firstName,
+      platformName,
+      platformUrl: platformUrl ? '✓' : '✗'
+    });
 
     if (!email || !platformUrl) {
-      return NextResponse.json({ error: 'Email and platform URL required' }, { status: 400 });
+      console.error('[send-welcome] Missing params:', { email: !!email, platformUrl: !!platformUrl });
+      return NextResponse.json({
+        error: 'Email and platform URL required',
+        received: { email: !!email, platformUrl: !!platformUrl }
+      }, { status: 400 });
     }
+
+    // Normalize URL
+    const cleanUrl = platformUrl.startsWith('http') ? platformUrl : `https://${platformUrl}`;
+    const dashboardUrl = `${cleanUrl}/dashboard`;
 
     const emailHtml = `
 <!DOCTYPE html>
@@ -21,52 +47,73 @@ export async function POST(request: NextRequest) {
     
     <!-- Header -->
     <div style="text-align:center;margin-bottom:32px;">
-      <h1 style="color:#fff;font-size:24px;margin:0;">AI Interview Agents</h1>
-      <p style="color:#94a3b8;font-size:14px;margin:4px 0 0;">Your platform is ready!</p>
+      <h1 style="color:#fff;font-size:24px;margin:0;">${platformName}</h1>
+      <p style="color:#94a3b8;font-size:14px;margin:4px 0 0;">Your AI Interview Platform is Ready!</p>
     </div>
 
     <!-- Main Card -->
     <div style="background:#1e293b;border-radius:16px;padding:40px;text-align:center;">
       
       <!-- Success Icon -->
-      <div style="width:64px;height:64px;background:rgba(34,197,94,0.2);border-radius:50%;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#22c55e;font-size:32px;">✓</span>
+      <div style="width:64px;height:64px;background:rgba(139,92,246,0.2);border-radius:50%;margin:0 auto 24px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#a78bfa;font-size:32px;">✓</span>
       </div>
 
-      <h2 style="color:#22c55e;font-size:28px;margin:0 0 16px;">Platform Created!</h2>
+      <h2 style="color:#a78bfa;font-size:28px;margin:0 0 16px;">Platform Created!</h2>
       
       <p style="color:#e2e8f0;font-size:16px;line-height:1.6;margin:0 0 32px;">
-        Hi ${firstName || 'there'},<br><br>
-        Your AI Interview Agents platform for <strong>${companyName}</strong> is now live and ready to use.
+        Hi ${firstName},<br><br>
+        Your AI Interview Platform for <strong>${companyName}</strong> is now live and ready to use.
       </p>
 
-      <!-- CTA Button -->
-      <a href="${platformUrl}" style="display:inline-block;background:#22c55e;color:#fff;text-decoration:none;padding:16px 40px;border-radius:12px;font-weight:600;font-size:16px;">
-        Visit Your Platform →
-      </a>
+      <!-- CTA Buttons -->
+      <div style="margin-bottom:24px;">
+        <a href="${dashboardUrl}" style="display:inline-block;background:#8b5cf6;color:#fff;text-decoration:none;padding:16px 40px;border-radius:12px;font-weight:600;font-size:16px;">
+          View Dashboard →
+        </a>
+      </div>
+      <div>
+        <a href="${cleanUrl}" style="display:inline-block;background:transparent;color:#a78bfa;text-decoration:none;padding:12px 24px;border:1px solid #a78bfa;border-radius:8px;font-weight:500;font-size:14px;">
+          Visit Platform Home
+        </a>
+      </div>
 
       <!-- URL Box -->
       <div style="margin-top:32px;padding:16px;background:#0f172a;border-radius:8px;">
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Platform URL:</p>
-        <a href="${platformUrl}" style="color:#a78bfa;font-size:14px;word-break:break-all;">${platformUrl}</a>
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Dashboard URL:</p>
+        <a href="${dashboardUrl}" style="color:#a78bfa;font-size:14px;word-break:break-all;">${dashboardUrl}</a>
       </div>
     </div>
 
     <!-- Getting Started -->
     <div style="margin-top:24px;padding:24px;background:rgba(30,41,59,0.5);border-radius:12px;">
-      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">Getting Started</h3>
+      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">🚀 Getting Started</h3>
       <ol style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;">
-        <li>Visit your platform</li>
-        <li>Click "Create Your Agent" to design your AI interviewer</li>
-        <li>Share the interview link with participants</li>
-        <li>View responses in your dashboard</li>
+        <li><strong>Create your AI interviewer</strong> - Click "Start Setup Call" to design your interview</li>
+        <li><strong>Share interview links</strong> - Send participants their unique interview URL</li>
+        <li><strong>View results in Dashboard</strong> - See all responses, transcripts and analytics</li>
+        <li><strong>Export data</strong> - Download interview data for further analysis</li>
       </ol>
+    </div>
+
+    <!-- Dashboard Features -->
+    <div style="margin-top:16px;padding:24px;background:rgba(30,41,59,0.5);border-radius:12px;">
+      <h3 style="color:#fff;font-size:16px;margin:0 0 16px;">📊 Your Dashboard Includes</h3>
+      <ul style="color:#94a3b8;font-size:14px;margin:0;padding-left:20px;line-height:2;list-style:none;">
+        <li>✅ Real-time interview tracking</li>
+        <li>✅ Full conversation transcripts</li>
+        <li>✅ Response analytics and insights</li>
+        <li>✅ Participant management</li>
+      </ul>
     </div>
 
     <!-- Footer -->
     <div style="text-align:center;margin-top:32px;padding-top:24px;border-top:1px solid #334155;">
       <p style="color:#64748b;font-size:12px;margin:0;">
         Questions? Reply to this email or book a call at <a href="https://calendly.com/mcmdennis" style="color:#a78bfa;">calendly.com/mcmdennis</a>
+      </p>
+      <p style="color:#475569;font-size:11px;margin:12px 0 0;">
+        Powered by Connexions Interview Platform Factory
       </p>
     </div>
   </div>
@@ -75,6 +122,7 @@ export async function POST(request: NextRequest) {
 
     // Try Resend
     if (process.env.RESEND_API_KEY) {
+      const fromDomain = process.env.SMTP_FROM_DOMAIN || 'updates.corporateaisolutions.com';
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -82,16 +130,20 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'AI Interview Agents <hello@corporateaisolutions.com>',
+          from: `Connexions <noreply@${fromDomain}>`,
           to: [email],
-          subject: `✓ Your AI Interview Platform is Ready - ${companyName}`,
+          subject: `🎉 Your ${platformName} Interview Platform is Ready!`,
           html: emailHtml,
         }),
       });
 
       if (res.ok) {
-        console.log('Welcome email sent via Resend');
-        return NextResponse.json({ success: true, provider: 'resend' });
+        const result = await res.json();
+        console.log('[send-welcome] Email sent via Resend:', result.id);
+        return NextResponse.json({ success: true, provider: 'resend', messageId: result.id });
+      } else {
+        const error = await res.text();
+        console.error('[send-welcome] Resend error:', error);
       }
     }
 
@@ -106,28 +158,39 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           personalizations: [{ to: [{ email }] }],
           from: { email: process.env.EMAIL_FROM_ADDRESS || 'hello@corporateaisolutions.com' },
-          subject: `✓ Your AI Interview Platform is Ready - ${companyName}`,
+          subject: `🎉 Your ${platformName} Interview Platform is Ready!`,
           content: [{ type: 'text/html', value: emailHtml }],
         }),
       });
 
       if (res.ok || res.status === 202) {
-        console.log('Welcome email sent via SendGrid');
+        console.log('[send-welcome] Email sent via SendGrid');
         return NextResponse.json({ success: true, provider: 'sendgrid' });
       }
     }
 
-    // Fallback: log to console
-    console.log('=== WELCOME EMAIL (no provider configured) ===');
+    // No provider - return success but note it wasn't sent
+    console.log('[send-welcome] No email provider configured');
     console.log('To:', email);
-    console.log('Company:', companyName);
-    console.log('URL:', platformUrl);
-    console.log('==============================================');
+    console.log('Dashboard:', dashboardUrl);
 
-    return NextResponse.json({ success: true, provider: 'console' });
+    return NextResponse.json({
+      success: true,
+      provider: 'none',
+      message: 'No email provider configured - email not sent'
+    });
 
   } catch (error: any) {
-    console.error('Send email error:', error);
-    return NextResponse.json({ success: false, error: error.message });
+    console.error('[send-welcome] Error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    service: 'send-welcome',
+    status: 'ready',
+    resendConfigured: !!process.env.RESEND_API_KEY,
+    sendgridConfigured: !!process.env.SENDGRID_API_KEY
+  });
 }
