@@ -1,18 +1,45 @@
-﻿import { NextResponse } from 'next/server';
+﻿// app/api/dashboard/performance/route.ts
+
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+export async function GET(req: Request) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('dashboard_performance')
+      .select(
+        `
+        total_agents,
+        total_interviews,
+        total_minutes
+        `
+      )
+      .limit(1)
+      .maybeSingle();
 
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
+    if (error) {
+      console.error('[dashboard/performance] query error', error);
+    }
 
-  // TODO: replace with real implementation
-  return NextResponse.json({
-    ok: true,
-    from,
-    to,
-    data: [],
-  });
+    /**
+     * 🔒 HARD GUARANTEED RESPONSE SHAPE
+     * These keys ALWAYS exist
+     */
+    return NextResponse.json({
+      total_agents: Number(data?.total_agents ?? 0),
+      total_interviews: Number(data?.total_interviews ?? 0),
+      total_minutes: Number(data?.total_minutes ?? 0),
+    });
+  } catch (err) {
+    console.error('[dashboard/performance] fatal error', err);
+
+    // Even on failure, NEVER break the UI
+    return NextResponse.json({
+      total_agents: 0,
+      total_interviews: 0,
+      total_minutes: 0,
+    });
+  }
 }

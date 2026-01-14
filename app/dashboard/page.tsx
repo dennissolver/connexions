@@ -1,30 +1,37 @@
 ﻿// app/dashboard/page.tsx
-// Main evaluation dashboard page
 
-'use client';
+import { DashboardMetrics } from '@/types/dashboard';
+import PerformanceDashboard from '@/components/dashboard/PerformanceDashboard';
 
-import { useState } from 'react';
-import { PerformanceDashboard } from '@/components/dashboard/PerformanceDashboard';
-import { AgentDrilldown } from '@/components/dashboard/AgentDrilldown';
+export const dynamic = 'force-dynamic';
 
-export default function DashboardPage() {
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-
-  return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {selectedAgent ? (
-          <AgentDrilldown
-            agentId={selectedAgent}
-            onBack={() => setSelectedAgent(null)}
-          />
-        ) : (
-          <PerformanceDashboard
-            onAgentSelect={(id) => setSelectedAgent(id)}
-          />
-        )}
-      </div>
-    </div>
+async function getMetrics(): Promise<DashboardMetrics> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_BASE_URL}/api/dashboard/performance`,
+    {
+      cache: 'no-store',
+    }
   );
+
+  if (!res.ok) {
+    return {
+      total_agents: 0,
+      total_interviews: 0,
+      total_minutes: 0,
+    };
+  }
+
+  const data = (await res.json()) as DashboardMetrics;
+
+  return {
+    total_agents: data?.total_agents ?? 0,
+    total_interviews: data?.total_interviews ?? 0,
+    total_minutes: data?.total_minutes ?? 0,
+  };
 }
 
+export default async function DashboardPage() {
+  const metrics = await getMetrics();
+
+  return <PerformanceDashboard metrics={metrics} />;
+}
