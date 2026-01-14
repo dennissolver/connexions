@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
       ELEVENLABS_API_KEY: elevenlabsApiKey || '',
       NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID: elevenlabsAgentId,
       ANTHROPIC_API_KEY: anthropicApiKey || '',
+      NEXT_PUBLIC_APP_URL: vercelUrl,
+      NEXT_PUBLIC_SITE_URL: vercelUrl,
     };
 
     // Check if project already exists
