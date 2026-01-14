@@ -666,7 +666,8 @@ function SetupWizard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentName: `${formData.platformName} Setup`,
+          projectSlug,
+          agentName: formData.voiceGender === 'male' ? 'Alex' : 'Sarah',
           platformName: formData.platformName,
           companyName: formData.companyName,
           voiceGender: formData.voiceGender,

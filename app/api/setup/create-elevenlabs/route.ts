@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     // Accept multiple parameter formats
     const platformName = body.platformName || body.projectName || body.formData?.platformName;
     const companyName = body.companyName || body.formData?.companyName || platformName;
+    const projectSlug = body.projectSlug || body.slug || platformName?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
     const voiceGender = body.voiceGender || body.formData?.voiceGender || 'female';
     const agentName = body.agentName || body.formData?.agentName || (voiceGender === 'male' ? 'Alex' : 'Sarah');
     const webhookUrl = body.webhookUrl || '';
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
     }
 
-    const agentDisplayName = `${companyName || platformName} Setup Agent`;
+    // Use projectSlug for unique agent naming (prevents conflicts between platforms)
+    const agentDisplayName = `${projectSlug}-setup-agent`;
 
     // Replace placeholders in prompt
     const prompt = SETUP_AGENT_PROMPT_TEMPLATE

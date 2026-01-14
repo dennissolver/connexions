@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
       attempts: 1,
     });
 
-    // 4. ElevenLabs
-    const elevenlabsResult = await cleanupElevenLabs(baseUrl, resources?.elevenlabs?.agentId);
+    // 4. ElevenLabs (uses projectSlug for unique agent naming)
+    const elevenlabsResult = await cleanupElevenLabs(baseUrl, resources?.elevenlabs?.agentId, slug || undefined);
     results.push({
       component: 'ElevenLabs',
       verified: elevenlabsResult.success,
@@ -232,31 +232,79 @@ async function cleanupVercel(baseUrl: string, slug: string | null, projectId?: s
   }
 }
 
-async function cleanupElevenLabs(baseUrl: string, agentId?: string): Promise<CleanupServiceResult> {
+async function cleanupElevenLabs(baseUrl: string, agentId?: string, projectSlug?: string): Promise<CleanupServiceResult> {
   try {
-    if (!agentId) {
+    // If we have an agentId, delete directly
+    if (agentId) {
+      log(`Deleting ElevenLabs agent by ID: ${agentId}`);
+
+      const res = await fetch(`${baseUrl}/api/setup/create-elevenlabs`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 404 || data.alreadyDeleted) {
+        return { success: true, found: false, deleted: false };
+      }
+
+      if (res.ok || data.success) {
+        return { success: true, found: true, deleted: true };
+      }
+
+      return { success: false, found: true, deleted: false, error: data.error };
+    }
+
+    // No agentId - search by name pattern using projectSlug
+    if (!projectSlug) {
       return { success: true, found: false, deleted: false };
     }
 
-    log(`Checking ElevenLabs for: ${agentId}`);
+    // Agent name format matches create-elevenlabs route
+    const agentDisplayName = `${projectSlug}-setup-agent`;
+    log(`Searching ElevenLabs for agent: ${agentDisplayName}`);
 
-    const res = await fetch(`${baseUrl}/api/setup/create-elevenlabs`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId }),
+    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
+    if (!elevenlabsApiKey) {
+      log('No ELEVENLABS_API_KEY configured, skipping');
+      return { success: true, found: false, deleted: false };
+    }
+
+    // List all agents and find matching one
+    const listRes = await fetch('https://api.elevenlabs.io/v1/convai/agents', {
+      headers: { 'xi-api-key': elevenlabsApiKey },
     });
 
-    const data = await res.json().catch(() => ({}));
-
-    if (res.status === 404 || data.alreadyDeleted) {
+    if (!listRes.ok) {
       return { success: true, found: false, deleted: false };
     }
 
-    if (res.ok || data.success) {
+    const data = await listRes.json();
+    const existingAgent = data.agents?.find((a: any) => a.name === agentDisplayName);
+
+    if (!existingAgent) {
+      log(`No ElevenLabs agent found with name: ${agentDisplayName}`);
+      return { success: true, found: false, deleted: false };
+    }
+
+    log(`Found ElevenLabs agent: ${existingAgent.agent_id}, deleting...`);
+
+    // Delete the agent
+    const deleteRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${existingAgent.agent_id}`, {
+      method: 'DELETE',
+      headers: { 'xi-api-key': elevenlabsApiKey },
+    });
+
+    if (deleteRes.ok || deleteRes.status === 404) {
+      log(`Deleted ElevenLabs agent: ${existingAgent.agent_id}`);
       return { success: true, found: true, deleted: true };
     }
 
-    return { success: false, found: true, deleted: false, error: data.error };
+    const error = await deleteRes.json().catch(() => ({}));
+    return { success: false, found: true, deleted: false, error: error.detail || 'Delete failed' };
+
   } catch (e) {
     return { success: true, found: false, deleted: false };
   }
