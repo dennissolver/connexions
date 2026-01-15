@@ -56,6 +56,7 @@ export async function createVercelProject(ctx: ProvisionContext): Promise<Provis
 
 export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   const teamQuery = ctx.vercelTeamId ? `?teamId=${ctx.vercelTeamId}` : '';
+  const teamQueryAmp = ctx.vercelTeamId ? `&teamId=${ctx.vercelTeamId}` : '';
   const headers = { Authorization: `Bearer ${ctx.vercelToken}`, 'Content-Type': 'application/json' };
 
   // If we have a deployment ID, check its status
@@ -85,7 +86,7 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
 
   // Get latest deployments for this project
   const listRes = await fetch(
-    `${VERCEL_API}/v6/deployments?projectId=${projectId}&limit=5${teamQuery ? '&' + teamQuery.slice(1) : ''}`,
+    `${VERCEL_API}/v6/deployments?projectId=${projectId}&limit=5${teamQueryAmp}`,
     { headers }
   );
 
@@ -110,8 +111,8 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
       }
 
       if (state === 'ERROR' || state === 'CANCELED') {
-        // Trigger a new deployment
-        return await manuallyTriggerDeployment(ctx, headers, teamQuery);
+        // Need to trigger a new deployment - use deploy hook
+        return await triggerViaDeployHook(ctx, headers, teamQuery);
       }
 
       // Building or queued - save the ID and wait
@@ -122,28 +123,69 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
     }
   }
 
-  // No deployments found - trigger one manually
-  console.log(`[vercel] No deployments found, triggering manually`);
-  return await manuallyTriggerDeployment(ctx, headers, teamQuery);
+  // No deployments found - trigger via deploy hook
+  console.log(`[vercel] No deployments found, triggering via deploy hook`);
+  return await triggerViaDeployHook(ctx, headers, teamQuery);
 }
 
-async function manuallyTriggerDeployment(
+async function triggerViaDeployHook(
   ctx: ProvisionContext,
   headers: Record<string, string>,
   teamQuery: string
 ): Promise<ProvisionStepResult> {
+  const projectId = ctx.metadata.vercelProjectId;
+
+  // First, check if a deploy hook exists, if not create one
+  const hooksRes = await fetch(`${VERCEL_API}/v1/projects/${projectId}/deploy-hooks${teamQuery}`, { headers });
+
+  let hookUrl: string | null = null;
+
+  if (hooksRes.ok) {
+    const hooks = await hooksRes.json();
+    const existingHook = hooks.find?.((h: any) => h.name === 'provision-hook');
+    if (existingHook) {
+      hookUrl = existingHook.url;
+    }
+  }
+
+  // Create hook if doesn't exist
+  if (!hookUrl) {
+    const createHookRes = await fetch(`${VERCEL_API}/v1/projects/${projectId}/deploy-hooks${teamQuery}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'provision-hook', ref: 'main' }),
+    });
+
+    if (createHookRes.ok) {
+      const newHook = await createHookRes.json();
+      hookUrl = newHook.url;
+      console.log(`[vercel] Created deploy hook`);
+    }
+  }
+
+  // Trigger the deploy hook
+  if (hookUrl) {
+    const triggerRes = await fetch(hookUrl, { method: 'POST' });
+    if (triggerRes.ok) {
+      const result = await triggerRes.json();
+      console.log(`[vercel] Triggered deployment via hook: ${result.job?.id || 'pending'}`);
+
+      // The hook doesn't return a deployment ID immediately,
+      // so we'll pick it up on the next poll
+      return { nextState: 'VERCEL_DEPLOYING', metadata: ctx.metadata };
+    }
+    console.error(`[vercel] Hook trigger failed: ${await triggerRes.text()}`);
+  }
+
+  // Fallback: try using the new createDeployment API without gitSource
+  console.log(`[vercel] Trying direct deployment creation`);
   const deployRes = await fetch(`${VERCEL_API}/v13/deployments${teamQuery}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
       name: ctx.projectSlug,
-      project: ctx.metadata.vercelProjectId,
+      project: projectId,
       target: 'production',
-      gitSource: {
-        type: 'github',
-        repo: `${ctx.githubOwner}/${ctx.metadata.githubRepoName}`,
-        ref: 'main'
-      },
     }),
   });
 
