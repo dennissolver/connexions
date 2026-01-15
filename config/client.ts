@@ -1,19 +1,33 @@
 // config/client.ts
 export const clientConfig = {
-  platform: { 
-    name: "f25 survey", 
-    tagline: "AI-Powered Interviews",
-    description: "AI-Powered Interview Platform"
+  platform: {
+    name: "f27 survey",
+    tagline: "AI-Powered Interview Platform",
+    description: "Conduct structured interviews with AI assistance.",
+    version: "1.0.0",
   },
-  company: { 
-    name: "Factory2Key", 
-    supportEmail: "support@example.com" 
+  company: {
+    name: "key2factoiry",
+    website: "",
+    supportEmail: "support@example.com",
   },
-  theme: { 
-    colors: { 
-      primary: "#8B5CF6", 
-      accent: "#10B981", 
-      background: "#0F172A" 
-    } 
+  theme: {
+    mode: "dark" as "dark" | "light",
+    colors: {
+      primary: "#8B5CF6",
+      accent: "#10B981",
+      background: "#0F172A",
+    },
+  },
+  features: {
+    enableAnalytics: true,
+    enableExport: true,
+  },
+  parent: {
+    apiUrl: "https://connexions-silk.vercel.app",
   },
 } as const;
+
+export const getPlatformInfo = () => clientConfig.platform;
+export const getCompanyInfo = () => clientConfig.company;
+export type ClientConfig = typeof clientConfig;
