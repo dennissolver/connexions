@@ -1,22 +1,24 @@
 // app/api/provision/status/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getProvisionRun } from '@/lib/provisioning/engine';
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const platformId = searchParams.get('platformId');
+export async function GET(req: NextRequest) {
+  const projectSlug = req.nextUrl.searchParams.get('projectSlug');
 
-  if (!platformId) {
-    return NextResponse.json({ error: 'Missing platformId' }, { status: 400 });
+  if (!projectSlug) {
+    return NextResponse.json({ error: 'Missing projectSlug' }, { status: 400 });
   }
 
-  const run = await getProvisionRun(platformId);
-  if (!run) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
+  try {
+    const run = await getProvisionRun(projectSlug);
 
-  return NextResponse.json({
-    state: run.state,
-    metadata: run.metadata ?? {},
-  });
+    if (!run) {
+      return NextResponse.json({ error: 'Run not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ run });
+  } catch (err: any) {
+    console.error('Provision status error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }
