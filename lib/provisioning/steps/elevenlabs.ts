@@ -120,6 +120,29 @@ function buildAgentConfig(
   return config;
 }
 
+/**
+ * Verify an ElevenLabs agent exists by fetching it
+ */
+async function verifyAgentExists(agentId: string, apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${ELEVENLABS_API}/convai/agents/${agentId}`, {
+      headers: { 'xi-api-key': apiKey },
+    });
+
+    if (res.ok) {
+      const agent = await res.json();
+      console.log(`[elevenlabs] Verified agent exists: ${agent.name} (${agentId})`);
+      return true;
+    }
+
+    console.error(`[elevenlabs] Agent verification failed: ${res.status}`);
+    return false;
+  } catch (err: any) {
+    console.error(`[elevenlabs] Agent verification error: ${err.message}`);
+    return false;
+  }
+}
+
 export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
   const childPlatformUrl = ctx.metadata.vercelUrl || `https://${ctx.projectSlug}.vercel.app`;
@@ -150,37 +173,53 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
 
     if (existing) {
       console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
-      console.log(`[elevenlabs] Updating existing agent with correct URLs...`);
 
-      const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(buildAgentConfig(
-          agentName,
-          ctx.platformName,
-          toolWebhookUrl,
-          routerWebhookUrl,
-          webhookSecret
-        )),
-      });
-
-      if (updateRes.ok) {
-        console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
+      // Verify the agent actually exists (double-check)
+      const verified = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
+      if (!verified) {
+        console.error(`[elevenlabs] Existing agent ${existing.agent_id} failed verification`);
+        // Fall through to create new agent
       } else {
-        const errorText = await updateRes.text();
-        console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
-      }
+        console.log(`[elevenlabs] Updating existing agent with correct URLs...`);
 
-      return {
-        nextState: 'WEBHOOK_REGISTERING',
-        metadata: {
-          ...ctx.metadata,
-          elevenLabsAgentId: existing.agent_id,
-          elevenLabsAgentName: existing.name,
-          elevenLabsToolUrl: toolWebhookUrl,
-          elevenLabsRouterUrl: routerWebhookUrl,
-        },
-      };
+        const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(buildAgentConfig(
+            agentName,
+            ctx.platformName,
+            toolWebhookUrl,
+            routerWebhookUrl,
+            webhookSecret
+          )),
+        });
+
+        if (updateRes.ok) {
+          console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
+
+          // Verify update took effect
+          const updateVerified = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
+          if (!updateVerified) {
+            throw new Error(`Agent update verification failed for ${existing.agent_id}`);
+          }
+        } else {
+          const errorText = await updateRes.text();
+          console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
+          throw new Error(`Failed to update ElevenLabs agent: ${errorText}`);
+        }
+
+        return {
+          nextState: 'WEBHOOK_REGISTERING',
+          metadata: {
+            ...ctx.metadata,
+            elevenLabsAgentId: existing.agent_id,
+            elevenLabsAgentName: existing.name,
+            elevenLabsToolUrl: toolWebhookUrl,
+            elevenLabsRouterUrl: routerWebhookUrl,
+            elevenLabsVerified: true,
+          },
+        };
+      }
     }
   }
 
@@ -208,6 +247,19 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   const agent = await createRes.json();
   console.log(`[elevenlabs] Created agent: ${agent.agent_id}`);
 
+  // CRITICAL: Verify the agent was actually created
+  console.log(`[elevenlabs] Verifying agent creation...`);
+
+  // Wait a moment for propagation
+  await new Promise(r => setTimeout(r, 1000));
+
+  const verified = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
+  if (!verified) {
+    throw new Error(`Agent creation verification failed: ${agent.agent_id} not found after creation`);
+  }
+
+  console.log(`[elevenlabs] Agent verified successfully: ${agent.agent_id}`);
+
   return {
     nextState: 'WEBHOOK_REGISTERING',
     metadata: {
@@ -216,6 +268,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       elevenLabsAgentName: agentName,
       elevenLabsToolUrl: toolWebhookUrl,
       elevenLabsRouterUrl: routerWebhookUrl,
+      elevenLabsVerified: true,
     },
   };
 }

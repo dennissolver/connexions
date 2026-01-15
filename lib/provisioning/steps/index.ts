@@ -7,6 +7,7 @@ import { createGithubRepo } from './github';
 import { createVercelProject, triggerVercelDeployment } from './vercel';
 import { createElevenLabsAgent } from './elevenlabs';
 import { registerWebhook } from './webhook';
+import { verifySupabase, verifyGitHub, verifyVercel } from './verify';
 
 export type StepFunction = (ctx: ProvisionContext) => Promise<ProvisionStepResult>;
 
@@ -21,7 +22,20 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
   // Step 2: Wait for Supabase to be ready, run migrations
   SUPABASE_CREATING: async (ctx) => {
     console.log(`[SUPABASE_CREATING] Waiting for Supabase project...`);
-    return waitForSupabaseReady(ctx);
+    const result = await waitForSupabaseReady(ctx);
+
+    // If we're moving to SUPABASE_READY, verify first
+    if (result.nextState === 'SUPABASE_READY') {
+      const verification = await verifySupabase({ ...ctx, metadata: result.metadata || ctx.metadata });
+      if (!verification.success) {
+        console.error(`[SUPABASE_CREATING] Verification failed: ${verification.error}`);
+        // Stay in SUPABASE_CREATING to retry
+        return { nextState: 'SUPABASE_CREATING', metadata: result.metadata };
+      }
+      console.log(`[SUPABASE_CREATING] Verification passed`);
+    }
+
+    return result;
   },
 
   // Step 3: Create GitHub repository with template files
@@ -35,6 +49,12 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
     console.log(`[GITHUB_CREATING] Waiting for GitHub...`);
     // GitHub creation is synchronous, so if we're here, check if done
     if (ctx.metadata.githubRepoName) {
+      // Verify before advancing
+      const verification = await verifyGitHub(ctx);
+      if (!verification.success) {
+        console.error(`[GITHUB_CREATING] Verification failed: ${verification.error}`);
+        return { nextState: 'GITHUB_CREATING', metadata: ctx.metadata };
+      }
       return { nextState: 'GITHUB_READY', metadata: ctx.metadata };
     }
     return createGithubRepo(ctx);
@@ -55,7 +75,20 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
   // Step 7: Wait for Vercel deployment to complete
   VERCEL_DEPLOYING: async (ctx) => {
     console.log(`[VERCEL_DEPLOYING] Waiting for deployment...`);
-    return triggerVercelDeployment(ctx);
+    const result = await triggerVercelDeployment(ctx);
+
+    // If moving past VERCEL_DEPLOYING, verify deployment is actually ready
+    if (result.nextState !== 'VERCEL_DEPLOYING') {
+      const verification = await verifyVercel({ ...ctx, metadata: result.metadata || ctx.metadata });
+      if (!verification.success) {
+        console.error(`[VERCEL_DEPLOYING] Verification failed: ${verification.error}`);
+        // Stay in deploying state
+        return { nextState: 'VERCEL_DEPLOYING', metadata: result.metadata };
+      }
+      console.log(`[VERCEL_DEPLOYING] Verification passed`);
+    }
+
+    return result;
   },
 
   // Step 8: Vercel ready, create ElevenLabs agent
@@ -75,6 +108,7 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
   },
 
   // Step 10: Final configuration - Supabase auth, Vercel env vars, webhooks
+  // This step now includes full verification before marking COMPLETE
   WEBHOOK_REGISTERING: async (ctx) => {
     console.log(`[WEBHOOK_REGISTERING] Running final configuration...`);
     console.log(`  - Supabase URL: ${ctx.metadata.supabaseUrl}`);
@@ -129,3 +163,14 @@ export {
   createElevenLabsAgent,
   registerWebhook,
 };
+
+// Export verification functions
+export {
+  verifySupabase,
+  verifyGitHub,
+  verifyVercel,
+  verifyAllComplete,
+  verifyElevenLabs,
+  verifyVercelEnvVars,
+  verifyChildSupabaseData,
+} from './verify';

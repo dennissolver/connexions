@@ -55,7 +55,7 @@ export default function ProvisionClient() {
         setRun(data.run);
 
         if (data.run?.state === 'FAILED') {
-          setError(data.run.error || 'Provisioning failed');
+          setError(data.run.error || data.run.metadata?.error || 'Provisioning failed');
         }
       } catch (err: any) {
         console.error('Poll error:', err);

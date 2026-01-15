@@ -2,14 +2,11 @@
 
 import { ProvisionContext, ProvisionStepResult } from '../types';
 import { configureSupabaseAuth } from './supabase';
+import { verifyAllComplete, verifyVercelEnvVars, verifyChildSupabaseData, verifyElevenLabs } from './verify';
 
 const VERCEL_API = 'https://api.vercel.com';
 
 export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionStepResult> {
-  if (ctx.metadata.webhookRegistered) {
-    return { nextState: 'COMPLETE', metadata: ctx.metadata };
-  }
-
   const vercelUrl = ctx.metadata.vercelUrl;
   const elevenLabsAgentId = ctx.metadata.elevenLabsAgentId;
 
@@ -100,8 +97,55 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
     }
   }
 
-  // 5. Trigger a redeployment so the new env vars take effect
-  console.log('[webhook] Step 5: Triggering redeployment...');
+  // 5. VERIFY all critical data was written correctly before proceeding
+  console.log('[webhook] Step 5: Verifying configuration was applied...');
+
+  // Wait a moment for writes to propagate
+  await new Promise(r => setTimeout(r, 2000));
+
+  // Verify Vercel env vars
+  const envVerification = await verifyVercelEnvVars(ctx);
+  if (!envVerification.success) {
+    console.error('[webhook] Env var verification failed:', envVerification.error);
+    return {
+      nextState: 'FAILED',
+      metadata: {
+        ...ctx.metadata,
+        error: `Env var verification failed: ${envVerification.error}`,
+      },
+    };
+  }
+
+  // Verify ElevenLabs agent exists
+  const agentVerification = await verifyElevenLabs(ctx);
+  if (!agentVerification.success) {
+    console.error('[webhook] Agent verification failed:', agentVerification.error);
+    return {
+      nextState: 'FAILED',
+      metadata: {
+        ...ctx.metadata,
+        error: `Agent verification failed: ${agentVerification.error}`,
+      },
+    };
+  }
+
+  // Verify child Supabase data
+  const dataVerification = await verifyChildSupabaseData(ctx);
+  if (!dataVerification.success) {
+    console.error('[webhook] Child data verification failed:', dataVerification.error);
+    return {
+      nextState: 'FAILED',
+      metadata: {
+        ...ctx.metadata,
+        error: `Child data verification failed: ${dataVerification.error}`,
+      },
+    };
+  }
+
+  console.log('[webhook] All verifications passed!');
+
+  // 6. Trigger a redeployment so the new env vars take effect
+  console.log('[webhook] Step 6: Triggering redeployment...');
   if (ctx.metadata.vercelProjectId) {
     await triggerRedeployment(ctx);
   }
@@ -115,6 +159,7 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
       webhookRegistered: true,
       supabaseAuthConfigured: true,
       vercelEnvUpdated: true,
+      verificationPassed: true,
     }
   };
 }
