@@ -1,4 +1,4 @@
-// app/api/dashboard/performance/route.ts
+// app/api/dashboard/performance/route.ts.ts
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 

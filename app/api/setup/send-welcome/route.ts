@@ -1,4 +1,4 @@
-﻿// app/api/setup/send-welcome/route.ts
+﻿// app/api/setup/send-welcome/route.ts.ts
 // ============================================================================
 // SEND WELCOME EMAIL - Sends onboarding email with dashboard link
 // ============================================================================

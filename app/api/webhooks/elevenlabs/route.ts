@@ -1,4 +1,4 @@
-﻿// app/api/webhooks/elevenlabs/route.ts
+﻿// app/api/webhooks/elevenlabs/route.ts.ts
 
 export const runtime = "nodejs";
 

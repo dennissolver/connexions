@@ -1,4 +1,4 @@
-// app/api/agents/[agentId]/route.ts
+// app/api/agents/[agentId]/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 

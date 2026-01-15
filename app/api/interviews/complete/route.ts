@@ -1,4 +1,4 @@
-﻿// app/api/interviews/complete/route.ts
+﻿// app/api/interviews/complete/route.ts.ts
 // UPDATED: Now triggers evaluation after marking interviews complete
 
 import { NextRequest, NextResponse } from 'next/server';

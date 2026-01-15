@@ -1,4 +1,4 @@
-﻿// app/api/admin/alerts/route.ts
+﻿// app/api/admin/alerts/route.ts.ts
 // SUPERADMIN: Manage alerts across all clients
 
 import { NextRequest, NextResponse } from 'next/server';

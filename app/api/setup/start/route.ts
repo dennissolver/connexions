@@ -1,4 +1,4 @@
-// app/api/setup/start/route.ts
+// app/api/setup/start/route.ts.ts
 import { NextResponse } from 'next/server';
 import { createProvisionRun } from '@/lib/provisioning/engine';
 import { runOrchestrator } from '@/lib/provisioning/orchestrator';

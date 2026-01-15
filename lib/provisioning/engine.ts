@@ -20,19 +20,36 @@ export async function createProvisionRun(projectSlug: string, platformName: stri
 
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
-    .insert({ project_slug: projectSlug, platform_name: platformName, company_name: companyName, state: 'INIT', metadata: {} })
+    .insert({
+      project_slug: projectSlug,
+      platform_name: platformName,
+      company_name: companyName,
+      state: 'INIT',
+      metadata: {}
+    })
     .select()
     .single();
   if (error) throw error;
   return data as ProvisionRun;
 }
 
-export async function advanceState(projectSlug: string, from: ProvisionState, to: ProvisionState, metadata?: ProvisionMetadata): Promise<ProvisionRun> {
-  if (!ALLOWED_TRANSITIONS[from]?.includes(to)) throw new Error(`Invalid: ${from} → ${to}`);
+export async function advanceState(
+  projectSlug: string,
+  from: ProvisionState,
+  to: ProvisionState,
+  metadata?: ProvisionMetadata
+): Promise<ProvisionRun> {
+  if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
+    throw new Error(`Invalid: ${from} → ${to}`);
+  }
 
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
-    .update({ state: to, metadata: metadata ?? {}, updated_at: new Date().toISOString() })
+    .update({
+      state: to,
+      metadata: metadata ?? {},
+      updated_at: new Date().toISOString()
+    })
     .eq('project_slug', projectSlug)
     .eq('state', from)
     .select()
@@ -44,6 +61,34 @@ export async function advanceState(projectSlug: string, from: ProvisionState, to
 export async function failRun(projectSlug: string, errorMessage: string): Promise<void> {
   await supabaseAdmin
     .from('provision_runs')
-    .update({ state: 'FAILED', error: errorMessage, updated_at: new Date().toISOString() })
+    .update({
+      state: 'FAILED',
+      last_error: errorMessage,
+      updated_at: new Date().toISOString()
+    })
     .eq('project_slug', projectSlug);
+}
+
+export async function deleteProvisionRun(projectSlug: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('provision_runs')
+    .delete()
+    .eq('project_slug', projectSlug);
+  if (error) throw error;
+}
+
+export async function resetProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
+  const { data, error } = await supabaseAdmin
+    .from('provision_runs')
+    .update({
+      state: 'INIT',
+      metadata: {},
+      last_error: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProvisionRun | null;
 }

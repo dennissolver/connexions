@@ -69,6 +69,11 @@ export interface ProvisionMetadata {
   // Error tracking
   lastError?: string;
   retryCount?: number;
+  
+  // Cleanup tracking
+  cleanupCompleted?: boolean;
+  cleanupDeleted?: string[];
+  cleanupErrors?: string[];
 }
 
 export interface ProvisionStepResult {
@@ -88,3 +93,4 @@ export interface ProvisionRun {
   created_at: string;
   updated_at: string;
 }
+

@@ -1,4 +1,4 @@
-﻿// app/api/child/transcript/route.ts
+﻿// app/api/child/transcript/route.ts.ts
 // Parent Connexions endpoint - receives transcripts from child platforms for centralized evaluation
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';

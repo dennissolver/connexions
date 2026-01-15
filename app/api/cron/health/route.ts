@@ -1,4 +1,4 @@
-﻿// app/api/cron/health/route.ts
+﻿// app/api/cron/health/route.ts.ts
 import { NextResponse } from 'next/server';
 
 export async function GET() {

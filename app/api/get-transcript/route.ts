@@ -1,10 +1,10 @@
-﻿// app/api/get-transcript/route.ts
+﻿// app/api/get-transcript/route.ts.ts
 // Retrieves transcript from ElevenLabs conversation or our DB
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Force dynamic rendering - this route uses request.url
+// Force dynamic rendering - this route.ts uses request.url
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(

@@ -1,4 +1,4 @@
-﻿// app/api/tools/create-panel/route.ts
+﻿// app/api/tools/create-panel/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

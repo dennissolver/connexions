@@ -1,4 +1,4 @@
-﻿// app/api/setup/send-welcome/route.ts
+﻿// app/api/setup/send-welcome/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {

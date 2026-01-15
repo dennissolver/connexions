@@ -1,4 +1,4 @@
-﻿// app/api/interview/voice/start/route.ts
+﻿// app/api/interview/voice/start/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 

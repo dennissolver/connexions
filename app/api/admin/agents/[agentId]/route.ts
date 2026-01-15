@@ -1,4 +1,4 @@
-// app/api/dashboard/agents/[agentId]/route.ts
+// app/api/dashboard/agents/[agentId]/route.ts.ts
 // Returns detailed performance data for a specific agent (drill-down view)
 
 import { NextRequest, NextResponse } from 'next/server';

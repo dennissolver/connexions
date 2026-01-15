@@ -1,4 +1,4 @@
-﻿// app/api/demo/webhook/route.ts
+﻿// app/api/demo/webhook/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

@@ -11,7 +11,7 @@ export const TEMPLATE_FILES: Record<string, string> = {
     "start": "next start"
   },
   "dependencies": {
-    "@elevenlabs/client": "^1.0.0",
+    "@elevenlabs/client": "^0.13.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.0",
     "lucide-react": "^0.460.0",

@@ -1,4 +1,4 @@
-﻿// app/api/analyze-interviews/route.ts
+﻿// app/api/analyze-interviews/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';

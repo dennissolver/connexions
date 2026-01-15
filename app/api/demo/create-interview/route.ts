@@ -1,4 +1,4 @@
-﻿// app/api/demo/create-interview/route.ts
+﻿// app/api/demo/create-interview/route.ts.ts
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 

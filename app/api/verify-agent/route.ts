@@ -1,4 +1,4 @@
-﻿// app/api/verify-agent/route.ts
+﻿// app/api/verify-agent/route.ts.ts
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';

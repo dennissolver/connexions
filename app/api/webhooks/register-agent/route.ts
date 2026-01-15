@@ -1,4 +1,4 @@
-﻿// app/api/webhooks/register-agent/route.ts
+﻿// app/api/webhooks/register-agent/route.ts.ts
 // Registers agent_id â†’ platform mappings and resolves any unrouted webhook backlog
 
 export const runtime = 'nodejs';
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('[register-agent] Upsert failed:', error);
       return NextResponse.json(
-        { error: 'Failed to register agent route', details: error.message },
+        { error: 'Failed to register agent route.ts', details: error.message },
         { status: 500 }
       );
     }
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 }
 
 // -----------------------------------------------------------------------------
-// GET â€“ Fetch route(s)
+// GET â€“ Fetch route.ts(s)
 // -----------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
 
       if (error || !data) {
         return NextResponse.json(
-          { error: 'Agent route not found' },
+          { error: 'Agent route.ts not found' },
           { status: 404 }
         );
       }
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
 }
 
 // -----------------------------------------------------------------------------
-// DELETE â€“ Remove agent route
+// DELETE â€“ Remove agent route.ts
 // -----------------------------------------------------------------------------
 
 export async function DELETE(request: NextRequest) {
@@ -211,7 +211,7 @@ export async function DELETE(request: NextRequest) {
     if (error) {
       console.error('[register-agent DELETE] Error:', error);
       return NextResponse.json(
-        { error: 'Failed to delete route' },
+        { error: 'Failed to delete route.ts' },
         { status: 500 }
       );
     }

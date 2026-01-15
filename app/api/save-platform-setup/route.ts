@@ -1,4 +1,4 @@
-﻿// app/api/setup/save-platform-setup/route.ts
+﻿// app/api/setup/save-platform-setup/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 

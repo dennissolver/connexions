@@ -1,4 +1,4 @@
-﻿// app/api/interviews/voice/route.ts
+﻿// app/api/interviews/voice/route.ts.ts
 
 export const runtime = "nodejs";
 

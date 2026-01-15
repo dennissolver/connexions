@@ -1,4 +1,4 @@
-// app/api/provision/status/route.ts
+// app/api/provision/status/route.ts.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getProvisionRun } from '@/lib/provisioning/engine';
 import { runProvisioningStep } from '@/lib/provisioning/orchestrator';
