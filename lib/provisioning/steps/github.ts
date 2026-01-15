@@ -76,7 +76,6 @@ export const clientConfig = {
   platform: { 
     name: "${ctx.platformName}", 
     tagline: "AI-Powered Interviews",
-    description: "AI-Powered Interview Platform",
     description: "AI-Powered Interview Platform" 
   },
   company: { 
@@ -139,3 +138,4 @@ async function pushFile(
     }),
   });
 }
+
