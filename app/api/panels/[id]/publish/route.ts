@@ -14,7 +14,6 @@ export async function POST(
   try {
     const { id } = await params;
 
-    // Get the draft
     const { data: draft, error: fetchError } = await supabase
       .from('panel_drafts')
       .select('*')
@@ -29,7 +28,6 @@ export async function POST(
       return NextResponse.json({ error: 'Draft already published' }, { status: 400 });
     }
 
-    // Get any updates from request body (user edits)
     const updates = await request.json().catch(() => ({}));
 
     const finalConfig = {
@@ -42,7 +40,6 @@ export async function POST(
       questions: updates.questions || draft.questions,
     };
 
-    // Create ElevenLabs interview agent
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
     if (!elevenlabsApiKey) {
       return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
@@ -86,7 +83,7 @@ ${(finalConfig.questions || []).map((q: string, i: number) => `${i + 1}. ${q}`).
           language: 'en',
         },
         tts: {
-          voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah (female)
+          voice_id: 'EXAVITQu4vr4xnSDxMaL',
           model_id: 'eleven_flash_v2',
         },
         stt: { provider: 'elevenlabs' },
@@ -122,10 +119,8 @@ ${(finalConfig.questions || []).map((q: string, i: number) => `${i + 1}. ${q}`).
     const agent = await createRes.json();
     console.log('[publish] ElevenLabs agent created:', agent.agent_id);
 
-    // Generate slug
     const slug = finalConfig.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
 
-    // Save to agents table
     const { data: panel, error: insertError } = await supabase
       .from('agents')
       .insert({
@@ -141,4 +136,39 @@ ${(finalConfig.questions || []).map((q: string, i: number) => `${i + 1}. ${q}`).
           target_audience: finalConfig.target_audience,
           interview_type: finalConfig.interview_type,
         },
-        status
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[publish] Database error:', insertError);
+      return NextResponse.json({
+        error: `Agent created but database save failed: ${insertError.message}`
+      }, { status: 500 });
+    }
+
+    await supabase
+      .from('panel_drafts')
+      .update({
+        status: 'published',
+        published_panel_id: panel.id,
+        published_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    console.log('[publish] Panel published:', panel.id);
+
+    return NextResponse.json({
+      success: true,
+      panelId: panel.id,
+      agentId: agent.agent_id,
+      slug,
+      interviewUrl: `/i/${panel.id}`,
+    });
+
+  } catch (error: any) {
+    console.error('[publish] Error:', error);
+    return NextResponse.json({ error: error.message || 'Failed to publish' }, { status: 500 });
+  }
+}
