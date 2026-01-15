@@ -12,34 +12,34 @@ export interface ProvisionContext {
   projectSlug: string;
   platformName: string;
   companyName: string;
-  
+
   // URLs
   publicBaseUrl: string;
   parentWebhookUrl: string;
-  
+
   // Supabase credentials
   supabaseToken: string;
   supabaseOrgId: string;
-  
+
   // GitHub credentials
   githubToken: string;
   githubOwner: string;
-  
+
   // Vercel credentials
   vercelToken: string;
   vercelTeamId?: string;
-  
+
   // ElevenLabs credentials
   elevenLabsApiKey: string;
   elevenLabsWebhookSecret?: string;
-  
+
   // Theming
   colors: {
     primary: string;
     accent: string;
     background: string;
   };
-  
+
   // Accumulated metadata
   metadata: ProvisionMetadata;
 }
@@ -51,30 +51,35 @@ export interface ProvisionMetadata {
   supabaseAnonKey?: string;
   supabaseServiceKey?: string;
   supabaseAuthConfigured?: boolean;
-  
+
   // GitHub
   githubRepoName?: string;
   githubRepoUrl?: string;
-  
+
   // Vercel
   vercelProjectId?: string;
   vercelUrl?: string;
   vercelDeploymentId?: string;
   vercelEnvUpdated?: boolean;
-  
+
   // ElevenLabs
   elevenLabsAgentId?: string;
   elevenLabsAgentName?: string;
   elevenLabsToolUrl?: string;
   elevenLabsRouterUrl?: string;
-  
+  elevenLabsVerified?: boolean;
+
   // Webhook
   webhookRegistered?: boolean;
-  
+
+  // Verification tracking
+  verificationPassed?: boolean;
+
   // Error tracking
   lastError?: string;
+  error?: string;
   retryCount?: number;
-  
+
   // Cleanup tracking
   cleanupCompleted?: boolean;
   cleanupDeleted?: string[];
@@ -98,4 +103,3 @@ export interface ProvisionRun {
   created_at: string;
   updated_at: string;
 }
-
