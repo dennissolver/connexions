@@ -2,6 +2,7 @@
 
 import { ProvisionState } from '../states';
 import { ProvisionContext, ProvisionStepResult } from '../types';
+
 import { createSupabaseProject, waitForSupabaseReady } from './supabase';
 import { createGithubRepo } from './github';
 import { createVercelProject, triggerVercelDeployment } from './vercel';
@@ -19,6 +20,7 @@ export const STEPS: Record<ProvisionState, StepFn> = {
   GITHUB_READY: createVercelProject,
   VERCEL_CREATING: triggerVercelDeployment,
   VERCEL_DEPLOYING: triggerVercelDeployment,
+  VERCEL_READY: createElevenLabsAgent,
   ELEVENLABS_CREATING: createElevenLabsAgent,
   WEBHOOK_REGISTERING: registerWebhook,
   COMPLETE: async () => ({}),
