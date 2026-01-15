@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Mic, Users, TrendingUp, Sparkles, ExternalLink, MessageSquare } from 'lucide-react';
+import { Plus, Mic, Users, TrendingUp, Sparkles, ExternalLink, MessageSquare, UserCircle } from 'lucide-react';
 
 interface Panel {
   id: string;
@@ -34,10 +34,17 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch('/api/dashboard/performance')
       .then(r => r.json())
-      .then(d => setMetrics(d))
+      .then(d => setMetrics({
+        total_agents: d.total_agents ?? 0,
+        total_interviews: d.total_interviews ?? 0,
+        completed_interviews: d.completed_interviews ?? 0,
+        agents: d.agents ?? [],
+      }))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const hasSetupProfile = metrics.agents.length > 0;
 
   if (loading) {
     return (
@@ -64,135 +71,154 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500">Your interview panels</p>
             </div>
           </div>
-          <Link
-            href="/create"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl font-semibold shadow-lg shadow-violet-200 hover:shadow-xl hover:shadow-violet-300 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            New Panel
-          </Link>
+
+          {/* Show different button based on whether they've set up */}
+          {hasSetupProfile ? (
+            <Link
+              href="/create"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl font-semibold shadow-lg shadow-violet-200 hover:shadow-xl hover:shadow-violet-300 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              New Panel
+            </Link>
+          ) : (
+            <Link
+              href="/setup"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 transition-all"
+            >
+              <UserCircle className="w-4 h-4" />
+              Setup Profile
+            </Link>
+          )}
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl p-6 border border-violet-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                <Mic className="w-5 h-5 text-violet-600" />
+        {/* Stats - only show if they have panels */}
+        {hasSetupProfile && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white rounded-2xl p-6 border border-violet-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <Mic className="w-5 h-5 text-violet-600" />
+                </div>
+                <span className="text-gray-500 text-sm font-medium">Interview Panels</span>
               </div>
-              <span className="text-gray-500 text-sm font-medium">Interview Panels</span>
+              <div className="text-3xl font-bold text-gray-900">{metrics.total_agents}</div>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{metrics.total_agents}</div>
-          </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-emerald-600" />
+            <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-emerald-600" />
+                </div>
+                <span className="text-gray-500 text-sm font-medium">Total Interviews</span>
               </div>
-              <span className="text-gray-500 text-sm font-medium">Total Interviews</span>
+              <div className="text-3xl font-bold text-gray-900">{metrics.total_interviews}</div>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{metrics.total_interviews}</div>
-          </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-amber-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-amber-600" />
+            <div className="bg-white rounded-2xl p-6 border border-amber-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-amber-600" />
+                </div>
+                <span className="text-gray-500 text-sm font-medium">Completed</span>
               </div>
-              <span className="text-gray-500 text-sm font-medium">Completed</span>
+              <div className="text-3xl font-bold text-gray-900">{metrics.completed_interviews}</div>
             </div>
-            <div className="text-3xl font-bold text-gray-900">{metrics.completed_interviews}</div>
           </div>
-        </div>
+        )}
 
-        {/* Panels List */}
+        {/* Main Content */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Your Interview Panels</h2>
-            {metrics.agents.length > 0 && (
-              <span className="text-sm text-gray-400">{metrics.agents.length} panels</span>
-            )}
-          </div>
-
-          {metrics.agents.length === 0 ? (
+          {!hasSetupProfile ? (
+            /* Empty State - First Time User */
             <div className="px-6 py-16 text-center">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center mx-auto mb-6">
-                <MessageSquare className="w-10 h-10 text-violet-400" />
+              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-100 to-fuchsia-100 flex items-center justify-center mx-auto mb-6">
+                <Sparkles className="w-12 h-12 text-violet-500" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No panels yet</h3>
-              <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                Create your first interview panel to start collecting insights from customers, candidates, or users.
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Welcome to Connexions! 🎉</h2>
+              <p className="text-gray-500 mb-8 max-w-md mx-auto">
+                Let's get you set up. We'll create your platform and then you can start designing interview panels with Sandra, your AI assistant.
               </p>
               <Link
-                href="/create"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl font-semibold shadow-lg shadow-violet-200 hover:shadow-xl hover:shadow-violet-300 transition-all"
+                href="/setup"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-2xl font-semibold text-lg shadow-xl shadow-violet-200 hover:shadow-2xl hover:shadow-violet-300 transition-all"
               >
-                <Sparkles className="w-4 h-4" />
-                Create Your First Panel
+                <UserCircle className="w-5 h-5" />
+                Setup Your Profile
               </Link>
+              <p className="text-sm text-gray-400 mt-4">Takes about 2 minutes</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {metrics.agents.map((panel) => (
-                <Link
-                  key={panel.id}
-                  href={`/agent/${panel.id}`}
-                  className="flex items-center justify-between px-6 py-5 hover:bg-violet-50/50 transition-colors group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center shadow-md">
-                      <Mic className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 group-hover:text-violet-700 transition-colors">
-                        {panel.name}
+            /* Has Panels - Show List */
+            <>
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="font-semibold text-gray-900">Your Interview Panels</h2>
+                <span className="text-sm text-gray-400">{metrics.agents.length} panels</span>
+              </div>
+
+              <div className="divide-y divide-gray-50">
+                {metrics.agents.map((panel) => (
+                  <Link
+                    key={panel.id}
+                    href={`/agent/${panel.id}`}
+                    className="flex items-center justify-between px-6 py-5 hover:bg-violet-50/50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center shadow-md">
+                        <Mic className="w-6 h-6 text-white" />
                       </div>
-                      <div className="text-sm text-gray-400">/{panel.slug}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="font-semibold text-gray-900">
-                        {panel.completed_interviews}/{panel.total_interviews}
+                      <div>
+                        <div className="font-semibold text-gray-900 group-hover:text-violet-700 transition-colors">
+                          {panel.name}
+                        </div>
+                        <div className="text-sm text-gray-400">/{panel.slug}</div>
                       </div>
-                      <div className="text-xs text-gray-400">interviews</div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      panel.status === 'active' 
-                        ? 'bg-emerald-100 text-emerald-700' 
-                        : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {panel.status}
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-900">
+                          {panel.completed_interviews}/{panel.total_interviews}
+                        </div>
+                        <div className="text-xs text-gray-400">interviews</div>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        panel.status === 'active' 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {panel.status}
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-violet-500 transition-colors" />
                     </div>
-                    <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-violet-500 transition-colors" />
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
-        {/* Help Card */}
-        <div className="mt-8 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-2xl p-6 text-white shadow-xl shadow-violet-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Need help designing a panel?</h3>
-              <p className="text-violet-100 text-sm max-w-md">
-                Chat with Sandra, your AI assistant, to design the perfect interview questions for your research goals.
-              </p>
+        {/* Help Card - only show if they have panels */}
+        {hasSetupProfile && (
+          <div className="mt-8 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-2xl p-6 text-white shadow-xl shadow-violet-200">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Need help designing a panel?</h3>
+                <p className="text-violet-100 text-sm max-w-md">
+                  Chat with Sandra, your AI assistant, to design the perfect interview questions for your research goals.
+                </p>
+              </div>
+              <Link
+                href="/create"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-violet-600 rounded-xl font-semibold hover:bg-violet-50 transition-colors shrink-0"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Talk to Sandra
+              </Link>
             </div>
-            <Link
-              href="/create"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-violet-600 rounded-xl font-semibold hover:bg-violet-50 transition-colors shrink-0"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Talk to Sandra
-            </Link>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

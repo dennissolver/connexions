@@ -1,8 +1,9 @@
-﻿'use client';
+﻿// app/create/page.tsx
+'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Phone, PhoneOff, Loader2, Bot, Mic, MicOff, CheckCircle, ArrowRight } from 'lucide-react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Phone, PhoneOff, Loader2, Mic, MicOff, CheckCircle, ArrowRight, Sparkles, MessageSquare } from 'lucide-react';
 
 interface AgentConfig {
   clientName?: string;
@@ -20,8 +21,11 @@ interface AgentConfig {
   summary?: string;
 }
 
-export default function CreateAgentPage() {
+function CreateAgentContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const userName = searchParams.get('name') || '';
+
   const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'connected' | 'ended'>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [agentConfig, setAgentConfig] = useState<AgentConfig>({ conversationComplete: false });
@@ -31,25 +35,32 @@ export default function CreateAgentPage() {
 
   const startCall = async () => {
     setCallStatus('connecting');
-    
+
     try {
-      // Get signed URL from our API
       const response = await fetch('/api/setup-agent/voice/start', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to start call');
       }
 
-      // Initialize ElevenLabs conversation
       const { Conversation } = await import('@elevenlabs/client');
-      
+
+      // Build dynamic variables for personalization
+      const dynamicVariables: Record<string, string> = {};
+      if (userName) {
+        dynamicVariables.user_name = userName;
+        dynamicVariables.first_name = userName.split(' ')[0];
+      }
+
       const conv = await Conversation.startSession({
-        agentId: data.agentId,
         signedUrl: data.signedUrl,
+        dynamicVariables: Object.keys(dynamicVariables).length > 0 ? dynamicVariables : undefined,
         onConnect: () => {
           setCallStatus('connected');
         },
@@ -103,9 +114,9 @@ export default function CreateAgentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.config) {
         setAgentConfig(data.config);
         if (data.config.conversationComplete || data.config.summary) {
@@ -114,6 +125,10 @@ export default function CreateAgentPage() {
       }
     } catch (error) {
       console.error('Failed to extract config:', error);
+      // Still show confirmation if we have transcript
+      if (transcript.length > 5) {
+        setShowConfirmation(true);
+      }
     }
   };
 
@@ -124,44 +139,48 @@ export default function CreateAgentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-amber-50">
       {/* Header */}
-      <header className="border-b border-slate-800 px-4 py-4">
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
-            <Bot className="w-5 h-5 text-purple-400" />
+      <div className="bg-white/70 backdrop-blur-sm border-b border-violet-100">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-200">
+            <MessageSquare className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-semibold">Setup Agent</h1>
-            <p className="text-sm text-slate-400">Voice-powered interviewer design</p>
+            <h1 className="font-bold text-gray-900">Talk to Sandra</h1>
+            <p className="text-sm text-gray-500">Design your interview panel</p>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
         <div className="text-center max-w-lg">
-          
+
           {/* Idle State */}
           {callStatus === 'idle' && (
             <>
-              <div className="w-32 h-32 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
-                <Phone className="w-12 h-12 text-purple-400" />
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
+                <Phone className="w-14 h-14 text-white" />
               </div>
-              <h2 className="text-2xl font-bold mb-4">Ready to design your AI interviewer</h2>
-              <p className="text-slate-400 mb-8">
-                Start a voice conversation with our Setup Agent. Just tell us what you need â€” 
-                we'll design a custom AI interviewer based on your requirements.
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                {userName ? `Hi ${userName.split(' ')[0]}! 👋` : 'Ready to design your panel'}
+              </h2>
+              <p className="text-gray-500 mb-8 text-lg">
+                {userName
+                  ? "I'm Sandra, your AI assistant. Let's create your first interview panel together!"
+                  : "Start a voice conversation with Sandra. Just tell her what you need — she'll design a custom AI interviewer for you."
+                }
               </p>
               <button
                 onClick={startCall}
-                className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-green-500/25"
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 transition-all hover:scale-105"
               >
                 <Phone className="w-6 h-6" />
-                Start Call
+                Start Call with Sandra
               </button>
-              <p className="text-sm text-slate-500 mt-4">
-                Takes about 3-5 minutes
+              <p className="text-sm text-gray-400 mt-6">
+                ✨ Takes about 3-5 minutes
               </p>
             </>
           )}
@@ -169,11 +188,11 @@ export default function CreateAgentPage() {
           {/* Connecting State */}
           {callStatus === 'connecting' && (
             <>
-              <div className="w-32 h-32 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
-                <Loader2 className="w-12 h-12 text-purple-400 animate-spin" />
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
+                <Loader2 className="w-14 h-14 text-white animate-spin" />
               </div>
-              <h2 className="text-2xl font-bold mb-4">Connecting...</h2>
-              <p className="text-slate-400">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Connecting to Sandra...</h2>
+              <p className="text-gray-500">
                 Setting up your voice session
               </p>
             </>
@@ -182,40 +201,40 @@ export default function CreateAgentPage() {
           {/* Connected State */}
           {callStatus === 'connected' && (
             <>
-              <div className="w-32 h-32 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
-                <Mic className="w-12 h-12 text-green-400" />
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300 animate-pulse">
+                <Mic className="w-14 h-14 text-white" />
               </div>
-              <h2 className="text-2xl font-bold mb-4 text-green-400">Call in progress</h2>
-              <p className="text-slate-400 mb-8">
-                Speak naturally â€” the Setup Agent is listening
+              <h2 className="text-2xl font-bold text-emerald-600 mb-4">Connected with Sandra</h2>
+              <p className="text-gray-500 mb-8">
+                Speak naturally — Sandra is listening 🎙️
               </p>
-              
+
               {/* Call Controls */}
               <div className="flex items-center justify-center gap-4">
                 <button
                   onClick={toggleMute}
-                  className={`p-4 rounded-full transition ${
+                  className={`p-5 rounded-2xl transition-all shadow-lg ${
                     isMuted 
-                      ? 'bg-yellow-500/20 text-yellow-400' 
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-amber-100 text-amber-600 shadow-amber-200' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
                 </button>
                 <button
                   onClick={endCall}
-                  className="p-4 bg-red-600 hover:bg-red-500 text-white rounded-full transition"
+                  className="p-5 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-2xl shadow-lg shadow-red-200 hover:shadow-xl transition-all"
                 >
-                  <PhoneOff className="w-6 h-6" />
+                  <PhoneOff className="w-7 h-7" />
                 </button>
               </div>
 
               {/* Live Transcript Preview */}
               {transcript.length > 0 && (
-                <div className="mt-8 text-left bg-slate-900 rounded-xl p-4 max-h-48 overflow-y-auto">
-                  <p className="text-xs text-slate-500 mb-2">Live transcript</p>
+                <div className="mt-10 text-left bg-white rounded-2xl p-5 max-h-48 overflow-y-auto border border-gray-100 shadow-sm">
+                  <p className="text-xs text-gray-400 mb-3 font-medium">Live transcript</p>
                   {transcript.slice(-5).map((line, i) => (
-                    <p key={i} className="text-sm text-slate-400">{line}</p>
+                    <p key={i} className="text-sm text-gray-600 mb-1">{line}</p>
                   ))}
                 </div>
               )}
@@ -225,37 +244,36 @@ export default function CreateAgentPage() {
           {/* Call Ended State */}
           {callStatus === 'ended' && !showConfirmation && (
             <>
-              <div className="w-32 h-32 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-8">
-                <PhoneOff className="w-12 h-12 text-slate-500" />
+              <div className="w-32 h-32 rounded-3xl bg-gray-100 flex items-center justify-center mx-auto mb-8">
+                <Loader2 className="w-14 h-14 text-violet-500 animate-spin" />
               </div>
-              <h2 className="text-2xl font-bold mb-4">Call ended</h2>
-              <p className="text-slate-400 mb-8">
-                Processing your conversation...
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Processing...</h2>
+              <p className="text-gray-500">
+                Sandra is preparing your panel configuration
               </p>
-              <Loader2 className="w-8 h-8 animate-spin text-purple-500 mx-auto" />
             </>
           )}
 
           {/* Confirmation Ready */}
           {showConfirmation && (
             <>
-              <div className="w-32 h-32 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-8">
-                <CheckCircle className="w-12 h-12 text-green-400" />
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300">
+                <CheckCircle className="w-14 h-14 text-white" />
               </div>
-              <h2 className="text-2xl font-bold mb-4 text-green-400">Ready to create your interviewer!</h2>
-              <p className="text-slate-400 mb-8">
-                I've captured everything from our conversation. Review and confirm to create your AI interviewer.
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Your panel is ready! 🎉</h2>
+              <p className="text-gray-500 mb-8">
+                Sandra captured everything from your conversation. Review and confirm to create your AI interviewer.
               </p>
-              
+
               {agentConfig.summary && (
-                <div className="bg-slate-900 rounded-xl p-4 mb-8 text-left">
-                  <p className="text-sm text-slate-300">{agentConfig.summary}</p>
+                <div className="bg-white rounded-2xl p-6 mb-8 text-left border border-gray-100 shadow-sm">
+                  <p className="text-gray-700">{agentConfig.summary}</p>
                 </div>
               )}
 
               <button
                 onClick={proceedToConfirmation}
-                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-medium transition"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-violet-200 hover:shadow-2xl transition-all"
               >
                 Review & Create
                 <ArrowRight className="w-5 h-5" />
@@ -266,12 +284,23 @@ export default function CreateAgentPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 px-4 py-4 text-center">
-        <p className="text-xs text-slate-500">
-          Powered by ElevenLabs Conversational AI
+      <footer className="border-t border-gray-100 px-6 py-4 text-center bg-white/50">
+        <p className="text-xs text-gray-400">
+          Powered by ElevenLabs Conversational AI ✨
         </p>
       </footer>
     </div>
   );
 }
 
+export default function CreateAgentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-amber-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+      </div>
+    }>
+      <CreateAgentContent />
+    </Suspense>
+  );
+}
