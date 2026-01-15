@@ -75,7 +75,8 @@ async function updateClientConfig(ctx: ProvisionContext, repoName: string, heade
 export const clientConfig = {
   platform: { 
     name: "${ctx.platformName}", 
-    tagline: "AI-Powered Interviews" 
+    tagline: "AI-Powered Interviews",
+    description: "AI-Powered Interview Platform" 
   },
   company: { 
     name: "${ctx.companyName}", 
