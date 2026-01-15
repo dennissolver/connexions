@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const { transcript, conversationId } = await request.json();
 
-    if (!transcript) {
+    if (!transcript || transcript.trim().length === 0) {
       return NextResponse.json(
         { error: 'No transcript provided' },
         { status: 400 }
@@ -24,18 +24,26 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `Extract the platform configuration from this setup conversation transcript. Return ONLY valid JSON with these fields:
+          content: `Extract the interview panel configuration from this setup conversation with Sandra. Return ONLY valid JSON matching this exact structure:
 
 {
-  "platformName": "string - the name of their platform/company",
-  "platformSlug": "string - URL-friendly version (lowercase, hyphens)",
-  "adminEmail": "string - their email address",
-  "adminName": "string - their name",
-  "primaryColor": "string - hex color or null",
-  "description": "string - brief description of what they're building",
-  "agentType": "string - 'interview' | 'survey' | 'feedback' | 'screening'",
-  "voicePreference": "string - 'male' | 'female' | null"
+  "clientName": "string - the person's name",
+  "companyName": "string - their company/organization name",
+  "interviewPurpose": "string - what they want to learn/achieve",
+  "targetAudience": "string - who they want to interview",
+  "interviewStyle": "string - conversational, structured, or mixed",
+  "tone": "string - professional, friendly, casual, etc.",
+  "timeLimit": number or null - interview duration in minutes,
+  "outputsRequired": ["array of strings - what deliverables they need"],
+  "keyTopics": ["array of strings - main topics to cover"],
+  "keyQuestions": ["array of strings - specific questions to ask"],
+  "constraints": ["array of strings - any limitations or requirements"],
+  "conversationComplete": true,
+  "summary": "string - 2-3 sentence summary of what was configured"
 }
+
+For any fields not mentioned in the conversation, use reasonable defaults or null.
+Set conversationComplete to true if enough information was gathered to create a basic interview panel.
 
 Transcript:
 ${transcript}`
@@ -58,6 +66,11 @@ ${transcript}`
     }
 
     const config = JSON.parse(jsonMatch[0]);
+
+    // Ensure conversationComplete is set
+    if (config.conversationComplete === undefined) {
+      config.conversationComplete = true;
+    }
 
     return NextResponse.json({
       success: true,
