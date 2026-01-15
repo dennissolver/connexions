@@ -1,36 +1,27 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { DEFAULT_DASHBOARD_METRICS } from '@/lib/dashboard/defaultMetrics';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const supabase = supabaseAdmin;
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const clientId = searchParams.get('clientId');
 
-  const [
-    agentsRes,
-    interviewsRes,
-    minutesRes,
-  ] = await Promise.all([
-    supabase.from('agents').select('*', { count: 'exact', head: true }),
-    supabase.from('interviews').select('*', { count: 'exact', head: true }),
-    supabase.from('interviews').select('duration_minutes'),
-  ]);
+  if (!clientId) {
+    return NextResponse.json(DEFAULT_DASHBOARD_METRICS);
+  }
 
-  const totalMinutes =
-    minutesRes.data?.reduce(
-      (sum, row) => sum + (row.duration_minutes ?? 0),
-      0
-    ) ?? 0;
+  const { count, error } = await supabaseAdmin
+    .from('agents')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', clientId);
 
-  const totalAgents = agentsRes.count ?? 0;
-  const totalInterviews = interviewsRes.count ?? 0;
+  if (error) {
+    return NextResponse.json(DEFAULT_DASHBOARD_METRICS);
+  }
 
   return NextResponse.json({
-    totals: {
-      total_agents: totalAgents,
-      total_interviews: totalInterviews,
-      total_minutes: totalMinutes,
-    },
-    is_empty: totalAgents === 0 && totalInterviews === 0,
+    total_agents: count ?? 0,
   });
 }

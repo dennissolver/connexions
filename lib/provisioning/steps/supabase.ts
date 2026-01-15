@@ -1,219 +1,187 @@
-import { generatePassword } from '@/lib/security/passwords';
+// lib/provisioning/steps/supabase.ts
 
-/**
- * Supabase provisioning steps
- * ----------------------------
- * Pure, idempotent functions.
- * No HTTP routes. No orchestration. No retries.
- */
+import { ProvisionContext, ProvisionStepResult } from '../types';
 
 const SUPABASE_API = 'https://api.supabase.com/v1';
 
-export interface SupabaseProjectInfo {
-  projectRef: string;
-  supabaseUrl: string;
-  anonKey: string;
-  serviceKey: string;
-  created: boolean;
+const CHILD_SCHEMA = `
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS agents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  status TEXT DEFAULT 'active',
+  company_name TEXT,
+  interview_purpose TEXT,
+  target_interviewees TEXT,
+  interviewer_tone TEXT DEFAULT 'professional',
+  estimated_duration_mins INT DEFAULT 10,
+  elevenlabs_agent_id TEXT,
+  voice_id TEXT,
+  key_topics TEXT[],
+  key_questions TEXT[],
+  system_prompt TEXT,
+  first_message TEXT,
+  welcome_message TEXT,
+  closing_message TEXT,
+  primary_color TEXT DEFAULT '#8B5CF6',
+  background_color TEXT DEFAULT '#0F172A',
+  logo_url TEXT,
+  total_interviews INT DEFAULT 0,
+  completed_interviews INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS interviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending',
+  source TEXT DEFAULT 'voice',
+  interviewee_name TEXT,
+  interviewee_email TEXT,
+  interviewee_profile JSONB DEFAULT '{}',
+  conversation_id TEXT,
+  messages JSONB DEFAULT '[]',
+  transcript TEXT,
+  transcript_url TEXT,
+  summary TEXT,
+  feedback JSONB DEFAULT '{}',
+  extracted_data JSONB DEFAULT '{}',
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  duration_seconds INT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
+CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
+CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
+`;
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 24; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
 }
 
-/**
- * Create (or find) a Supabase project by name.
- */
-export async function createSupabaseProject(
-  token: string,
-  orgId: string,
-  platformName: string
-): Promise<{ projectRef: string; created: boolean }> {
-  const safeName = platformName
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .slice(0, 40);
-
-  const listRes = await fetch(`${SUPABASE_API}/projects`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!listRes.ok) {
-    throw new Error('Failed to list Supabase projects');
+export async function createSupabaseProject(ctx: ProvisionContext): Promise<ProvisionStepResult> {
+  if (ctx.metadata.supabaseProjectRef && ctx.metadata.supabaseUrl) {
+    return { nextState: 'SUPABASE_READY', metadata: ctx.metadata };
   }
+
+  const safeName = ctx.projectSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+
+  // Check for existing
+  const listRes = await fetch(`${SUPABASE_API}/projects`, {
+    headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
+  });
+  if (!listRes.ok) throw new Error('Failed to list Supabase projects');
 
   const projects = await listRes.json();
   const existing = projects.find((p: any) => p.name === safeName);
 
   if (existing) {
-    return { projectRef: existing.id, created: false };
+    const keys = await fetchKeys(ctx.supabaseToken, existing.id);
+    return {
+      nextState: 'SUPABASE_READY',
+      metadata: {
+        ...ctx.metadata,
+        supabaseProjectRef: existing.id,
+        supabaseUrl: `https://${existing.id}.supabase.co`,
+        supabaseAnonKey: keys.anonKey,
+        supabaseServiceKey: keys.serviceKey,
+      },
+    };
   }
 
+  // Create new
   const createRes = await fetch(`${SUPABASE_API}/projects`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: safeName,
-      organization_id: orgId,
+      organization_id: ctx.supabaseOrgId,
       region: 'ap-southeast-2',
       plan: 'free',
       db_pass: generatePassword(),
     }),
   });
 
-  if (!createRes.ok) {
-    const err = await createRes.text();
-    throw new Error(`Supabase create failed: ${err}`);
-  }
-
+  if (!createRes.ok) throw new Error(`Supabase create failed: ${await createRes.text()}`);
   const project = await createRes.json();
-  return { projectRef: project.id, created: true };
+
+  return {
+    nextState: 'SUPABASE_CREATING',
+    metadata: { ...ctx.metadata, supabaseProjectRef: project.id, supabaseUrl: `https://${project.id}.supabase.co` },
+  };
 }
 
-/**
- * Check if the Supabase project is ready.
- * Single check only — no loops.
- */
-export async function isSupabaseReady(
-  token: string,
-  projectRef: string
-): Promise<boolean> {
-  const res = await fetch(`${SUPABASE_API}/projects/${projectRef}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<ProvisionStepResult> {
+  const projectRef = ctx.metadata.supabaseProjectRef;
+  if (!projectRef) throw new Error('No Supabase project ref');
 
-  if (!res.ok) return false;
+  // Check ready
+  const res = await fetch(`${SUPABASE_API}/projects/${projectRef}`, {
+    headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
+  });
+  if (!res.ok) return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
 
   const project = await res.json();
-  return project.status === 'ACTIVE_HEALTHY';
-}
-
-/**
- * Fetch API keys.
- */
-export async function fetchSupabaseKeys(
-  token: string,
-  projectRef: string
-): Promise<{ anonKey: string; serviceKey: string }> {
-  const res = await fetch(
-    `${SUPABASE_API}/projects/${projectRef}/api-keys`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to fetch API keys: ${err}`);
+  if (project.status !== 'ACTIVE_HEALTHY') {
+    return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
   }
 
+  // Get keys
+  const keys = await fetchKeys(ctx.supabaseToken, projectRef);
+
+  // Run migration
+  await fetch(`${SUPABASE_API}/projects/${projectRef}/database/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: CHILD_SCHEMA }),
+  });
+
+  // Create buckets
+  const supabaseUrl = `https://${projectRef}.supabase.co`;
+  for (const name of ['transcripts', 'recordings', 'exports', 'assets']) {
+    await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${keys.serviceKey}`, 'Content-Type': 'application/json', apikey: keys.serviceKey },
+      body: JSON.stringify({ id: name, name, public: name === 'assets' }),
+    }).catch(() => {});
+  }
+
+  // Configure auth
+  const vercelUrl = `https://${ctx.projectSlug}.vercel.app`;
+  await fetch(`${SUPABASE_API}/projects/${projectRef}/config/auth`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      site_url: vercelUrl,
+      uri_allow_list: [`${vercelUrl}/**`, 'http://localhost:3000/**'],
+      redirect_urls: [`${vercelUrl}/auth/callback`, 'http://localhost:3000/auth/callback'],
+    }),
+  }).catch(() => {});
+
+  return {
+    nextState: 'SUPABASE_READY',
+    metadata: { ...ctx.metadata, supabaseAnonKey: keys.anonKey, supabaseServiceKey: keys.serviceKey },
+  };
+}
+
+async function fetchKeys(token: string, projectRef: string): Promise<{ anonKey: string; serviceKey: string }> {
+  const res = await fetch(`${SUPABASE_API}/projects/${projectRef}/api-keys`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch keys');
   const keys = await res.json();
-
-  const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
-  const serviceKey = keys.find(
-    (k: any) => k.name === 'service_role'
-  )?.api_key;
-
-  if (!anonKey || !serviceKey) {
-    throw new Error('Missing Supabase API keys');
-  }
-
-  return { anonKey, serviceKey };
-}
-
-/**
- * Run schema migration (idempotent).
- */
-export async function runSupabaseMigration(
-  token: string,
-  projectRef: string,
-  schemaSql: string
-): Promise<void> {
-  const res = await fetch(
-    `${SUPABASE_API}/projects/${projectRef}/database/query`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: schemaSql }),
-    }
-  );
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Schema migration failed: ${error}`);
-  }
-}
-
-/**
- * Configure Supabase auth URLs.
- */
-export async function configureSupabaseAuth(
-  token: string,
-  projectRef: string,
-  publicBaseUrl: string
-): Promise<void> {
-  const siteUrl = publicBaseUrl.replace(/\/$/, '');
-  const redirectUrl = `${siteUrl}/auth/callback`;
-
-  const res = await fetch(
-    `${SUPABASE_API}/projects/${projectRef}/config/auth`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        site_url: siteUrl,
-        uri_allow_list: redirectUrl,
-        redirect_urls: redirectUrl,
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Auth config failed: ${error}`);
-  }
-}
-
-/**
- * Create storage buckets (idempotent).
- */
-export async function createSupabaseBuckets(
-  supabaseUrl: string,
-  serviceKey: string
-): Promise<void> {
-  const buckets = [
-    { name: 'transcripts', public: false },
-    { name: 'recordings', public: false },
-    { name: 'exports', public: false },
-    { name: 'assets', public: true },
-    { name: 'attachments', public: false },
-  ];
-
-  for (const bucket of buckets) {
-    const res = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        apikey: serviceKey,
-      },
-      body: JSON.stringify({
-        id: bucket.name,
-        name: bucket.name,
-        public: bucket.public,
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      if (!text.includes('already exists')) {
-        throw new Error(`Bucket ${bucket.name} failed: ${text}`);
-      }
-    }
-  }
+  return {
+    anonKey: keys.find((k: any) => k.name === 'anon')?.api_key || '',
+    serviceKey: keys.find((k: any) => k.name === 'service_role')?.api_key || '',
+  };
 }

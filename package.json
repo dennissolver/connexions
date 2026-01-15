@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lint:lifecycle": "powershell -ExecutionPolicy Bypass -File ./scripts/enforce-dashboard-rpc.ps1",
     "lint": "next lint"
   },
   "dependencies": {

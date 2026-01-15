@@ -1,90 +1,49 @@
-﻿// lib/provisioning/engine.ts
+// lib/provisioning/engine.ts
+
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ProvisionState, ALLOWED_TRANSITIONS } from './states';
+import { ProvisionRun, ProvisionMetadata } from './types';
 
-/* ======================================================
-   READ ONLY — SAFE — NO SIDE EFFECTS
-====================================================== */
-export async function getProvisionRun(projectSlug: string) {
+export async function getProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
     .select('*')
     .eq('project_slug', projectSlug)
     .maybeSingle();
-
   if (error) throw error;
-
-  return data; // may be null
+  return data as ProvisionRun | null;
 }
 
-/* ======================================================
-   EXPLICIT CREATION — CALLED ONCE FROM SETUP FLOW
-====================================================== */
-export async function createProvisionRun(projectSlug: string) {
+export async function createProvisionRun(projectSlug: string, platformName: string, companyName: string): Promise<ProvisionRun> {
   const existing = await getProvisionRun(projectSlug);
   if (existing) return existing;
 
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
-    .insert({
-      project_slug: projectSlug,
-      state: 'INIT',
-      metadata: {},
-    })
+    .insert({ project_slug: projectSlug, platform_name: platformName, company_name: companyName, state: 'INIT', metadata: {} })
     .select()
     .single();
-
   if (error) throw error;
-
-  return data;
+  return data as ProvisionRun;
 }
 
-/* ======================================================
-   STATE MACHINE — ORCHESTRATOR ONLY
-====================================================== */
-export async function advanceState(
-  projectSlug: string,
-  from: ProvisionState,
-  to: ProvisionState,
-  metadata?: Record<string, any>
-) {
-  if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
-    throw new Error(`Invalid transition ${from} → ${to}`);
-  }
+export async function advanceState(projectSlug: string, from: ProvisionState, to: ProvisionState, metadata?: ProvisionMetadata): Promise<ProvisionRun> {
+  if (!ALLOWED_TRANSITIONS[from]?.includes(to)) throw new Error(`Invalid: ${from} → ${to}`);
 
   const { data, error } = await supabaseAdmin
     .from('provision_runs')
-    .update({
-      state: to,
-      metadata: metadata ?? {},
-      updated_at: new Date().toISOString(),
-    })
+    .update({ state: to, metadata: metadata ?? {}, updated_at: new Date().toISOString() })
     .eq('project_slug', projectSlug)
     .eq('state', from)
     .select()
     .single();
-
   if (error) throw error;
-  if (!data) throw new Error('State transition race condition');
-
-  return data;
+  return data as ProvisionRun;
 }
 
-/* ======================================================
-   TERMINAL FAILURE
-====================================================== */
-export async function failRun(
-  projectSlug: string,
-  errorMessage: string
-) {
-  const { error } = await supabaseAdmin
+export async function failRun(projectSlug: string, errorMessage: string): Promise<void> {
+  await supabaseAdmin
     .from('provision_runs')
-    .update({
-      state: 'FAILED',
-      error: errorMessage,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ state: 'FAILED', error: errorMessage, updated_at: new Date().toISOString() })
     .eq('project_slug', projectSlug);
-
-  if (error) throw error;
 }

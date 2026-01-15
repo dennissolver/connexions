@@ -1,4 +1,4 @@
-﻿import { PROVISION_UI } from '@/lib/provisioning/uiSteps';
+import { PROVISION_UI } from '@/lib/provisioning/states';
 import { ProvisionState } from '@/lib/provisioning/states';
 
 type Props = {
