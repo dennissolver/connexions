@@ -21,7 +21,7 @@ export async function createVercelProject(ctx: ProvisionContext): Promise<Provis
     NEXT_PUBLIC_PLATFORM_NAME: ctx.platformName,
     NEXT_PUBLIC_COMPANY_NAME: ctx.companyName,
     ELEVENLABS_API_KEY: ctx.elevenLabsApiKey,
-    NEXT_PUBLIC_ELEVENLABS_SETUP_AGENT_ID: ctx.metadata.elevenLabsAgentId || '',
+    NEXT_PUBLIC_ELEVENLABS_AGENT_ID: ctx.metadata.elevenLabsAgentId || '', // Fixed: was SETUP_AGENT_ID
     PARENT_WEBHOOK_URL: ctx.parentWebhookUrl,
   };
 
@@ -177,5 +177,3 @@ async function updateEnvVars(
     }
   }
 }
-
-
