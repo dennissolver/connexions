@@ -66,14 +66,22 @@ export default function SetupPage() {
         body: JSON.stringify(data),
       });
 
+      // Parse response once
+      const result = await res.json();
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to start provisioning");
+        throw new Error(result.error || "Failed to start provisioning");
       }
 
-      const { projectSlug } = await res.json();
-      router.push(`/factory/provision?projectSlug=${projectSlug}`);
+      // Validate we got the projectSlug
+      if (!result.projectSlug) {
+        console.error("API response missing projectSlug:", result);
+        throw new Error("Server did not return project identifier");
+      }
+
+      router.push(`/factory/provision?projectSlug=${result.projectSlug}`);
     } catch (err: any) {
+      console.error("Setup error:", err);
       setError(err.message || "Something went wrong");
       setLoading(false);
     }
