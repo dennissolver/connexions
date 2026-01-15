@@ -33,7 +33,7 @@ export async function createVercelProject(ctx: ProvisionContext): Promise<Provis
     return { nextState: 'VERCEL_CREATING', metadata: { ...ctx.metadata, vercelProjectId: existing.id, vercelUrl } };
   }
 
-  // Create project
+  // Create project (this will auto-trigger a deployment via GitHub integration)
   const createRes = await fetch(`${VERCEL_API}/v10/projects${teamQuery}`, {
     method: 'POST',
     headers,
@@ -58,20 +58,80 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
   const teamQuery = ctx.vercelTeamId ? `?teamId=${ctx.vercelTeamId}` : '';
   const headers = { Authorization: `Bearer ${ctx.vercelToken}`, 'Content-Type': 'application/json' };
 
-  // Check existing deployment
+  // If we have a deployment ID, check its status
   if (ctx.metadata.vercelDeploymentId) {
     const res = await fetch(`${VERCEL_API}/v13/deployments/${ctx.metadata.vercelDeploymentId}${teamQuery}`, { headers });
     if (res.ok) {
       const deployment = await res.json();
-      if (deployment.readyState === 'READY') return { nextState: 'ELEVENLABS_CREATING', metadata: ctx.metadata };
+      console.log(`[vercel] Deployment ${ctx.metadata.vercelDeploymentId} state: ${deployment.readyState}`);
+
+      if (deployment.readyState === 'READY') {
+        return { nextState: 'ELEVENLABS_CREATING', metadata: ctx.metadata };
+      }
       if (deployment.readyState === 'ERROR' || deployment.readyState === 'CANCELED') {
+        // Reset and try again
         return { nextState: 'VERCEL_CREATING', metadata: { ...ctx.metadata, vercelDeploymentId: undefined } };
       }
+      // Still building
       return { nextState: 'VERCEL_DEPLOYING', metadata: ctx.metadata };
     }
   }
 
-  // Trigger deployment
+  // No deployment ID - query for the latest deployment on this project
+  const projectId = ctx.metadata.vercelProjectId;
+  if (!projectId) {
+    throw new Error('No Vercel project ID');
+  }
+
+  // Get latest deployments for this project
+  const listRes = await fetch(
+    `${VERCEL_API}/v6/deployments?projectId=${projectId}&limit=5${teamQuery ? '&' + teamQuery.slice(1) : ''}`,
+    { headers }
+  );
+
+  if (listRes.ok) {
+    const data = await listRes.json();
+    const deployments = data.deployments || [];
+
+    console.log(`[vercel] Found ${deployments.length} deployments for project ${projectId}`);
+
+    if (deployments.length > 0) {
+      // Get the most recent deployment
+      const latest = deployments[0];
+      console.log(`[vercel] Latest deployment: ${latest.uid}, state: ${latest.readyState || latest.state}`);
+
+      const state = latest.readyState || latest.state;
+
+      if (state === 'READY') {
+        return {
+          nextState: 'ELEVENLABS_CREATING',
+          metadata: { ...ctx.metadata, vercelDeploymentId: latest.uid }
+        };
+      }
+
+      if (state === 'ERROR' || state === 'CANCELED') {
+        // Trigger a new deployment
+        return await manuallyTriggerDeployment(ctx, headers, teamQuery);
+      }
+
+      // Building or queued - save the ID and wait
+      return {
+        nextState: 'VERCEL_DEPLOYING',
+        metadata: { ...ctx.metadata, vercelDeploymentId: latest.uid }
+      };
+    }
+  }
+
+  // No deployments found - trigger one manually
+  console.log(`[vercel] No deployments found, triggering manually`);
+  return await manuallyTriggerDeployment(ctx, headers, teamQuery);
+}
+
+async function manuallyTriggerDeployment(
+  ctx: ProvisionContext,
+  headers: Record<string, string>,
+  teamQuery: string
+): Promise<ProvisionStepResult> {
   const deployRes = await fetch(`${VERCEL_API}/v13/deployments${teamQuery}`, {
     method: 'POST',
     headers,
@@ -79,19 +139,36 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
       name: ctx.projectSlug,
       project: ctx.metadata.vercelProjectId,
       target: 'production',
-      gitSource: { type: 'github', repo: `${ctx.githubOwner}/${ctx.metadata.githubRepoName}`, ref: 'main' },
+      gitSource: {
+        type: 'github',
+        repo: `${ctx.githubOwner}/${ctx.metadata.githubRepoName}`,
+        ref: 'main'
+      },
     }),
   });
 
   if (deployRes.ok) {
     const deployment = await deployRes.json();
-    return { nextState: 'VERCEL_DEPLOYING', metadata: { ...ctx.metadata, vercelDeploymentId: deployment.id } };
+    console.log(`[vercel] Triggered deployment: ${deployment.id}`);
+    return {
+      nextState: 'VERCEL_DEPLOYING',
+      metadata: { ...ctx.metadata, vercelDeploymentId: deployment.id }
+    };
   }
 
+  const errorText = await deployRes.text();
+  console.error(`[vercel] Failed to trigger deployment: ${errorText}`);
+
+  // Don't throw - return deploying state and try again next poll
   return { nextState: 'VERCEL_DEPLOYING', metadata: ctx.metadata };
 }
 
-async function updateEnvVars(token: string, projectId: string, envVars: Record<string, string>, teamId?: string): Promise<void> {
+async function updateEnvVars(
+  token: string,
+  projectId: string,
+  envVars: Record<string, string>,
+  teamId?: string
+): Promise<void> {
   const teamQuery = teamId ? `?teamId=${teamId}` : '';
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
