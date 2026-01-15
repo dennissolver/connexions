@@ -4,8 +4,19 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Loader2, CheckCircle, AlertCircle, Edit3, Save, X,
-  MessageSquare, Clock, Users, Sparkles, ArrowRight, Plus, Trash2
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Edit3,
+  Save,
+  X,
+  MessageSquare,
+  Clock,
+  Users,
+  Sparkles,
+  ArrowRight,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 interface PanelDraft {
@@ -21,6 +32,85 @@ interface PanelDraft {
   created_at: string;
 }
 
+interface EditableFieldProps {
+  label: string;
+  value: string;
+  editing: boolean;
+  editValue: string;
+  onStartEdit: () => void;
+  onCancel: () => void;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  placeholder?: string;
+  required?: boolean;
+  icon?: React.ElementType;
+}
+
+function EditableField({
+  label,
+  value,
+  editing,
+  editValue,
+  onStartEdit,
+  onCancel,
+  onChange,
+  onSave,
+  placeholder,
+  required,
+  icon: Icon,
+}: EditableFieldProps) {
+  if (editing) {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-violet-300 shadow-sm p-5">
+        <label className="text-sm font-medium text-gray-700 mb-2 block">
+          {label} {required && <span className="text-red-400">*</span>}
+        </label>
+        <input
+          type="text"
+          value={editValue}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500 mb-3"
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={onSave}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition"
+          >
+            <Save className="w-4 h-4" />
+            Save
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition"
+          >
+            <X className="w-4 h-4" />
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-violet-200 transition cursor-pointer group"
+      onClick={onStartEdit}
+    >
+      <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
+        {label} {required && <span className="text-red-400">*</span>}
+      </label>
+      <div className="flex items-center justify-between">
+        <span className={value ? 'text-gray-900' : 'text-gray-400 italic'}>
+          {value || placeholder || '(not set)'}
+        </span>
+        <Edit3 className="w-4 h-4 text-gray-300 group-hover:text-violet-400 transition" />
+      </div>
+    </div>
+  );
+}
+
 export default function DraftReviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -31,27 +121,26 @@ export default function DraftReviewPage() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
 
-  // Edit states
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [newQuestion, setNewQuestion] = useState('');
 
   useEffect(() => {
+    const fetchDraft = async () => {
+      try {
+        const res = await fetch(`/api/panels/drafts/${draftId}`);
+        if (!res.ok) throw new Error('Draft not found');
+        const data = await res.json();
+        setDraft(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDraft();
   }, [draftId]);
-
-  const fetchDraft = async () => {
-    try {
-      const res = await fetch(`/api/panels/drafts/${draftId}`);
-      if (!res.ok) throw new Error('Draft not found');
-      const data = await res.json();
-      setDraft(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const updateField = (field: string, value: any) => {
     if (!draft) return;
@@ -69,7 +158,7 @@ export default function DraftReviewPage() {
     if (!newQuestion.trim() || !draft) return;
     setDraft({
       ...draft,
-      questions: [...draft.questions, newQuestion.trim()]
+      questions: [...draft.questions, newQuestion.trim()],
     });
     setNewQuestion('');
   };
@@ -78,7 +167,7 @@ export default function DraftReviewPage() {
     if (!draft) return;
     setDraft({
       ...draft,
-      questions: draft.questions.filter((_, i) => i !== index)
+      questions: draft.questions.filter((_, i) => i !== index),
     });
   };
 
@@ -102,16 +191,13 @@ export default function DraftReviewPage() {
 
       const result = await res.json();
       router.push(`/panels/${result.panelId}/success`);
-
     } catch (err: any) {
       setError(err.message);
       setPublishing(false);
     }
   };
 
-  const isValid = draft &&
-    draft.name &&
-    draft.questions.length >= 1;
+  const isValid = draft && draft.name && draft.questions.length >= 1;
 
   if (loading) {
     return (
@@ -137,7 +223,6 @@ export default function DraftReviewPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-amber-50">
-      {/* Header */}
       <div className="bg-white/70 backdrop-blur-sm border-b border-violet-100">
         <div className="max-w-3xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
@@ -146,13 +231,14 @@ export default function DraftReviewPage() {
             </div>
             <div>
               <h1 className="font-bold text-gray-900">Review Your Panel</h1>
-              <p className="text-sm text-gray-500">Make any changes, then create your interviewer</p>
+              <p className="text-sm text-gray-500">
+                Make any changes, then create your interviewer
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-3xl mx-auto px-6 py-8">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
@@ -161,7 +247,6 @@ export default function DraftReviewPage() {
         )}
 
         <div className="space-y-6">
-          {/* Panel Name */}
           <EditableField
             label="Panel Name"
             value={draft.name}
@@ -174,7 +259,6 @@ export default function DraftReviewPage() {
             required
           />
 
-          {/* Description */}
           <EditableField
             label="Description"
             value={draft.description}
@@ -187,7 +271,6 @@ export default function DraftReviewPage() {
             placeholder="What is this interview panel for?"
           />
 
-          {/* Interview Type */}
           <EditableField
             label="Interview Type"
             value={draft.interview_type}
@@ -200,7 +283,6 @@ export default function DraftReviewPage() {
             placeholder="e.g., Customer Feedback, Market Research"
           />
 
-          {/* Target Audience */}
           <EditableField
             label="Target Audience"
             value={draft.target_audience}
@@ -214,8 +296,116 @@ export default function DraftReviewPage() {
             icon={Users}
           />
 
-          {/* Tone */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <label className="text-sm font-medium text-gray-700 mb-2 block">Tone</label>
             <select
               value={draft.tone}
+              onChange={(e) => updateField('tone', e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="professional">Professional</option>
+              <option value="friendly">Friendly</option>
+              <option value="casual">Casual</option>
+              <option value="formal">Formal</option>
+            </select>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-400" />
+              Duration
+            </label>
+            <select
+              value={draft.duration_minutes}
+              onChange={(e) => updateField('duration_minutes', parseInt(e.target.value))}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value={5}>5 minutes</option>
+              <option value={10}>10 minutes</option>
+              <option value={15}>15 minutes</option>
+              <option value={20}>20 minutes</option>
+              <option value={30}>30 minutes</option>
+            </select>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <label className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-violet-400" />
+              Interview Questions
+              <span className="text-red-400">*</span>
+              <span className="text-xs text-gray-400 ml-auto">
+                {draft.questions.length} question{draft.questions.length !== 1 ? 's' : ''}
+              </span>
+            </label>
+
+            <ul className="space-y-2 mb-4">
+              {draft.questions.map((q, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-3 bg-gray-50 rounded-xl px-4 py-3 group"
+                >
+                  <span className="text-violet-400 font-medium text-sm mt-0.5">{i + 1}.</span>
+                  <span className="flex-1 text-gray-700">{q}</span>
+                  <button
+                    onClick={() => removeQuestion(i)}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addQuestion()}
+                placeholder="Add a question..."
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <button
+                onClick={addQuestion}
+                className="px-4 py-3 bg-violet-100 text-violet-600 rounded-xl hover:bg-violet-200 transition"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex gap-4">
+          <button
+            onClick={publishPanel}
+            disabled={!isValid || publishing}
+            className={`flex-1 flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-semibold text-lg transition-all ${
+              isValid && !publishing
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-200 hover:shadow-2xl hover:scale-[1.02]'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {publishing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Creating Your Panel...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-5 h-5" />
+                Create Interview Panel
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+        </div>
+
+        {!isValid && (
+          <p className="text-center text-sm text-amber-600 mt-4">
+            Please add a name and at least one question
+          </p>
+        )}
+      </main>
+    </div>
+  );
+}

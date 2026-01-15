@@ -4,8 +4,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  CheckCircle, Copy, ExternalLink, Share2, Mail,
-  Loader2, Sparkles, ArrowRight, MessageSquare, Link2
+  CheckCircle,
+  Copy,
+  ExternalLink,
+  Share2,
+  Mail,
+  Loader2,
+  Sparkles,
+  ArrowRight,
+  MessageSquare,
+  Link2
 } from 'lucide-react';
 
 interface Panel {
@@ -34,22 +42,22 @@ export default function PanelSuccessPage() {
   const dashboardUrl = `/dashboard`;
 
   useEffect(() => {
+    const fetchPanel = async () => {
+      try {
+        const res = await fetch(`/api/panels/${panelId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPanel(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch panel:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchPanel();
   }, [panelId]);
-
-  const fetchPanel = async () => {
-    try {
-      const res = await fetch(`/api/panels/${panelId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPanel(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch panel:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const copyToClipboard = async (text: string, type: string) => {
     try {
@@ -62,7 +70,9 @@ export default function PanelSuccessPage() {
   };
 
   const shareViaEmail = () => {
-    const subject = encodeURIComponent(`Interview Invitation: ${panel?.name || 'Interview Panel'}`);
+    const subject = encodeURIComponent(
+      `Interview Invitation: ${panel?.name || 'Interview Panel'}`
+    );
     const body = encodeURIComponent(
       `Hi,\n\nYou're invited to participate in an interview.\n\nClick here to start: ${interviewUrl}\n\nThis should take about ${panel?.settings?.duration_minutes || 15} minutes.\n\nThank you!`
     );
@@ -79,7 +89,6 @@ export default function PanelSuccessPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
-      {/* Header */}
       <div className="bg-white/70 backdrop-blur-sm border-b border-emerald-100">
         <div className="max-w-3xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
@@ -94,9 +103,7 @@ export default function PanelSuccessPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-3xl mx-auto px-6 py-12">
-        {/* Success Hero */}
         <div className="text-center mb-12">
           <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-emerald-200">
             <CheckCircle className="w-12 h-12 text-white" />
@@ -105,11 +112,11 @@ export default function PanelSuccessPage() {
             🎉 {panel?.name || 'Your Panel'} is Live!
           </h2>
           <p className="text-lg text-gray-500 max-w-md mx-auto">
-            Your AI interviewer is ready to conduct interviews. Share the link below to get started.
+            Your AI interviewer is ready to conduct interviews. Share the link below to get
+            started.
           </p>
         </div>
 
-        {/* Interview Link Card */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-100/50 p-8 mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -147,7 +154,6 @@ export default function PanelSuccessPage() {
             </button>
           </div>
 
-          {/* Share Options */}
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => window.open(interviewUrl, '_blank')}
@@ -164,10 +170,12 @@ export default function PanelSuccessPage() {
               Share via Email
             </button>
             <button
-              onClick={() => copyToClipboard(
-                `You're invited to participate in an interview: ${panel?.name}\n\nClick here to start: ${interviewUrl}`,
-                'message'
-              )}
+              onClick={() =>
+                copyToClipboard(
+                  `You're invited to participate in an interview: ${panel?.name}\n\nClick here to start: ${interviewUrl}`,
+                  'message'
+                )
+              }
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition ${
                 copied === 'message'
                   ? 'bg-emerald-100 text-emerald-600'
@@ -180,7 +188,6 @@ export default function PanelSuccessPage() {
           </div>
         </div>
 
-        {/* Panel Summary */}
         {panel && (
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -201,7 +208,9 @@ export default function PanelSuccessPage() {
               {panel.settings?.duration_minutes && (
                 <div>
                   <span className="text-gray-500">Duration</span>
-                  <p className="font-medium text-gray-900">{panel.settings.duration_minutes} minutes</p>
+                  <p className="font-medium text-gray-900">
+                    {panel.settings.duration_minutes} minutes
+                  </p>
                 </div>
               )}
               {panel.settings?.target_audience && (
@@ -214,6 +223,44 @@ export default function PanelSuccessPage() {
           </div>
         )}
 
-        {/* Next Steps */}
         <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-3xl border border-violet-100 p-8">
-          <h3 className="font-semibold t
+          <h3 className="font-semibold text-gray-900 mb-4">What&apos;s Next?</h3>
+          <ul className="space-y-3 text-gray-600 mb-6">
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-violet-200 text-violet-700 flex items-center justify-center text-sm font-medium shrink-0">
+                1
+              </span>
+              <span>Share the interview link with your participants</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-violet-200 text-violet-700 flex items-center justify-center text-sm font-medium shrink-0">
+                2
+              </span>
+              <span>Interviews will be conducted automatically by your AI interviewer</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 rounded-full bg-violet-200 text-violet-700 flex items-center justify-center text-sm font-medium shrink-0">
+                3
+              </span>
+              <span>View transcripts and insights in your dashboard</span>
+            </li>
+          </ul>
+
+          <button
+            onClick={() => router.push(dashboardUrl)}
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-2xl font-semibold shadow-lg shadow-violet-200 hover:shadow-xl transition"
+          >
+            Go to Dashboard
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
+      </main>
+
+      <footer className="border-t border-gray-100 px-6 py-4 text-center bg-white/50">
+        <p className="text-xs text-gray-400">
+          Need help? Contact support or check our documentation ✨
+        </p>
+      </footer>
+    </div>
+  );
+}

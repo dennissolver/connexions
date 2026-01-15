@@ -4,8 +4,14 @@
 import { useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Phone, PhoneOff, Loader2, Mic, MicOff,
-  MessageSquare, AlertCircle, RefreshCw
+  Phone,
+  PhoneOff,
+  Loader2,
+  Mic,
+  MicOff,
+  MessageSquare,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 type CallStatus = 'idle' | 'connecting' | 'connected' | 'polling' | 'error';
@@ -26,48 +32,51 @@ function CreateAgentContent() {
   const MAX_POLL_ATTEMPTS = 20;
   const POLL_INTERVAL = 1500;
 
-  // Poll for draft after call ends
-  const pollForDraft = useCallback(async (convId: string, attempt: number = 0) => {
-    if (attempt >= MAX_POLL_ATTEMPTS) {
-      setError('Could not find your panel draft. Sandra may not have saved it yet. Please try again.');
-      setCallStatus('error');
-      return;
-    }
-
-    setPollAttempts(attempt + 1);
-
-    try {
-      const res = await fetch(`/api/panels/drafts/by-conversation/${convId}`);
-
-      if (res.ok) {
-        const draft = await res.json();
-        if (draft.found && draft.id) {
-          // Success! Redirect to draft review
-          router.push(`/panels/drafts/${draft.id}`);
-          return;
-        }
+  const pollForDraft = useCallback(
+    async (convId: string, attempt: number = 0) => {
+      if (attempt >= MAX_POLL_ATTEMPTS) {
+        setError(
+          'Could not find your panel draft. Sandra may not have saved it yet. Please try again.'
+        );
+        setCallStatus('error');
+        return;
       }
 
-      // Not found yet, keep polling
-      setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
-    } catch (err) {
-      console.error('[poll] Error:', err);
-      setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
-    }
-  }, [router]);
+      setPollAttempts(attempt + 1);
 
-  // Handle call end
-  const handleCallEnd = useCallback((convId: string | null) => {
-    setCallStatus('polling');
+      try {
+        const res = await fetch(`/api/panels/drafts/by-conversation/${convId}`);
 
-    if (convId) {
-      // Start polling for the draft Sandra created
-      pollForDraft(convId);
-    } else {
-      setError('No conversation ID available. Please try again.');
-      setCallStatus('error');
-    }
-  }, [pollForDraft]);
+        if (res.ok) {
+          const draft = await res.json();
+          if (draft.found && draft.id) {
+            router.push(`/panels/drafts/${draft.id}`);
+            return;
+          }
+        }
+
+        setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
+      } catch (err) {
+        console.error('[poll] Error:', err);
+        setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
+      }
+    },
+    [router]
+  );
+
+  const handleCallEnd = useCallback(
+    (convId: string | null) => {
+      setCallStatus('polling');
+
+      if (convId) {
+        pollForDraft(convId);
+      } else {
+        setError('No conversation ID available. Please try again.');
+        setCallStatus('error');
+      }
+    },
+    [pollForDraft]
+  );
 
   const startCall = async () => {
     setCallStatus('connecting');
@@ -90,7 +99,6 @@ function CreateAgentContent() {
 
       const { Conversation } = await import('@elevenlabs/client');
 
-      // Build dynamic variables for personalization
       const dynamicVariables: Record<string, string> = {};
       if (userName) {
         dynamicVariables.user_name = userName;
@@ -101,7 +109,8 @@ function CreateAgentContent() {
 
       const conv = await Conversation.startSession({
         signedUrl: data.signedUrl,
-        dynamicVariables: Object.keys(dynamicVariables).length > 0 ? dynamicVariables : undefined,
+        dynamicVariables:
+          Object.keys(dynamicVariables).length > 0 ? dynamicVariables : undefined,
         onConnect: ({ conversationId: convId }: { conversationId?: string }) => {
           console.log('[call] Connected, conversation ID:', convId);
           sessionConversationId = convId || null;
@@ -114,21 +123,20 @@ function CreateAgentContent() {
         },
         onMessage: (message: any) => {
           if (message.message) {
-            setTranscript(prev => [...prev, `${message.source}: ${message.message}`]);
+            setTranscript((prev) => [...prev, `${message.source}: ${message.message}`]);
           }
         },
-        onError: (error: any) => {
-          console.error('[call] Error:', error);
-          setError(error.message || 'Call error occurred');
+        onError: (err: any) => {
+          console.error('[call] Error:', err);
+          setError(err.message || 'Call error occurred');
           setCallStatus('error');
         },
       });
 
       setConversation(conv);
-
-    } catch (error: any) {
-      console.error('[call] Failed to start:', error);
-      setError(error.message || 'Failed to start call');
+    } catch (err: any) {
+      console.error('[call] Failed to start:', err);
+      setError(err.message || 'Failed to start call');
       setCallStatus('error');
     }
   };
@@ -166,7 +174,6 @@ function CreateAgentContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-amber-50">
-      {/* Header */}
       <div className="bg-white/70 backdrop-blur-sm border-b border-violet-100">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-200">
@@ -179,5 +186,146 @@ function CreateAgentContent() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
+        <div className="text-center max-w-lg">
+          {callStatus === 'idle' && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
+                <Phone className="w-14 h-14 text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                {userName ? `Hi ${userName.split(' ')[0]}! 👋` : 'Ready to design your panel'}
+              </h2>
+              <p className="text-gray-500 mb-8 text-lg">
+                {userName
+                  ? "I'm Sandra, your AI assistant. Let's create your first interview panel together!"
+                  : "Start a voice conversation with Sandra. Just tell her what you need — she'll design a custom AI interviewer for you."}
+              </p>
+              <button
+                onClick={startCall}
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 transition-all hover:scale-105"
+              >
+                <Phone className="w-6 h-6" />
+                Start Call with Sandra
+              </button>
+              <p className="text-sm text-gray-400 mt-6">✨ Takes about 3-5 minutes</p>
+            </>
+          )}
+
+          {callStatus === 'connecting' && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
+                <Loader2 className="w-14 h-14 text-white animate-spin" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Connecting to Sandra...</h2>
+              <p className="text-gray-500">Setting up your voice session</p>
+            </>
+          )}
+
+          {callStatus === 'connected' && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300 animate-pulse">
+                <Mic className="w-14 h-14 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-emerald-600 mb-4">Connected with Sandra</h2>
+              <p className="text-gray-500 mb-8">Speak naturally — Sandra is listening 🎙️</p>
+
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={toggleMute}
+                  className={`p-5 rounded-2xl transition-all shadow-lg ${
+                    isMuted
+                      ? 'bg-amber-100 text-amber-600 shadow-amber-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+                <button
+                  onClick={endCall}
+                  className="p-5 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-2xl shadow-lg shadow-red-200 hover:shadow-xl transition-all"
+                >
+                  <PhoneOff className="w-7 h-7" />
+                </button>
+              </div>
+
+              {transcript.length > 0 && (
+                <div className="mt-10 text-left bg-white rounded-2xl p-5 max-h-48 overflow-y-auto border border-gray-100 shadow-sm">
+                  <p className="text-xs text-gray-400 mb-3 font-medium">Live transcript</p>
+                  {transcript.slice(-5).map((line, i) => (
+                    <p key={i} className="text-sm text-gray-600 mb-1">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {conversationId && (
+                <p className="mt-4 text-xs text-gray-400">
+                  Session: {conversationId.slice(0, 8)}...
+                </p>
+              )}
+            </>
+          )}
+
+          {callStatus === 'polling' && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
+                <Loader2 className="w-14 h-14 text-white animate-spin" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Sandra is preparing your panel...
+              </h2>
+              <p className="text-gray-500 mb-4">
+                Just a moment while we save your configuration
+              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>
+                  Checking... ({pollAttempts}/{MAX_POLL_ATTEMPTS})
+                </span>
+              </div>
+            </>
+          )}
+
+          {callStatus === 'error' && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-red-400 to-rose-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-red-200">
+                <AlertCircle className="w-14 h-14 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Something went wrong</h2>
+              <p className="text-gray-500 mb-8">
+                {error || 'An unexpected error occurred. Please try again.'}
+              </p>
+              <button
+                onClick={retry}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white px-8 py-4 rounded-2xl font-semibold shadow-xl shadow-violet-200 hover:shadow-2xl transition-all"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Try Again
+              </button>
+            </>
+          )}
+        </div>
+      </main>
+
+      <footer className="border-t border-gray-100 px-6 py-4 text-center bg-white/50">
+        <p className="text-xs text-gray-400">Powered by ElevenLabs Conversational AI ✨</p>
+      </footer>
+    </div>
+  );
+}
+
+export default function CreateAgentPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-amber-50 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        </div>
+      }
+    >
+      <CreateAgentContent />
+    </Suspense>
+  );
+}
