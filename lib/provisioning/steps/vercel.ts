@@ -124,7 +124,7 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
       ctx.githubOwner,
       ctx.metadata.githubRepoName!,
       ctx.githubToken,
-      ctx.metadata.vercelUrl
+      ctx.metadata.vercelUrl!
     );
     return { nextState: 'VERCEL_DEPLOYING', metadata: ctx.metadata };
   }
@@ -177,4 +177,5 @@ async function updateEnvVars(
     }
   }
 }
+
 
