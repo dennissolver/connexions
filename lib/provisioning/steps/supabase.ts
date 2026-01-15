@@ -7,6 +7,22 @@ const SUPABASE_API = 'https://api.supabase.com/v1';
 const CHILD_SCHEMA = `
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Platform configuration (single row for platform settings)
+CREATE TABLE IF NOT EXISTS platforms (
+  id INT PRIMARY KEY DEFAULT 1,
+  name TEXT,
+  company_name TEXT,
+  vercel_url TEXT,
+  supabase_url TEXT,
+  elevenlabs_agent_id TEXT,
+  settings JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT single_row CHECK (id = 1)
+);
+
+INSERT INTO platforms (id, name) VALUES (1, 'Platform') ON CONFLICT (id) DO NOTHING;
+
 -- Agents/Panels table
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -37,6 +53,24 @@ CREATE TABLE IF NOT EXISTS agents (
   logo_url TEXT,
   total_interviews INT DEFAULT 0,
   completed_interviews INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Panel drafts table (for Sandra draft review flow)
+CREATE TABLE IF NOT EXISTS panel_drafts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  interview_type TEXT DEFAULT '',
+  target_audience TEXT DEFAULT '',
+  tone TEXT DEFAULT 'professional',
+  duration_minutes INTEGER DEFAULT 15,
+  questions JSONB DEFAULT '[]'::jsonb,
+  conversation_id TEXT,
+  status TEXT DEFAULT 'draft',
+  published_panel_id UUID,
+  published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -133,6 +167,8 @@ CREATE INDEX IF NOT EXISTS idx_interviewees_panel_id ON interviewees(panel_id);
 CREATE INDEX IF NOT EXISTS idx_interviewees_email ON interviewees(email);
 CREATE INDEX IF NOT EXISTS idx_interview_transcripts_conversation ON interview_transcripts(elevenlabs_conversation_id);
 CREATE INDEX IF NOT EXISTS idx_setup_conversations_conversation ON setup_conversations(elevenlabs_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_panel_drafts_status ON panel_drafts(status);
+CREATE INDEX IF NOT EXISTS idx_panel_drafts_conversation_id ON panel_drafts(conversation_id);
 `;
 
 function generatePassword(): string {
@@ -151,7 +187,6 @@ export async function createSupabaseProject(ctx: ProvisionContext): Promise<Prov
 
   const safeName = ctx.projectSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
 
-  // Check for existing
   const listRes = await fetch(`${SUPABASE_API}/projects`, {
     headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
   });
@@ -174,7 +209,6 @@ export async function createSupabaseProject(ctx: ProvisionContext): Promise<Prov
     };
   }
 
-  // Create new
   const createRes = await fetch(`${SUPABASE_API}/projects`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
@@ -200,7 +234,6 @@ export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<Provi
   const projectRef = ctx.metadata.supabaseProjectRef;
   if (!projectRef) throw new Error('No Supabase project ref');
 
-  // Check ready
   const res = await fetch(`${SUPABASE_API}/projects/${projectRef}`, {
     headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
   });
@@ -211,7 +244,6 @@ export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<Provi
     return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
   }
 
-  // Get keys
   const keys = await fetchKeys(ctx.supabaseToken, projectRef);
 
   // Run migration
@@ -231,22 +263,59 @@ export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<Provi
     }).catch(() => {});
   }
 
-  // Configure auth
-  const vercelUrl = `https://${ctx.projectSlug}.vercel.app`;
-  await fetch(`${SUPABASE_API}/projects/${projectRef}/config/auth`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      site_url: vercelUrl,
-      uri_allow_list: [`${vercelUrl}/**`, 'http://localhost:3000/**'],
-      redirect_urls: [`${vercelUrl}/auth/callback`, 'http://localhost:3000/auth/callback'],
-    }),
-  }).catch(() => {});
+  // NOTE: Auth config moved to configureSupabaseAuth() - called after Vercel is ready
 
   return {
     nextState: 'SUPABASE_READY',
     metadata: { ...ctx.metadata, supabaseAnonKey: keys.anonKey, supabaseServiceKey: keys.serviceKey },
   };
+}
+
+// NEW: Configure Supabase auth with actual Vercel URL (called after Vercel deployment)
+export async function configureSupabaseAuth(ctx: ProvisionContext): Promise<void> {
+  const projectRef = ctx.metadata.supabaseProjectRef;
+  const vercelUrl = ctx.metadata.vercelUrl;
+
+  if (!projectRef || !vercelUrl) {
+    console.warn('[supabase] Cannot configure auth - missing projectRef or vercelUrl');
+    return;
+  }
+
+  console.log(`[supabase] Configuring auth for ${projectRef} with URL: ${vercelUrl}`);
+
+  try {
+    const response = await fetch(`${SUPABASE_API}/projects/${projectRef}/config/auth`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${ctx.supabaseToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        site_url: vercelUrl,
+        uri_allow_list: [
+          `${vercelUrl}/**`,
+          `${vercelUrl}/auth/callback`,
+          'http://localhost:3000/**',
+          'http://localhost:3000/auth/callback',
+        ],
+        redirect_urls: [
+          `${vercelUrl}/auth/callback`,
+          `${vercelUrl}/`,
+          'http://localhost:3000/auth/callback',
+          'http://localhost:3000/',
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[supabase] Auth config failed: ${errorText}`);
+    } else {
+      console.log(`[supabase] Auth configured successfully for ${vercelUrl}`);
+    }
+  } catch (err) {
+    console.error('[supabase] Auth config error:', err);
+  }
 }
 
 async function fetchKeys(token: string, projectRef: string): Promise<{ anonKey: string; serviceKey: string }> {

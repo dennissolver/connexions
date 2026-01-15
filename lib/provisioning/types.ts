@@ -31,6 +31,7 @@ export interface ProvisionContext {
   
   // ElevenLabs credentials
   elevenLabsApiKey: string;
+  elevenLabsWebhookSecret?: string;
   
   // Theming
   colors: {
@@ -49,6 +50,7 @@ export interface ProvisionMetadata {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   supabaseServiceKey?: string;
+  supabaseAuthConfigured?: boolean;
   
   // GitHub
   githubRepoName?: string;
@@ -58,10 +60,13 @@ export interface ProvisionMetadata {
   vercelProjectId?: string;
   vercelUrl?: string;
   vercelDeploymentId?: string;
+  vercelEnvUpdated?: boolean;
   
   // ElevenLabs
   elevenLabsAgentId?: string;
   elevenLabsAgentName?: string;
+  elevenLabsToolUrl?: string;
+  elevenLabsRouterUrl?: string;
   
   // Webhook
   webhookRegistered?: boolean;

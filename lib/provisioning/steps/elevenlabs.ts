@@ -23,61 +23,35 @@ const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent. Your goal
 ## Wrap Up
 When you have all the information, use the save_panel_draft tool to save it. Then say: "Perfect! I've saved your panel as a draft. Check your screen to review and finalize it!"`;
 
-export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
-  // Skip if already created
-  if (ctx.metadata.elevenLabsAgentId) {
-    return { nextState: 'WEBHOOK_REGISTERING', metadata: ctx.metadata };
-  }
-
-  const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
-  const headers = {
-    'xi-api-key': ctx.elevenLabsApiKey,
-    'Content-Type': 'application/json',
-  };
-
-  // Check if agent already exists
-  const listRes = await fetch(`${ELEVENLABS_API}/convai/agents`, { headers });
-  if (listRes.ok) {
-    const data = await listRes.json();
-    const existing = data.agents?.find((a: any) => a.name === agentName);
-    if (existing) {
-      console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
-      return {
-        nextState: 'WEBHOOK_REGISTERING',
-        metadata: {
-          ...ctx.metadata,
-          elevenLabsAgentId: existing.agent_id,
-          elevenLabsAgentName: existing.name
-        },
-      };
-    }
-  }
-
-  // Create the agent with tools
-  const childPlatformUrl = ctx.metadata.vercelUrl || `https://${ctx.projectSlug}.vercel.app`;
-
-  const agentConfig = {
+function buildAgentConfig(
+  agentName: string,
+  platformName: string,
+  toolWebhookUrl: string,
+  routerWebhookUrl: string,
+  webhookSecret?: string
+) {
+  const config: any = {
     name: agentName,
     conversation_config: {
       agent: {
         prompt: {
-          prompt: SETUP_AGENT_PROMPT.replace(/\{platformName\}/g, ctx.platformName)
+          prompt: SETUP_AGENT_PROMPT.replace(/\{platformName\}/g, platformName),
         },
-        first_message: `Hello! I'm Sandra, your AI setup assistant for ${ctx.platformName}. I'll help you create a custom interview panel. Ready to get started?`,
+        first_message: `Hello! I'm Sandra, your AI setup assistant for ${platformName}. I'll help you create a custom interview panel. Ready to get started?`,
         language: 'en',
       },
       tts: {
         voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah voice
-        model_id: 'eleven_flash_v2'
+        model_id: 'eleven_flash_v2',
       },
       stt: {
-        provider: 'elevenlabs'
+        provider: 'elevenlabs',
       },
       turn: {
-        mode: 'turn'
+        mode: 'turn',
       },
       conversation: {
-        max_duration_seconds: 3600
+        max_duration_seconds: 3600,
       },
     },
     platform_settings: {
@@ -87,7 +61,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           name: 'save_panel_draft',
           description: 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
           webhook: {
-            url: `${childPlatformUrl}/api/tools/save-draft`,
+            url: toolWebhookUrl,
             method: 'POST',
           },
           parameters: {
@@ -127,16 +101,102 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           },
         },
       ],
+      // Webhook for conversation events (transcripts, etc.)
+      webhook: {
+        url: routerWebhookUrl,
+        events: ['conversation.ended', 'conversation.transcript'],
+      },
     },
   };
 
-  console.log(`[elevenlabs] Creating agent: ${agentName}`);
-  console.log(`[elevenlabs] Tool URL: ${childPlatformUrl}/api/tools/save-draft`);
+  // Add HMAC authentication if secret is provided
+  if (webhookSecret) {
+    config.platform_settings.webhook.authentication = {
+      type: 'hmac',
+      secret: webhookSecret,
+    };
+  }
+
+  return config;
+}
+
+export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
+  const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
+  const childPlatformUrl = ctx.metadata.vercelUrl || `https://${ctx.projectSlug}.vercel.app`;
+  const toolWebhookUrl = `${childPlatformUrl}/api/tools/save-draft`;
+
+  // Centralized router webhook URL - all agents route through parent
+  const routerWebhookUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
+
+  // HMAC secret for webhook authentication
+  const webhookSecret = ctx.elevenLabsWebhookSecret;
+
+  const headers = {
+    'xi-api-key': ctx.elevenLabsApiKey,
+    'Content-Type': 'application/json',
+  };
+
+  console.log(`[elevenlabs] Agent name: ${agentName}`);
+  console.log(`[elevenlabs] Tool webhook URL: ${toolWebhookUrl}`);
+  console.log(`[elevenlabs] Router webhook URL: ${routerWebhookUrl}`);
+  console.log(`[elevenlabs] HMAC auth: ${webhookSecret ? 'enabled' : 'disabled'}`);
+
+  // Check if agent already exists
+  const listRes = await fetch(`${ELEVENLABS_API}/convai/agents`, { headers });
+
+  if (listRes.ok) {
+    const data = await listRes.json();
+    const existing = data.agents?.find((a: any) => a.name === agentName);
+
+    if (existing) {
+      console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
+      console.log(`[elevenlabs] Updating existing agent with correct URLs...`);
+
+      const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(buildAgentConfig(
+          agentName,
+          ctx.platformName,
+          toolWebhookUrl,
+          routerWebhookUrl,
+          webhookSecret
+        )),
+      });
+
+      if (updateRes.ok) {
+        console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
+      } else {
+        const errorText = await updateRes.text();
+        console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
+      }
+
+      return {
+        nextState: 'WEBHOOK_REGISTERING',
+        metadata: {
+          ...ctx.metadata,
+          elevenLabsAgentId: existing.agent_id,
+          elevenLabsAgentName: existing.name,
+          elevenLabsToolUrl: toolWebhookUrl,
+          elevenLabsRouterUrl: routerWebhookUrl,
+        },
+      };
+    }
+  }
+
+  // Create new agent
+  console.log(`[elevenlabs] Creating new agent: ${agentName}`);
 
   const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(agentConfig),
+    body: JSON.stringify(buildAgentConfig(
+      agentName,
+      ctx.platformName,
+      toolWebhookUrl,
+      routerWebhookUrl,
+      webhookSecret
+    )),
   });
 
   if (!createRes.ok) {
@@ -153,7 +213,9 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
     metadata: {
       ...ctx.metadata,
       elevenLabsAgentId: agent.agent_id,
-      elevenLabsAgentName: agentName
+      elevenLabsAgentName: agentName,
+      elevenLabsToolUrl: toolWebhookUrl,
+      elevenLabsRouterUrl: routerWebhookUrl,
     },
   };
 }

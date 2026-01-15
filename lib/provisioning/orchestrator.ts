@@ -12,7 +12,7 @@ function buildContext(run: ProvisionRun, publicBaseUrl: string): ProvisionContex
     companyName: run.company_name,
     metadata: run.metadata || {},
     publicBaseUrl,
-    parentWebhookUrl: `${publicBaseUrl}/api/child/transcript`,
+    parentWebhookUrl: `${publicBaseUrl}/api/webhooks/elevenlabs-router`,
     supabaseToken: process.env.SUPABASE_ACCESS_TOKEN!,
     supabaseOrgId: process.env.SUPABASE_ORG_ID!,
     githubToken: process.env.GITHUB_TOKEN!,
@@ -20,6 +20,7 @@ function buildContext(run: ProvisionRun, publicBaseUrl: string): ProvisionContex
     vercelToken: process.env.VERCEL_TOKEN!,
     vercelTeamId: process.env.VERCEL_TEAM_ID,
     elevenLabsApiKey: process.env.ELEVENLABS_API_KEY!,
+    elevenLabsWebhookSecret: process.env.ELEVENLABS_WEBHOOK_SECRET,
     colors: { primary: '#8B5CF6', accent: '#10B981', background: '#0F172A' },
   };
 }
