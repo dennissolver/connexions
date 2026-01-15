@@ -108,12 +108,22 @@ function CreateAgentContent() {
   };
 
   const checkConversationComplete = async () => {
+    // Don't call API if transcript is empty
+    if (transcript.length === 0) {
+      console.log('No transcript to process');
+      return;
+    }
+
     try {
       const response = await fetch('/api/setup-agent/voice/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ transcript: transcript.join('\n') }), // FIX: Join array to string
       });
+
+      if (!response.ok) {
+        throw new Error(`Extract failed: ${response.status}`);
+      }
 
       const data = await response.json();
 
