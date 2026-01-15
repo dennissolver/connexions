@@ -33,6 +33,7 @@ export async function runProvisioningStep(projectSlug: string, publicBaseUrl: st
   const step = STEPS[run.state as ProvisionState];
 
   try {
+    if (!step) return run;
     const result = await step(ctx);
     if (!result.nextState) return run;
 

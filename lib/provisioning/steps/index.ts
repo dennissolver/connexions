@@ -3,7 +3,7 @@
 import { ProvisionState } from '../states';
 import { ProvisionContext, ProvisionStepResult } from '../types';
 import { createSupabaseProject, waitForSupabaseReady } from './supabase';
-import { createGitHubRepo } from './github';
+import { createGithubRepo } from './github';
 import { createVercelProject, triggerVercelDeployment } from './vercel';
 import { createElevenLabsAgent } from './elevenlabs';
 import { registerWebhook } from './webhook';
@@ -27,7 +27,7 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
   // Step 3: Create GitHub repository with template files
   SUPABASE_READY: async (ctx) => {
     console.log(`[SUPABASE_READY] Creating GitHub repository...`);
-    return createGitHubRepo(ctx);
+    return createGithubRepo(ctx);
   },
 
   // Step 4: GitHub ready, create Vercel project
@@ -37,7 +37,7 @@ export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
     if (ctx.metadata.githubRepoName) {
       return { nextState: 'GITHUB_READY', metadata: ctx.metadata };
     }
-    return createGitHubRepo(ctx);
+    return createGithubRepo(ctx);
   },
 
   // Step 5: Create Vercel project linked to GitHub
@@ -123,7 +123,7 @@ export function getStepDescription(state: ProvisionState): string {
 export {
   createSupabaseProject,
   waitForSupabaseReady,
-  createGitHubRepo,
+  createGithubRepo,
   createVercelProject,
   triggerVercelDeployment,
   createElevenLabsAgent,
