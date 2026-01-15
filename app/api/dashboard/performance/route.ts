@@ -1,27 +1,45 @@
+// app/api/dashboard/performance/route.ts
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { DEFAULT_DASHBOARD_METRICS } from '@/lib/dashboard/defaultMetrics';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const clientId = searchParams.get('clientId');
+export async function GET() {
+  try {
+    // Get all agents with their interview counts
+    const { data: agents, error: agentsError } = await supabaseAdmin
+      .from('agents')
+      .select('id, name, slug, status, total_interviews, completed_interviews, created_at')
+      .order('created_at', { ascending: false });
 
-  if (!clientId) {
-    return NextResponse.json(DEFAULT_DASHBOARD_METRICS);
+    if (agentsError) {
+      console.error('Error fetching agents:', agentsError);
+      return NextResponse.json({
+        total_agents: 0,
+        total_interviews: 0,
+        completed_interviews: 0,
+        agents: [],
+      });
+    }
+
+    // Calculate totals
+    const total_agents = agents?.length ?? 0;
+    const total_interviews = agents?.reduce((sum, a) => sum + (a.total_interviews ?? 0), 0) ?? 0;
+    const completed_interviews = agents?.reduce((sum, a) => sum + (a.completed_interviews ?? 0), 0) ?? 0;
+
+    return NextResponse.json({
+      total_agents,
+      total_interviews,
+      completed_interviews,
+      agents: agents ?? [],
+    });
+  } catch (err) {
+    console.error('Dashboard performance error:', err);
+    return NextResponse.json({
+      total_agents: 0,
+      total_interviews: 0,
+      completed_interviews: 0,
+      agents: [],
+    });
   }
-
-  const { count, error } = await supabaseAdmin
-    .from('agents')
-    .select('*', { count: 'exact', head: true })
-    .eq('client_id', clientId);
-
-  if (error) {
-    return NextResponse.json(DEFAULT_DASHBOARD_METRICS);
-  }
-
-  return NextResponse.json({
-    total_agents: count ?? 0,
-  });
 }
