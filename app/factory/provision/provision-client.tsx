@@ -53,7 +53,7 @@ export default function ProvisionClient() {
 
         if (data.run?.state === 'COMPLETE') {
           // Wait a moment then redirect
-          setTimeout(() => router.push('/dashboard'), 2000);
+          setTimeout(() => router.push(data.run.metadata.vercelUrl || "/dashboard"), 2000);
         } else if (data.run?.state === 'FAILED') {
           setError(data.run.error || 'Provisioning failed');
         }

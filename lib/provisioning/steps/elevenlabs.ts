@@ -76,6 +76,9 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       turn: {
         mode: 'turn'
       },
+      conversation: {
+        max_duration_seconds: 3600
+      },
     },
     platform_settings: {
       tools: [
