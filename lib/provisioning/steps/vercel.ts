@@ -55,7 +55,7 @@ export async function createVercelProject(ctx: ProvisionContext): Promise<Provis
   await new Promise(r => setTimeout(r, 2000));
 
   // Push a trigger commit to start the deployment
-  await pushDeployTrigger(ctx.githubOwner, ctx.metadata.githubRepoName, ctx.githubToken, vercelUrl);
+  await pushDeployTrigger(ctx.githubOwner, ctx.metadata.githubRepoName!, ctx.githubToken, vercelUrl);
 
   return { nextState: 'VERCEL_CREATING', metadata: { ...ctx.metadata, vercelProjectId: project.id, vercelUrl } };
 }
@@ -122,7 +122,7 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
     console.log('[vercel] No deployments found, pushing trigger commit');
     await pushDeployTrigger(
       ctx.githubOwner,
-      ctx.metadata.githubRepoName,
+      ctx.metadata.githubRepoName!,
       ctx.githubToken,
       ctx.metadata.vercelUrl
     );
@@ -177,3 +177,4 @@ async function updateEnvVars(
     }
   }
 }
+
