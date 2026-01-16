@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         conversation_id: conversationId,
         payload: body,
         error: 'Could not determine child platform',
-      }).catch(() => {});
+      });
 
       return NextResponse.json(
         { error: 'Could not determine child platform' },
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       payload: body,
       child_url: childUrl,
       response_status: forwardRes.status,
-    }).catch(() => {});
+    });
 
     // Return the child's response
     let responseData;
