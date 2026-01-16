@@ -1,7 +1,7 @@
 ﻿// app/create/page.tsx
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -14,10 +14,18 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowRight,
-  FileEdit
+  FileEdit,
+  CheckCircle
 } from 'lucide-react';
+import { createClient } from '@/lib/supabase';
 
-type CallStatus = 'idle' | 'connecting' | 'connected' | 'finding-draft' | 'draft-ready' | 'error';
+type CallStatus = 'idle' | 'connecting' | 'connected' | 'error';
+
+interface Draft {
+  id: string;
+  name: string;
+  created_at: string;
+}
 
 function CreateAgentContent() {
   const router = useRouter();
@@ -30,60 +38,73 @@ function CreateAgentContent() {
   const [conversation, setConversation] = useState<any>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pollAttempts, setPollAttempts] = useState(0);
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftName, setDraftName] = useState<string | null>(null);
 
-  const MAX_POLL_ATTEMPTS = 20;
-  const POLL_INTERVAL = 1500;
+  // Draft detection state
+  const [draftReady, setDraftReady] = useState(false);
+  const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
+  const [callStartTime, setCallStartTime] = useState<Date | null>(null);
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
 
-  // Poll for the latest draft, then show button instead of redirecting
-  const pollForDraft = useCallback(
-    async (attempt: number = 0) => {
-      if (attempt >= MAX_POLL_ATTEMPTS) {
-        setError(
-          'Could not find your panel draft. Sandra may not have saved it yet. Please try again.'
-        );
-        setCallStatus('error');
-        return;
-      }
+  // Initialize Supabase client once
+  useEffect(() => {
+    supabaseRef.current = createClient();
+  }, []);
 
-      setPollAttempts(attempt + 1);
+  // REAL-TIME SUBSCRIPTION: Listen for new drafts while call is in progress
+  useEffect(() => {
+    if (callStatus !== 'connected' || !callStartTime || !supabaseRef.current) {
+      return;
+    }
 
-      try {
-        const res = await fetch('/api/panels/drafts/latest');
+    const supabase = supabaseRef.current;
 
-        if (res.ok) {
-          const draft = await res.json();
-          if (draft.found && draft.id) {
-            setDraftId(draft.id);
-            setDraftName(draft.name || 'Your Panel');
-            setCallStatus('draft-ready');
-            return;
+    console.log('[CreatePage] Starting real-time subscription for drafts...');
+    console.log('[CreatePage] Call started at:', callStartTime.toISOString());
+
+    // Subscribe to INSERT events on panel_drafts table
+    const channel = supabase
+      .channel('draft-detection')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'panel_drafts'
+        },
+        (payload) => {
+          console.log('[CreatePage] Real-time: New draft detected!', payload);
+
+          const newDraft = payload.new as Draft;
+          const draftCreatedAt = new Date(newDraft.created_at);
+
+          // Verify this draft was created AFTER the call started
+          if (draftCreatedAt >= callStartTime) {
+            console.log('[CreatePage] ✅ Draft verified - created during this session:', newDraft.name);
+            setCurrentDraft(newDraft);
+            setDraftReady(true);
+          } else {
+            console.log('[CreatePage] ⚠️ Draft ignored - created before call started');
           }
         }
+      )
+      .subscribe((status) => {
+        console.log('[CreatePage] Subscription status:', status);
+      });
 
-        setTimeout(() => pollForDraft(attempt + 1), POLL_INTERVAL);
-      } catch (err) {
-        console.error('[poll] Error:', err);
-        setTimeout(() => pollForDraft(attempt + 1), POLL_INTERVAL);
-      }
-    },
-    []
-  );
-
-  const handleCallEnd = useCallback(() => {
-    setCallStatus('finding-draft');
-    pollForDraft(0);
-  }, [pollForDraft]);
+    // Cleanup subscription on unmount or state change
+    return () => {
+      console.log('[CreatePage] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [callStatus, callStartTime]);
 
   const startCall = async () => {
     setCallStatus('connecting');
     setError(null);
     setTranscript([]);
-    setPollAttempts(0);
-    setDraftId(null);
-    setDraftName(null);
+    setDraftReady(false);
+    setCurrentDraft(null);
+    setCallStartTime(new Date());
 
     try {
       const response = await fetch('/api/setup-agent/voice/start', {
@@ -117,7 +138,7 @@ function CreateAgentContent() {
         },
         onDisconnect: () => {
           console.log('[call] Disconnected');
-          handleCallEnd();
+          // Don't change status - let user click the Review Draft button if ready
         },
         onMessage: (message: any) => {
           if (message.message) {
@@ -148,7 +169,12 @@ function CreateAgentContent() {
       }
       setConversation(null);
     }
-    handleCallEnd();
+    // Stay on connected screen so user can click Review Draft if ready
+    // Only go back to idle if no draft was created
+    if (!draftReady) {
+      setCallStatus('idle');
+      setCallStartTime(null);
+    }
   };
 
   const toggleMute = () => {
@@ -162,14 +188,20 @@ function CreateAgentContent() {
     }
   };
 
+  const goToReviewDraft = () => {
+    if (currentDraft) {
+      router.push(`/panels/drafts/${currentDraft.id}`);
+    }
+  };
+
   const retry = () => {
     setCallStatus('idle');
     setError(null);
     setConversationId(null);
-    setPollAttempts(0);
     setTranscript([]);
-    setDraftId(null);
-    setDraftName(null);
+    setDraftReady(false);
+    setCurrentDraft(null);
+    setCallStartTime(null);
   };
 
   return (
@@ -224,12 +256,23 @@ function CreateAgentContent() {
 
           {callStatus === 'connected' && (
             <>
-              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300 animate-pulse">
+              <div className={`w-32 h-32 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl transition-all duration-500 ${
+                draftReady 
+                  ? 'bg-gradient-to-br from-emerald-400 to-teal-400 shadow-emerald-300' 
+                  : 'bg-gradient-to-br from-emerald-400 to-teal-400 shadow-emerald-300 animate-pulse'
+              }`}>
                 <Mic className="w-14 h-14 text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-emerald-600 mb-4">Connected with Sandra</h2>
-              <p className="text-gray-500 mb-8">Speak naturally — Sandra is listening 🎙️</p>
+              <h2 className="text-2xl font-bold text-emerald-600 mb-4">
+                {draftReady ? 'Draft Ready!' : 'Connected with Sandra'}
+              </h2>
+              <p className="text-gray-500 mb-8">
+                {draftReady
+                  ? 'Your panel draft has been created. Click the green button below to review it.'
+                  : 'Speak naturally — Sandra is listening 🎙️'}
+              </p>
 
+              {/* Call Control Buttons */}
               <div className="flex items-center justify-center gap-4">
                 <button
                   onClick={toggleMute}
@@ -249,8 +292,50 @@ function CreateAgentContent() {
                 </button>
               </div>
 
+              {/* REVIEW DRAFT BUTTON - Always visible, turns green when ready */}
+              <div className="mt-8">
+                <button
+                  onClick={goToReviewDraft}
+                  disabled={!draftReady}
+                  className={`inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-semibold text-lg transition-all duration-500 ${
+                    draftReady
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 hover:scale-105 cursor-pointer'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {draftReady ? (
+                    <>
+                      <CheckCircle className="w-6 h-6" />
+                      Review Draft
+                      <ArrowRight className="w-6 h-6" />
+                    </>
+                  ) : (
+                    <>
+                      <FileEdit className="w-6 h-6" />
+                      Review Draft
+                    </>
+                  )}
+                </button>
+
+                {/* Status indicator below button */}
+                {draftReady && currentDraft ? (
+                  <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center justify-center gap-2 text-emerald-600">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="font-medium">"{currentDraft.name}"</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center justify-center gap-2 text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Waiting for Sandra to create your draft...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Live Transcript */}
               {transcript.length > 0 && (
-                <div className="mt-10 text-left bg-white rounded-2xl p-5 max-h-48 overflow-y-auto border border-gray-100 shadow-sm">
+                <div className="mt-8 text-left bg-white rounded-2xl p-5 max-h-48 overflow-y-auto border border-gray-100 shadow-sm">
                   <p className="text-xs text-gray-400 mb-3 font-medium">Live transcript</p>
                   {transcript.slice(-5).map((line, i) => (
                     <p key={i} className="text-sm text-gray-600 mb-1">
@@ -265,57 +350,6 @@ function CreateAgentContent() {
                   Session: {conversationId.slice(0, 8)}...
                 </p>
               )}
-            </>
-          )}
-
-          {callStatus === 'finding-draft' && (
-            <>
-              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
-                <Loader2 className="w-14 h-14 text-white animate-spin" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Finding your panel...
-              </h2>
-              <p className="text-gray-500 mb-4">
-                Just a moment while we locate your draft
-              </p>
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>
-                  Checking... ({pollAttempts}/{MAX_POLL_ATTEMPTS})
-                </span>
-              </div>
-            </>
-          )}
-
-          {callStatus === 'draft-ready' && draftId && (
-            <>
-              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300">
-                <FileEdit className="w-14 h-14 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Your panel is ready! 🎉
-              </h2>
-              <p className="text-lg text-gray-600 mb-2">
-                {draftName}
-              </p>
-              <p className="text-gray-500 mb-8">
-                Review and edit your panel configuration, then create your AI interviewer.
-              </p>
-              <Link
-                href={`/panels/drafts/${draftId}`}
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 transition-all hover:scale-105"
-              >
-                <FileEdit className="w-6 h-6" />
-                Review & Edit Panel
-                <ArrowRight className="w-6 h-6" />
-              </Link>
-              <button
-                onClick={retry}
-                className="block mx-auto mt-6 text-sm text-gray-400 hover:text-gray-600 transition"
-              >
-                Start over with a new panel
-              </button>
             </>
           )}
 
