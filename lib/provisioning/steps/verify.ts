@@ -306,23 +306,46 @@ export async function verifyElevenLabs(ctx: ProvisionContext): Promise<Verificat
 
     const agent = await res.json();
 
+    // Log full structure for debugging
+    console.log(`[verify] Agent name: ${agent.name}`);
+    console.log(`[verify] Agent has platform_settings: ${!!agent.platform_settings}`);
+
+    // Check different possible locations for tools
+    const platformTools = agent.platform_settings?.tools || [];
+    const conversationTools = agent.conversation_config?.agent?.tools || [];
+    const allTools = [...platformTools, ...conversationTools];
+
+    console.log(`[verify] platform_settings.tools count: ${platformTools.length}`);
+    console.log(`[verify] conversation_config.agent.tools count: ${conversationTools.length}`);
+    console.log(`[verify] All tool names: ${allTools.map((t: any) => t.name || t.tool_name || 'unnamed').join(', ') || 'none'}`);
+
     // Verify webhook URL is configured correctly
     const webhookUrl = agent.platform_settings?.webhook?.url;
     const expectedRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
     if (webhookUrl !== expectedRouterUrl) {
       console.warn(`[verify] Agent webhook URL mismatch. Expected: ${expectedRouterUrl}, Got: ${webhookUrl}`);
-      // Not a hard failure, but worth noting
     }
 
-    // Verify tool webhook is configured
-    const tools = agent.platform_settings?.tools || [];
-    const saveDraftTool = tools.find((t: any) => t.name === 'save_panel_draft');
+    // Look for save_panel_draft tool in any location
+    const saveDraftTool = allTools.find((t: any) =>
+      t.name === 'save_panel_draft' || t.tool_name === 'save_panel_draft'
+    );
 
     if (!saveDraftTool) {
+      // This is now a warning, not a failure - we want to see what's happening
+      console.warn(`[verify] save_panel_draft tool not found on agent`);
+      console.warn(`[verify] Full platform_settings: ${JSON.stringify(agent.platform_settings, null, 2)}`);
+
       return {
         success: false,
-        error: 'save_panel_draft tool not configured on agent'
+        error: `save_panel_draft tool not configured on agent. Tools found: ${allTools.map((t: any) => t.name || t.tool_name).join(', ') || 'none'}`,
+        details: {
+          agentId,
+          agentName: agent.name,
+          platformToolsCount: platformTools.length,
+          conversationToolsCount: conversationTools.length,
+        }
       };
     }
 
@@ -332,7 +355,8 @@ export async function verifyElevenLabs(ctx: ProvisionContext): Promise<Verificat
         agentId,
         agentName: agent.name,
         webhookConfigured: !!webhookUrl,
-        toolsCount: tools.length
+        toolsCount: allTools.length,
+        hasSaveDraftTool: true,
       }
     };
   } catch (err: any) {

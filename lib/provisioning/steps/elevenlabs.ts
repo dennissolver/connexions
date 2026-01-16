@@ -123,7 +123,7 @@ function buildAgentConfig(
 /**
  * Verify an ElevenLabs agent exists by fetching it
  */
-async function verifyAgentExists(agentId: string, apiKey: string): Promise<boolean> {
+async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exists: boolean; agent?: any }> {
   try {
     const res = await fetch(`${ELEVENLABS_API}/convai/agents/${agentId}`, {
       headers: { 'xi-api-key': apiKey },
@@ -132,14 +132,19 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<boole
     if (res.ok) {
       const agent = await res.json();
       console.log(`[elevenlabs] Verified agent exists: ${agent.name} (${agentId})`);
-      return true;
+
+      // Debug: Log the full agent config to see what's actually there
+      console.log(`[elevenlabs] Agent platform_settings:`, JSON.stringify(agent.platform_settings, null, 2));
+      console.log(`[elevenlabs] Agent tools:`, JSON.stringify(agent.platform_settings?.tools, null, 2));
+
+      return { exists: true, agent };
     }
 
     console.error(`[elevenlabs] Agent verification failed: ${res.status}`);
-    return false;
+    return { exists: false };
   } catch (err: any) {
     console.error(`[elevenlabs] Agent verification error: ${err.message}`);
-    return false;
+    return { exists: false };
   }
 }
 
@@ -175,8 +180,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
 
       // Verify the agent actually exists (double-check)
-      const verified = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
-      if (!verified) {
+      const verification = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
+      if (!verification.exists) {
         console.error(`[elevenlabs] Existing agent ${existing.agent_id} failed verification`);
         // Fall through to create new agent
       } else {
@@ -198,9 +203,17 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
 
           // Verify update took effect
-          const updateVerified = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
-          if (!updateVerified) {
+          const updateVerification = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
+          if (!updateVerification.exists) {
             throw new Error(`Agent update verification failed for ${existing.agent_id}`);
+          }
+
+          // Check if tools were applied
+          const tools = updateVerification.agent?.platform_settings?.tools || [];
+          const hasSaveDraftTool = tools.some((t: any) => t.name === 'save_panel_draft');
+          if (!hasSaveDraftTool) {
+            console.warn(`[elevenlabs] WARNING: save_panel_draft tool not found after update!`);
+            console.warn(`[elevenlabs] Tools found: ${tools.map((t: any) => t.name).join(', ') || 'none'}`);
           }
         } else {
           const errorText = await updateRes.text();
@@ -253,9 +266,17 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   // Wait a moment for propagation
   await new Promise(r => setTimeout(r, 1000));
 
-  const verified = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
-  if (!verified) {
+  const verification = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
+  if (!verification.exists) {
     throw new Error(`Agent creation verification failed: ${agent.agent_id} not found after creation`);
+  }
+
+  // Check if tools were applied
+  const tools = verification.agent?.platform_settings?.tools || [];
+  const hasSaveDraftTool = tools.some((t: any) => t.name === 'save_panel_draft');
+  if (!hasSaveDraftTool) {
+    console.warn(`[elevenlabs] WARNING: save_panel_draft tool not found after creation!`);
+    console.warn(`[elevenlabs] Tools found: ${tools.map((t: any) => t.name).join(', ') || 'none'}`);
   }
 
   console.log(`[elevenlabs] Agent verified successfully: ${agent.agent_id}`);
