@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
     // 1. Find which child platform owns this agent
     // ---------------------------------------------------------------------
 
-    // Check the platforms table for agent mapping
     const { data: platform, error: platformError } = await supabase
       .from('platforms')
       .select('id, name, slug, url, supabase_url')
@@ -96,23 +95,25 @@ export async function POST(req: NextRequest) {
       console.warn('[elevenlabs-router] No platform found for agent:', agentId);
 
       // Store in unrouted_webhooks for later processing
-      await supabase.from('unrouted_webhooks').insert({
+      const { error: insertError } = await supabase.from('unrouted_webhooks').insert({
         agent_id: agentId,
         conversation_id: conversationId,
         event_type: eventType,
         payload: body,
         received_at: new Date().toISOString(),
         resolved: false,
-      }).catch(err => {
-        console.error('[elevenlabs-router] Failed to store unrouted webhook:', err);
       });
+
+      if (insertError) {
+        console.error('[elevenlabs-router] Failed to store unrouted webhook:', insertError);
+      }
 
       return NextResponse.json({
         success: false,
         error: 'No platform found for agent',
         agent_id: agentId,
         stored_for_retry: true,
-      }, { status: 202 }); // 202 = Accepted but not processed
+      }, { status: 202 });
     }
 
     // ---------------------------------------------------------------------
@@ -134,7 +135,6 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
           'X-Forwarded-From': 'connexions-router',
           'X-Original-Agent-Id': agentId,
-          // Pass through any auth headers
           ...(req.headers.get('X-ElevenLabs-Signature') && {
             'X-ElevenLabs-Signature': req.headers.get('X-ElevenLabs-Signature')!,
           }),
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
         data: responseData,
       });
 
-      // Log successful forward
+      // Log successful forward (ignore errors)
       await supabase.from('webhook_logs').insert({
         source: 'elevenlabs',
         destination: childWebhookUrl,
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         status: forwardResponse.ok ? 'success' : 'failed',
         response_status: forwardResponse.status,
         duration_ms: Date.now() - startTime,
-      }).catch(() => {}); // Don't fail if logging fails
+      });
 
       if (!forwardResponse.ok) {
         return NextResponse.json({
@@ -185,10 +185,12 @@ export async function POST(req: NextRequest) {
         duration_ms: Date.now() - startTime,
       });
 
-    } catch (forwardError: any) {
+    } catch (forwardError) {
+      const errorMessage = forwardError instanceof Error ? forwardError.message : 'Unknown error';
+
       console.error('[elevenlabs-router] Forward failed:', {
         url: childWebhookUrl,
-        error: forwardError.message,
+        error: errorMessage,
       });
 
       // Store failed forward for retry
@@ -198,23 +200,24 @@ export async function POST(req: NextRequest) {
         event_type: eventType,
         payload: body,
         target_url: childWebhookUrl,
-        error: forwardError.message,
+        error: errorMessage,
         received_at: new Date().toISOString(),
         resolved: false,
-      }).catch(() => {});
+      });
 
       return NextResponse.json({
         success: false,
         error: 'Failed to forward to child platform',
-        details: forwardError.message,
+        details: errorMessage,
       }, { status: 502 });
     }
 
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('[elevenlabs-router] Fatal error:', err);
 
     return NextResponse.json(
-      { success: false, error: 'Internal server error', details: err.message },
+      { success: false, error: 'Internal server error', details: errorMessage },
       { status: 500 }
     );
   }
