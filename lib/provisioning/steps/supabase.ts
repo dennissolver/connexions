@@ -57,6 +57,18 @@ CREATE TABLE IF NOT EXISTS agents (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Enable real-time for agents table (required for draft detection)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'agents'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE agents;
+  END IF;
+END $$;
+
 -- Panel drafts table (for Sandra draft review flow)
 CREATE TABLE IF NOT EXISTS panel_drafts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -182,10 +194,12 @@ function generatePassword(): string {
 
 export async function createSupabaseProject(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   if (ctx.metadata.supabaseProjectRef && ctx.metadata.supabaseUrl) {
+    console.log(`[supabase] Project already exists: ${ctx.metadata.supabaseProjectRef}`);
     return { nextState: 'SUPABASE_READY', metadata: ctx.metadata };
   }
 
   const safeName = ctx.projectSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+  console.log(`[supabase] Creating project: ${safeName}`);
 
   const listRes = await fetch(`${SUPABASE_API}/projects`, {
     headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
@@ -196,6 +210,7 @@ export async function createSupabaseProject(ctx: ProvisionContext): Promise<Prov
   const existing = projects.find((p: any) => p.name === safeName);
 
   if (existing) {
+    console.log(`[supabase] Found existing project: ${existing.id}`);
     const keys = await fetchKeys(ctx.supabaseToken, existing.id);
     return {
       nextState: 'SUPABASE_READY',
@@ -224,6 +239,8 @@ export async function createSupabaseProject(ctx: ProvisionContext): Promise<Prov
   if (!createRes.ok) throw new Error(`Supabase create failed: ${await createRes.text()}`);
   const project = await createRes.json();
 
+  console.log(`[supabase] Project created: ${project.id}, waiting for ready state...`);
+
   return {
     nextState: 'SUPABASE_CREATING',
     metadata: { ...ctx.metadata, supabaseProjectRef: project.id, supabaseUrl: `https://${project.id}.supabase.co` },
@@ -237,30 +254,63 @@ export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<Provi
   const res = await fetch(`${SUPABASE_API}/projects/${projectRef}`, {
     headers: { Authorization: `Bearer ${ctx.supabaseToken}` },
   });
-  if (!res.ok) return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
-
-  const project = await res.json();
-  if (project.status !== 'ACTIVE_HEALTHY') {
+  if (!res.ok) {
+    console.log(`[supabase] Project ${projectRef} not ready yet (fetch failed)`);
     return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
   }
 
+  const project = await res.json();
+  if (project.status !== 'ACTIVE_HEALTHY') {
+    console.log(`[supabase] Project ${projectRef} status: ${project.status}, waiting...`);
+    return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
+  }
+
+  console.log(`[supabase] Project ${projectRef} is ACTIVE_HEALTHY`);
+
   const keys = await fetchKeys(ctx.supabaseToken, projectRef);
 
-  // Run migration
-  await fetch(`${SUPABASE_API}/projects/${projectRef}/database/query`, {
+  // Run migration with error handling
+  console.log(`[supabase] Running schema migration...`);
+  const migrationRes = await fetch(`${SUPABASE_API}/projects/${projectRef}/database/query`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${ctx.supabaseToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: CHILD_SCHEMA }),
   });
 
-  // Create buckets
+  if (!migrationRes.ok) {
+    const errorText = await migrationRes.text();
+    console.error(`[supabase] Migration failed: ${errorText}`);
+    throw new Error(`Schema migration failed: ${errorText}`);
+  }
+  console.log(`[supabase] Schema migration completed successfully`);
+
+  // Create buckets with logging
   const supabaseUrl = `https://${projectRef}.supabase.co`;
-  for (const name of ['transcripts', 'recordings', 'exports', 'assets']) {
-    await fetch(`${supabaseUrl}/storage/v1/bucket`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${keys.serviceKey}`, 'Content-Type': 'application/json', apikey: keys.serviceKey },
-      body: JSON.stringify({ id: name, name, public: name === 'assets' }),
-    }).catch(() => {});
+  const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
+
+  for (const name of buckets) {
+    try {
+      const bucketRes = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${keys.serviceKey}`,
+          'Content-Type': 'application/json',
+          apikey: keys.serviceKey
+        },
+        body: JSON.stringify({ id: name, name, public: name === 'assets' }),
+      });
+
+      if (bucketRes.ok) {
+        console.log(`[supabase] Created bucket: ${name}`);
+      } else if (bucketRes.status === 409) {
+        console.log(`[supabase] Bucket already exists: ${name}`);
+      } else {
+        const errText = await bucketRes.text();
+        console.warn(`[supabase] Failed to create bucket ${name}: ${errText}`);
+      }
+    } catch (err) {
+      console.warn(`[supabase] Error creating bucket ${name}:`, err);
+    }
   }
 
   // NOTE: Auth config moved to configureSupabaseAuth() - called after Vercel is ready
@@ -271,7 +321,7 @@ export async function waitForSupabaseReady(ctx: ProvisionContext): Promise<Provi
   };
 }
 
-// NEW: Configure Supabase auth with actual Vercel URL (called after Vercel deployment)
+// Configure Supabase auth with actual Vercel URL (called after Vercel deployment)
 export async function configureSupabaseAuth(ctx: ProvisionContext): Promise<void> {
   const projectRef = ctx.metadata.supabaseProjectRef;
   const vercelUrl = ctx.metadata.vercelUrl;
@@ -310,12 +360,90 @@ export async function configureSupabaseAuth(ctx: ProvisionContext): Promise<void
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[supabase] Auth config failed: ${errorText}`);
-    } else {
-      console.log(`[supabase] Auth configured successfully for ${vercelUrl}`);
+      throw new Error(`Supabase auth config failed: ${errorText}`);
     }
+
+    console.log(`[supabase] Auth configured successfully for ${vercelUrl}`);
   } catch (err) {
     console.error('[supabase] Auth config error:', err);
+    throw err;
   }
+}
+
+// Verify Supabase is fully configured (for verification step)
+export async function verifySupabaseSetup(ctx: ProvisionContext): Promise<{ success: boolean; issues: string[] }> {
+  const issues: string[] = [];
+  const projectRef = ctx.metadata.supabaseProjectRef;
+  const serviceKey = ctx.metadata.supabaseServiceKey;
+
+  if (!projectRef || !serviceKey) {
+    return { success: false, issues: ['Missing Supabase project ref or service key'] };
+  }
+
+  const supabaseUrl = `https://${projectRef}.supabase.co`;
+
+  // Check if tables exist
+  try {
+    const tablesRes = await fetch(`${supabaseUrl}/rest/v1/agents?select=id&limit=1`, {
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+    });
+
+    if (!tablesRes.ok) {
+      issues.push(`Agents table not accessible: ${tablesRes.status}`);
+    }
+  } catch (err) {
+    issues.push(`Failed to query agents table: ${err}`);
+  }
+
+  // Check platforms table
+  try {
+    const platformsRes = await fetch(`${supabaseUrl}/rest/v1/platforms?select=id&limit=1`, {
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+    });
+
+    if (!platformsRes.ok) {
+      issues.push(`Platforms table not accessible: ${platformsRes.status}`);
+    }
+  } catch (err) {
+    issues.push(`Failed to query platforms table: ${err}`);
+  }
+
+  // Check buckets exist
+  try {
+    const bucketsRes = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+    });
+
+    if (bucketsRes.ok) {
+      const buckets = await bucketsRes.json();
+      const bucketNames = buckets.map((b: any) => b.name);
+      const required = ['transcripts', 'recordings', 'exports', 'assets'];
+
+      for (const req of required) {
+        if (!bucketNames.includes(req)) {
+          issues.push(`Missing storage bucket: ${req}`);
+        }
+      }
+    } else {
+      issues.push(`Failed to list buckets: ${bucketsRes.status}`);
+    }
+  } catch (err) {
+    issues.push(`Failed to check buckets: ${err}`);
+  }
+
+  return {
+    success: issues.length === 0,
+    issues,
+  };
 }
 
 async function fetchKeys(token: string, projectRef: string): Promise<{ anonKey: string; serviceKey: string }> {
