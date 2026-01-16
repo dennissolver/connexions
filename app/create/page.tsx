@@ -3,6 +3,7 @@
 
 import { useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Phone,
   PhoneOff,
@@ -11,10 +12,12 @@ import {
   MicOff,
   MessageSquare,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  ArrowRight,
+  FileEdit
 } from 'lucide-react';
 
-type CallStatus = 'idle' | 'connecting' | 'connected' | 'polling' | 'error';
+type CallStatus = 'idle' | 'connecting' | 'connected' | 'finding-draft' | 'draft-ready' | 'error';
 
 function CreateAgentContent() {
   const router = useRouter();
@@ -28,12 +31,15 @@ function CreateAgentContent() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pollAttempts, setPollAttempts] = useState(0);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState<string | null>(null);
 
   const MAX_POLL_ATTEMPTS = 20;
   const POLL_INTERVAL = 1500;
 
+  // Poll for the latest draft, then show button instead of redirecting
   const pollForDraft = useCallback(
-    async (convId: string, attempt: number = 0) => {
+    async (attempt: number = 0) => {
       if (attempt >= MAX_POLL_ATTEMPTS) {
         setError(
           'Could not find your panel draft. Sandra may not have saved it yet. Please try again.'
@@ -45,44 +51,39 @@ function CreateAgentContent() {
       setPollAttempts(attempt + 1);
 
       try {
-        const res = await fetch(`/api/panels/drafts/by-conversation/${convId}`);
+        const res = await fetch('/api/panels/drafts/latest');
 
         if (res.ok) {
           const draft = await res.json();
           if (draft.found && draft.id) {
-            router.push(`/panels/drafts/${draft.id}`);
+            setDraftId(draft.id);
+            setDraftName(draft.name || 'Your Panel');
+            setCallStatus('draft-ready');
             return;
           }
         }
 
-        setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
+        setTimeout(() => pollForDraft(attempt + 1), POLL_INTERVAL);
       } catch (err) {
         console.error('[poll] Error:', err);
-        setTimeout(() => pollForDraft(convId, attempt + 1), POLL_INTERVAL);
+        setTimeout(() => pollForDraft(attempt + 1), POLL_INTERVAL);
       }
     },
-    [router]
+    []
   );
 
-  const handleCallEnd = useCallback(
-    (convId: string | null) => {
-      setCallStatus('polling');
-
-      if (convId) {
-        pollForDraft(convId);
-      } else {
-        setError('No conversation ID available. Please try again.');
-        setCallStatus('error');
-      }
-    },
-    [pollForDraft]
-  );
+  const handleCallEnd = useCallback(() => {
+    setCallStatus('finding-draft');
+    pollForDraft(0);
+  }, [pollForDraft]);
 
   const startCall = async () => {
     setCallStatus('connecting');
     setError(null);
     setTranscript([]);
     setPollAttempts(0);
+    setDraftId(null);
+    setDraftName(null);
 
     try {
       const response = await fetch('/api/setup-agent/voice/start', {
@@ -105,21 +106,18 @@ function CreateAgentContent() {
         dynamicVariables.first_name = userName.split(' ')[0];
       }
 
-      let sessionConversationId: string | null = null;
-
       const conv = await Conversation.startSession({
         signedUrl: data.signedUrl,
         dynamicVariables:
           Object.keys(dynamicVariables).length > 0 ? dynamicVariables : undefined,
         onConnect: ({ conversationId: convId }: { conversationId?: string }) => {
           console.log('[call] Connected, conversation ID:', convId);
-          sessionConversationId = convId || null;
           setConversationId(convId || null);
           setCallStatus('connected');
         },
         onDisconnect: () => {
           console.log('[call] Disconnected');
-          handleCallEnd(sessionConversationId);
+          handleCallEnd();
         },
         onMessage: (message: any) => {
           if (message.message) {
@@ -150,7 +148,7 @@ function CreateAgentContent() {
       }
       setConversation(null);
     }
-    handleCallEnd(conversationId);
+    handleCallEnd();
   };
 
   const toggleMute = () => {
@@ -170,6 +168,8 @@ function CreateAgentContent() {
     setConversationId(null);
     setPollAttempts(0);
     setTranscript([]);
+    setDraftId(null);
+    setDraftName(null);
   };
 
   return (
@@ -268,16 +268,16 @@ function CreateAgentContent() {
             </>
           )}
 
-          {callStatus === 'polling' && (
+          {callStatus === 'finding-draft' && (
             <>
               <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-violet-300">
                 <Loader2 className="w-14 h-14 text-white animate-spin" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Sandra is preparing your panel...
+                Finding your panel...
               </h2>
               <p className="text-gray-500 mb-4">
-                Just a moment while we save your configuration
+                Just a moment while we locate your draft
               </p>
               <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -285,6 +285,37 @@ function CreateAgentContent() {
                   Checking... ({pollAttempts}/{MAX_POLL_ATTEMPTS})
                 </span>
               </div>
+            </>
+          )}
+
+          {callStatus === 'draft-ready' && draftId && (
+            <>
+              <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-300">
+                <FileEdit className="w-14 h-14 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Your panel is ready! 🎉
+              </h2>
+              <p className="text-lg text-gray-600 mb-2">
+                {draftName}
+              </p>
+              <p className="text-gray-500 mb-8">
+                Review and edit your panel configuration, then create your AI interviewer.
+              </p>
+              <Link
+                href={`/panels/drafts/${draftId}`}
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-emerald-200 hover:shadow-2xl hover:shadow-emerald-300 transition-all hover:scale-105"
+              >
+                <FileEdit className="w-6 h-6" />
+                Review & Edit Panel
+                <ArrowRight className="w-6 h-6" />
+              </Link>
+              <button
+                onClick={retry}
+                className="block mx-auto mt-6 text-sm text-gray-400 hover:text-gray-600 transition"
+              >
+                Start over with a new panel
+              </button>
             </>
           )}
 
