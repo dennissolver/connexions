@@ -173,7 +173,6 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
       supabaseAuthConfigured: true,
       vercelEnvUpdated: true,
       verificationPassed: true,
-      finalDeploymentId: newDeploymentId || ctx.metadata.vercelDeploymentId,
     }
   };
 }
