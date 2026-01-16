@@ -2,7 +2,7 @@
 
 import { ProvisionContext, ProvisionStepResult } from '../types';
 import { configureSupabaseAuth } from './supabase';
-import { verifyAllComplete, verifyVercelEnvVars, verifyChildSupabaseData, verifyElevenLabs } from './verify';
+import { verifyVercelEnvVars, verifyChildSupabaseData, verifyElevenLabs } from './verify';
 
 const VERCEL_API = 'https://api.vercel.com';
 
@@ -21,6 +21,7 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
   // 2. Update Vercel env with NEXT_PUBLIC_ELEVENLABS_AGENT_ID (now that we have it)
   console.log('[webhook] Step 2: Updating Vercel environment variables...');
   if (elevenLabsAgentId && ctx.metadata.vercelProjectId) {
+    // NEXT_PUBLIC_ for client-side access
     await updateVercelEnvVar(
       ctx.vercelToken,
       ctx.metadata.vercelProjectId,
@@ -30,7 +31,7 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
       'plain' // NEXT_PUBLIC_ vars must be plain, not encrypted
     );
 
-    // Also ensure ELEVENLABS_AGENT_ID is set (for server-side use)
+    // Server-side env var
     await updateVercelEnvVar(
       ctx.vercelToken,
       ctx.metadata.vercelProjectId,
@@ -41,7 +42,7 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
     );
   }
 
-  // 3. Register with parent platform
+  // 3. Register with parent platform (agent_routes table for webhook routing)
   console.log('[webhook] Step 3: Registering with parent platform...');
   try {
     const registerUrl = ctx.parentWebhookUrl.replace('/child/transcript', '/webhooks/register-agent');
@@ -97,11 +98,30 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
     }
   }
 
-  // 5. VERIFY all critical data was written correctly before proceeding
-  console.log('[webhook] Step 5: Verifying configuration was applied...');
+  // 5. Trigger redeployment so the new env vars take effect
+  console.log('[webhook] Step 5: Triggering redeployment...');
+  let newDeploymentId: string | null = null;
+  if (ctx.metadata.vercelProjectId) {
+    newDeploymentId = await triggerRedeployment(ctx);
+  }
+
+  // 6. WAIT for redeployment to complete (critical!)
+  if (newDeploymentId) {
+    console.log('[webhook] Step 6: Waiting for redeployment to complete...');
+    const deploymentReady = await waitForDeployment(ctx, newDeploymentId, 120000); // 2 min timeout
+
+    if (!deploymentReady) {
+      console.warn('[webhook] Redeployment did not complete in time, but continuing...');
+    } else {
+      console.log('[webhook] Redeployment completed successfully');
+    }
+  }
+
+  // 7. VERIFY all critical data was written correctly
+  console.log('[webhook] Step 7: Verifying configuration was applied...');
 
   // Wait a moment for writes to propagate
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 3000));
 
   // Verify Vercel env vars
   const envVerification = await verifyVercelEnvVars(ctx);
@@ -143,13 +163,6 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
   }
 
   console.log('[webhook] All verifications passed!');
-
-  // 6. Trigger a redeployment so the new env vars take effect
-  console.log('[webhook] Step 6: Triggering redeployment...');
-  if (ctx.metadata.vercelProjectId) {
-    await triggerRedeployment(ctx);
-  }
-
   console.log('[webhook] All configuration steps complete!');
 
   return {
@@ -160,6 +173,7 @@ export async function registerWebhook(ctx: ProvisionContext): Promise<ProvisionS
       supabaseAuthConfigured: true,
       vercelEnvUpdated: true,
       verificationPassed: true,
+      finalDeploymentId: newDeploymentId || ctx.metadata.vercelDeploymentId,
     }
   };
 }
@@ -225,7 +239,7 @@ async function updateVercelEnvVar(
   }
 }
 
-async function triggerRedeployment(ctx: ProvisionContext): Promise<void> {
+async function triggerRedeployment(ctx: ProvisionContext): Promise<string | null> {
   const teamQuery = ctx.vercelTeamId ? `?teamId=${ctx.vercelTeamId}` : '';
   const headers = {
     Authorization: `Bearer ${ctx.vercelToken}`,
@@ -241,13 +255,13 @@ async function triggerRedeployment(ctx: ProvisionContext): Promise<void> {
 
     if (!deploymentsRes.ok) {
       console.warn('[webhook] Failed to get deployments for redeployment');
-      return;
+      return null;
     }
 
     const { deployments } = await deploymentsRes.json();
     if (deployments.length === 0) {
       console.warn('[webhook] No deployments found to redeploy');
-      return;
+      return null;
     }
 
     const latestDeployment = deployments[0];
@@ -264,13 +278,63 @@ async function triggerRedeployment(ctx: ProvisionContext): Promise<void> {
     });
 
     if (redeployRes.ok) {
-      console.log('[webhook] Triggered redeployment successfully');
+      const newDeployment = await redeployRes.json();
+      console.log('[webhook] Triggered redeployment successfully:', newDeployment.id);
+      return newDeployment.id;
     } else {
-      // Try alternative method - just log, don't fail
       console.warn('[webhook] Redeployment API returned:', await redeployRes.text());
       console.log('[webhook] Note: Env vars will take effect on next deployment');
+      return null;
     }
   } catch (err) {
     console.warn('[webhook] Redeployment error:', err);
+    return null;
   }
+}
+
+/**
+ * Wait for a deployment to reach READY state
+ */
+async function waitForDeployment(
+  ctx: ProvisionContext,
+  deploymentId: string,
+  timeoutMs: number = 120000
+): Promise<boolean> {
+  const teamQueryAmp = ctx.vercelTeamId ? `&teamId=${ctx.vercelTeamId}` : '';
+  const headers = {
+    Authorization: `Bearer ${ctx.vercelToken}`,
+  };
+
+  const startTime = Date.now();
+  const pollInterval = 5000; // Check every 5 seconds
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const res = await fetch(
+        `${VERCEL_API}/v13/deployments/${deploymentId}?${teamQueryAmp.replace('&', '')}`,
+        { headers }
+      );
+
+      if (res.ok) {
+        const deployment = await res.json();
+        console.log(`[webhook] Deployment ${deploymentId} state: ${deployment.readyState}`);
+
+        if (deployment.readyState === 'READY') {
+          return true;
+        }
+
+        if (deployment.readyState === 'ERROR' || deployment.readyState === 'CANCELED') {
+          console.error(`[webhook] Deployment failed with state: ${deployment.readyState}`);
+          return false;
+        }
+      }
+    } catch (err) {
+      console.warn('[webhook] Error checking deployment status:', err);
+    }
+
+    await new Promise(r => setTimeout(r, pollInterval));
+  }
+
+  console.warn(`[webhook] Deployment did not complete within ${timeoutMs}ms`);
+  return false;
 }

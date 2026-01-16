@@ -23,24 +23,61 @@ const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent. Your goal
 ## Wrap Up
 When you have all the information, use the save_panel_draft tool to save it. Then say: "Perfect! I've saved your panel as a draft. Check your screen to review and finalize it!"`;
 
+// Tool parameters for save_panel_draft - shared across all agents
+const SAVE_DRAFT_TOOL_PARAMS = {
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+      description: 'Name of the interview panel',
+    },
+    description: {
+      type: 'string',
+      description: 'Brief description of what this panel is for',
+    },
+    interview_type: {
+      type: 'string',
+      description: 'Type of interviews (e.g., customer feedback, market research)',
+    },
+    target_audience: {
+      type: 'string',
+      description: 'Who will be interviewed',
+    },
+    tone: {
+      type: 'string',
+      description: 'Tone of the interviewer (e.g., professional, friendly)',
+    },
+    duration_minutes: {
+      type: 'number',
+      description: 'Expected interview duration in minutes',
+    },
+    questions: {
+      type: 'array',
+      description: 'List of key questions or topics to cover',
+    },
+  },
+  required: ['name', 'description', 'questions'],
+};
+
 /**
- * Create a webhook tool in the ElevenLabs workspace
- * Returns the tool ID if successful
+ * Get or create the shared save_panel_draft tool that routes through the parent
+ * All child platforms share this one tool - the router determines which child to forward to
  */
-async function createOrGetTool(
+async function getOrCreateSharedTool(
   apiKey: string,
-  toolName: string,
-  toolDescription: string,
-  webhookUrl: string,
-  parameters: any
-): Promise<string | null> {
+  routerUrl: string
+): Promise<string> {
   const headers = {
     'xi-api-key': apiKey,
     'Content-Type': 'application/json',
   };
 
-  // First, list existing tools to check if it already exists
-  console.log(`[elevenlabs] Checking for existing tool: ${toolName}`);
+  const toolName = 'save_panel_draft';
+  const toolDescription = 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.';
+
+  console.log(`[elevenlabs] Looking for shared tool: ${toolName}`);
+
+  // Check if tool already exists
   const listRes = await fetch(`${ELEVENLABS_API}/convai/tools`, { headers });
 
   if (listRes.ok) {
@@ -50,9 +87,19 @@ async function createOrGetTool(
     );
 
     if (existingTool) {
-      console.log(`[elevenlabs] Found existing tool: ${existingTool.id}`);
+      // Check if webhook URL is correct
+      const currentUrl = existingTool.tool_config?.params?.url;
 
-      // Update the tool with current webhook URL
+      if (currentUrl === routerUrl) {
+        console.log(`[elevenlabs] Found existing tool with correct URL: ${existingTool.id}`);
+        return existingTool.id;
+      }
+
+      // Update the tool to point to the router
+      console.log(`[elevenlabs] Updating tool ${existingTool.id} to point to router`);
+      console.log(`[elevenlabs] Old URL: ${currentUrl}`);
+      console.log(`[elevenlabs] New URL: ${routerUrl}`);
+
       const updateRes = await fetch(`${ELEVENLABS_API}/convai/tools/${existingTool.id}`, {
         method: 'PATCH',
         headers,
@@ -63,33 +110,31 @@ async function createOrGetTool(
             description: toolDescription,
             params: {
               method: 'POST',
-              url: webhookUrl,
-              body_params: parameters.properties ?
-                Object.entries(parameters.properties).map(([key, value]: [string, any]) => ({
-                  name: key,
-                  description: value.description || key,
-                  type: value.type || 'string',
-                  required: parameters.required?.includes(key) || false,
-                })) : [],
+              url: routerUrl,
+              body_params: Object.entries(SAVE_DRAFT_TOOL_PARAMS.properties).map(([key, value]: [string, any]) => ({
+                name: key,
+                description: value.description || key,
+                type: value.type === 'array' ? 'array' : (value.type || 'string'),
+                required: SAVE_DRAFT_TOOL_PARAMS.required?.includes(key) || false,
+              })),
             },
           },
         }),
       });
 
       if (updateRes.ok) {
-        console.log(`[elevenlabs] Updated existing tool: ${existingTool.id}`);
-        return existingTool.id;
+        console.log(`[elevenlabs] Updated tool to use router URL`);
       } else {
         console.warn(`[elevenlabs] Failed to update tool: ${await updateRes.text()}`);
-        // Still return the existing ID even if update failed
-        return existingTool.id;
       }
+
+      return existingTool.id;
     }
   }
 
-  // Create new tool
-  console.log(`[elevenlabs] Creating new tool: ${toolName}`);
-  console.log(`[elevenlabs] Webhook URL: ${webhookUrl}`);
+  // Create new tool pointing to router
+  console.log(`[elevenlabs] Creating new shared tool: ${toolName}`);
+  console.log(`[elevenlabs] Router URL: ${routerUrl}`);
 
   const toolConfig = {
     tool_config: {
@@ -98,19 +143,16 @@ async function createOrGetTool(
       description: toolDescription,
       params: {
         method: 'POST',
-        url: webhookUrl,
-        body_params: parameters.properties ?
-          Object.entries(parameters.properties).map(([key, value]: [string, any]) => ({
-            name: key,
-            description: value.description || key,
-            type: value.type === 'array' ? 'array' : (value.type || 'string'),
-            required: parameters.required?.includes(key) || false,
-          })) : [],
+        url: routerUrl,
+        body_params: Object.entries(SAVE_DRAFT_TOOL_PARAMS.properties).map(([key, value]: [string, any]) => ({
+          name: key,
+          description: value.description || key,
+          type: value.type === 'array' ? 'array' : (value.type || 'string'),
+          required: SAVE_DRAFT_TOOL_PARAMS.required?.includes(key) || false,
+        })),
       },
     },
   };
-
-  console.log(`[elevenlabs] Tool config:`, JSON.stringify(toolConfig, null, 2));
 
   const createRes = await fetch(`${ELEVENLABS_API}/convai/tools`, {
     method: 'POST',
@@ -121,11 +163,11 @@ async function createOrGetTool(
   if (!createRes.ok) {
     const errorText = await createRes.text();
     console.error(`[elevenlabs] Failed to create tool: ${errorText}`);
-    return null;
+    throw new Error(`Failed to create shared tool: ${errorText}`);
   }
 
   const tool = await createRes.json();
-  console.log(`[elevenlabs] Created tool with ID: ${tool.id}`);
+  console.log(`[elevenlabs] Created shared tool with ID: ${tool.id}`);
   return tool.id;
 }
 
@@ -142,7 +184,6 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exi
       const agent = await res.json();
       console.log(`[elevenlabs] Verified agent exists: ${agent.name} (${agentId})`);
 
-      // Log tool configuration
       const toolIds = agent.conversation_config?.agent?.prompt?.tool_ids || [];
       console.log(`[elevenlabs] Agent tool_ids: ${JSON.stringify(toolIds)}`);
 
@@ -160,10 +201,12 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exi
 export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
   const childPlatformUrl = ctx.metadata.vercelUrl || `https://${ctx.projectSlug}.vercel.app`;
-  const toolWebhookUrl = `${childPlatformUrl}/api/tools/save-draft`;
 
-  // Centralized router webhook URL - all agents route through parent
-  const routerWebhookUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
+  // All tools route through the parent's save-draft-router
+  const toolRouterUrl = `${ctx.publicBaseUrl}/api/tools/save-draft-router`;
+
+  // All webhooks route through the parent's elevenlabs-router
+  const webhookRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
   const headers = {
     'xi-api-key': ctx.elevenLabsApiKey,
@@ -171,60 +214,15 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   };
 
   console.log(`[elevenlabs] Agent name: ${agentName}`);
-  console.log(`[elevenlabs] Tool webhook URL: ${toolWebhookUrl}`);
-  console.log(`[elevenlabs] Router webhook URL: ${routerWebhookUrl}`);
+  console.log(`[elevenlabs] Child platform URL: ${childPlatformUrl}`);
+  console.log(`[elevenlabs] Tool router URL: ${toolRouterUrl}`);
+  console.log(`[elevenlabs] Webhook router URL: ${webhookRouterUrl}`);
 
-  // Step 1: Create or get the save_panel_draft tool
-  const toolParameters = {
-    type: 'object',
-    properties: {
-      name: {
-        type: 'string',
-        description: 'Name of the interview panel',
-      },
-      description: {
-        type: 'string',
-        description: 'Brief description of what this panel is for',
-      },
-      interview_type: {
-        type: 'string',
-        description: 'Type of interviews (e.g., customer feedback, market research)',
-      },
-      target_audience: {
-        type: 'string',
-        description: 'Who will be interviewed',
-      },
-      tone: {
-        type: 'string',
-        description: 'Tone of the interviewer (e.g., professional, friendly)',
-      },
-      duration_minutes: {
-        type: 'number',
-        description: 'Expected interview duration in minutes',
-      },
-      questions: {
-        type: 'array',
-        description: 'List of key questions or topics to cover',
-      },
-    },
-    required: ['name', 'description', 'questions'],
-  };
+  // Step 1: Get or create the shared save_panel_draft tool (points to router)
+  const toolId = await getOrCreateSharedTool(ctx.elevenLabsApiKey, toolRouterUrl);
+  console.log(`[elevenlabs] Using shared tool ID: ${toolId}`);
 
-  const toolId = await createOrGetTool(
-    ctx.elevenLabsApiKey,
-    'save_panel_draft',
-    'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
-    toolWebhookUrl,
-    toolParameters
-  );
-
-  if (!toolId) {
-    throw new Error('Failed to create save_panel_draft tool');
-  }
-
-  console.log(`[elevenlabs] Tool ID for save_panel_draft: ${toolId}`);
-
-  // Step 2: Check if agent already exists
+  // Step 2: Check if agent already exists for this platform
   const listRes = await fetch(`${ELEVENLABS_API}/convai/agents`, { headers });
 
   if (listRes.ok) {
@@ -235,7 +233,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
       console.log(`[elevenlabs] Updating agent with tool_ids...`);
 
-      // Update agent to link the tool
+      // Update agent to ensure it has the correct tool and webhook
       const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
         method: 'PATCH',
         headers,
@@ -256,7 +254,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           },
           platform_settings: {
             webhook: {
-              url: routerWebhookUrl,
+              url: webhookRouterUrl,
               events: ['conversation.ended', 'conversation.transcript'],
             },
           },
@@ -264,7 +262,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       });
 
       if (updateRes.ok) {
-        console.log(`[elevenlabs] Updated agent ${existing.agent_id} with tool_ids`);
+        console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
       } else {
         const errorText = await updateRes.text();
         console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
@@ -284,15 +282,15 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           elevenLabsAgentId: existing.agent_id,
           elevenLabsAgentName: existing.name,
           elevenLabsToolId: toolId,
-          elevenLabsToolUrl: toolWebhookUrl,
-          elevenLabsRouterUrl: routerWebhookUrl,
+          elevenLabsToolUrl: toolRouterUrl,
+          elevenLabsRouterUrl: webhookRouterUrl,
           elevenLabsVerified: true,
         },
       };
     }
   }
 
-  // Step 3: Create new agent with tool_ids
+  // Step 3: Create new agent
   console.log(`[elevenlabs] Creating new agent: ${agentName}`);
 
   const agentConfig = {
@@ -322,13 +320,11 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
     },
     platform_settings: {
       webhook: {
-        url: routerWebhookUrl,
+        url: webhookRouterUrl,
         events: ['conversation.ended', 'conversation.transcript'],
       },
     },
   };
-
-  console.log(`[elevenlabs] Agent config:`, JSON.stringify(agentConfig, null, 2));
 
   const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
@@ -369,8 +365,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       elevenLabsAgentId: agent.agent_id,
       elevenLabsAgentName: agentName,
       elevenLabsToolId: toolId,
-      elevenLabsToolUrl: toolWebhookUrl,
-      elevenLabsRouterUrl: routerWebhookUrl,
+      elevenLabsToolUrl: toolRouterUrl,
+      elevenLabsRouterUrl: webhookRouterUrl,
       elevenLabsVerified: true,
     },
   };
