@@ -23,105 +23,114 @@ const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent. Your goal
 ## Wrap Up
 When you have all the information, use the save_panel_draft tool to save it. Then say: "Perfect! I've saved your panel as a draft. Check your screen to review and finalize it!"`;
 
-function buildAgentConfig(
-  agentName: string,
-  platformName: string,
-  toolWebhookUrl: string,
-  routerWebhookUrl: string,
-  webhookSecret?: string
-) {
-  const config: any = {
-    name: agentName,
-    conversation_config: {
-      agent: {
-        prompt: {
-          prompt: SETUP_AGENT_PROMPT.replace(/\{platformName\}/g, platformName),
-        },
-        first_message: `Hello! I'm Sandra, your AI setup assistant for ${platformName}. I'll help you create a custom interview panel. Ready to get started?`,
-        language: 'en',
-      },
-      tts: {
-        voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah voice
-        model_id: 'eleven_flash_v2',
-      },
-      stt: {
-        provider: 'elevenlabs',
-      },
-      turn: {
-        mode: 'turn',
-      },
-      conversation: {
-        max_duration_seconds: 3600,
-      },
-    },
-    platform_settings: {
-      tools: [
-        {
-          type: 'webhook',
-          name: 'save_panel_draft',
-          description: 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
-          webhook: {
-            url: toolWebhookUrl,
-            method: 'POST',
-          },
-          parameters: {
-            type: 'object',
-            properties: {
-              name: {
-                type: 'string',
-                description: 'Name of the interview panel',
-              },
-              description: {
-                type: 'string',
-                description: 'Brief description of what this panel is for',
-              },
-              interview_type: {
-                type: 'string',
-                description: 'Type of interviews (e.g., customer feedback, market research)',
-              },
-              target_audience: {
-                type: 'string',
-                description: 'Who will be interviewed',
-              },
-              tone: {
-                type: 'string',
-                description: 'Tone of the interviewer (e.g., professional, friendly)',
-              },
-              duration_minutes: {
-                type: 'number',
-                description: 'Expected interview duration in minutes',
-              },
-              questions: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'List of key questions or topics to cover',
-              },
+/**
+ * Create a webhook tool in the ElevenLabs workspace
+ * Returns the tool ID if successful
+ */
+async function createOrGetTool(
+  apiKey: string,
+  toolName: string,
+  toolDescription: string,
+  webhookUrl: string,
+  parameters: any
+): Promise<string | null> {
+  const headers = {
+    'xi-api-key': apiKey,
+    'Content-Type': 'application/json',
+  };
+
+  // First, list existing tools to check if it already exists
+  console.log(`[elevenlabs] Checking for existing tool: ${toolName}`);
+  const listRes = await fetch(`${ELEVENLABS_API}/convai/tools`, { headers });
+
+  if (listRes.ok) {
+    const data = await listRes.json();
+    const existingTool = data.tools?.find((t: any) =>
+      t.tool_config?.name === toolName || t.name === toolName
+    );
+
+    if (existingTool) {
+      console.log(`[elevenlabs] Found existing tool: ${existingTool.id}`);
+
+      // Update the tool with current webhook URL
+      const updateRes = await fetch(`${ELEVENLABS_API}/convai/tools/${existingTool.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          tool_config: {
+            type: 'webhook',
+            name: toolName,
+            description: toolDescription,
+            params: {
+              method: 'POST',
+              url: webhookUrl,
+              body_params: parameters.properties ?
+                Object.entries(parameters.properties).map(([key, value]: [string, any]) => ({
+                  name: key,
+                  description: value.description || key,
+                  type: value.type || 'string',
+                  required: parameters.required?.includes(key) || false,
+                })) : [],
             },
-            required: ['name', 'description', 'questions'],
           },
-        },
-      ],
-      // Webhook for conversation events (transcripts, etc.)
-      webhook: {
-        url: routerWebhookUrl,
-        events: ['conversation.ended', 'conversation.transcript'],
+        }),
+      });
+
+      if (updateRes.ok) {
+        console.log(`[elevenlabs] Updated existing tool: ${existingTool.id}`);
+        return existingTool.id;
+      } else {
+        console.warn(`[elevenlabs] Failed to update tool: ${await updateRes.text()}`);
+        // Still return the existing ID even if update failed
+        return existingTool.id;
+      }
+    }
+  }
+
+  // Create new tool
+  console.log(`[elevenlabs] Creating new tool: ${toolName}`);
+  console.log(`[elevenlabs] Webhook URL: ${webhookUrl}`);
+
+  const toolConfig = {
+    tool_config: {
+      type: 'webhook',
+      name: toolName,
+      description: toolDescription,
+      params: {
+        method: 'POST',
+        url: webhookUrl,
+        body_params: parameters.properties ?
+          Object.entries(parameters.properties).map(([key, value]: [string, any]) => ({
+            name: key,
+            description: value.description || key,
+            type: value.type === 'array' ? 'array' : (value.type || 'string'),
+            required: parameters.required?.includes(key) || false,
+          })) : [],
       },
     },
   };
 
-  // Add HMAC authentication if secret is provided
-  if (webhookSecret) {
-    config.platform_settings.webhook.authentication = {
-      type: 'hmac',
-      secret: webhookSecret,
-    };
+  console.log(`[elevenlabs] Tool config:`, JSON.stringify(toolConfig, null, 2));
+
+  const createRes = await fetch(`${ELEVENLABS_API}/convai/tools`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(toolConfig),
+  });
+
+  if (!createRes.ok) {
+    const errorText = await createRes.text();
+    console.error(`[elevenlabs] Failed to create tool: ${errorText}`);
+    return null;
   }
 
-  return config;
+  const tool = await createRes.json();
+  console.log(`[elevenlabs] Created tool with ID: ${tool.id}`);
+  return tool.id;
 }
 
 /**
- * Verify an ElevenLabs agent exists by fetching it
+ * Verify an ElevenLabs agent exists and has the expected tools
  */
 async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exists: boolean; agent?: any }> {
   try {
@@ -133,9 +142,9 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exi
       const agent = await res.json();
       console.log(`[elevenlabs] Verified agent exists: ${agent.name} (${agentId})`);
 
-      // Debug: Log the full agent config to see what's actually there
-      console.log(`[elevenlabs] Agent platform_settings:`, JSON.stringify(agent.platform_settings, null, 2));
-      console.log(`[elevenlabs] Agent tools:`, JSON.stringify(agent.platform_settings?.tools, null, 2));
+      // Log tool configuration
+      const toolIds = agent.conversation_config?.agent?.prompt?.tool_ids || [];
+      console.log(`[elevenlabs] Agent tool_ids: ${JSON.stringify(toolIds)}`);
 
       return { exists: true, agent };
     }
@@ -156,9 +165,6 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   // Centralized router webhook URL - all agents route through parent
   const routerWebhookUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
-  // HMAC secret for webhook authentication
-  const webhookSecret = ctx.elevenLabsWebhookSecret;
-
   const headers = {
     'xi-api-key': ctx.elevenLabsApiKey,
     'Content-Type': 'application/json',
@@ -167,9 +173,58 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   console.log(`[elevenlabs] Agent name: ${agentName}`);
   console.log(`[elevenlabs] Tool webhook URL: ${toolWebhookUrl}`);
   console.log(`[elevenlabs] Router webhook URL: ${routerWebhookUrl}`);
-  console.log(`[elevenlabs] HMAC auth: ${webhookSecret ? 'enabled' : 'disabled'}`);
 
-  // Check if agent already exists
+  // Step 1: Create or get the save_panel_draft tool
+  const toolParameters = {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Name of the interview panel',
+      },
+      description: {
+        type: 'string',
+        description: 'Brief description of what this panel is for',
+      },
+      interview_type: {
+        type: 'string',
+        description: 'Type of interviews (e.g., customer feedback, market research)',
+      },
+      target_audience: {
+        type: 'string',
+        description: 'Who will be interviewed',
+      },
+      tone: {
+        type: 'string',
+        description: 'Tone of the interviewer (e.g., professional, friendly)',
+      },
+      duration_minutes: {
+        type: 'number',
+        description: 'Expected interview duration in minutes',
+      },
+      questions: {
+        type: 'array',
+        description: 'List of key questions or topics to cover',
+      },
+    },
+    required: ['name', 'description', 'questions'],
+  };
+
+  const toolId = await createOrGetTool(
+    ctx.elevenLabsApiKey,
+    'save_panel_draft',
+    'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
+    toolWebhookUrl,
+    toolParameters
+  );
+
+  if (!toolId) {
+    throw new Error('Failed to create save_panel_draft tool');
+  }
+
+  console.log(`[elevenlabs] Tool ID for save_panel_draft: ${toolId}`);
+
+  // Step 2: Check if agent already exists
   const listRes = await fetch(`${ELEVENLABS_API}/convai/agents`, { headers });
 
   if (listRes.ok) {
@@ -178,77 +233,107 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
 
     if (existing) {
       console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
+      console.log(`[elevenlabs] Updating agent with tool_ids...`);
 
-      // Verify the agent actually exists (double-check)
+      // Update agent to link the tool
+      const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          conversation_config: {
+            agent: {
+              prompt: {
+                prompt: SETUP_AGENT_PROMPT.replace(/\{platformName\}/g, ctx.platformName),
+                tool_ids: [toolId],
+              },
+              first_message: `Hello! I'm Sandra, your AI setup assistant for ${ctx.platformName}. I'll help you create a custom interview panel. Ready to get started?`,
+              language: 'en',
+            },
+            tts: {
+              voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah voice
+              model_id: 'eleven_flash_v2',
+            },
+          },
+          platform_settings: {
+            webhook: {
+              url: routerWebhookUrl,
+              events: ['conversation.ended', 'conversation.transcript'],
+            },
+          },
+        }),
+      });
+
+      if (updateRes.ok) {
+        console.log(`[elevenlabs] Updated agent ${existing.agent_id} with tool_ids`);
+      } else {
+        const errorText = await updateRes.text();
+        console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
+        throw new Error(`Failed to update agent: ${errorText}`);
+      }
+
+      // Verify the update
       const verification = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
       if (!verification.exists) {
-        console.error(`[elevenlabs] Existing agent ${existing.agent_id} failed verification`);
-        // Fall through to create new agent
-      } else {
-        console.log(`[elevenlabs] Updating existing agent with correct URLs...`);
-
-        const updateRes = await fetch(`${ELEVENLABS_API}/convai/agents/${existing.agent_id}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify(buildAgentConfig(
-            agentName,
-            ctx.platformName,
-            toolWebhookUrl,
-            routerWebhookUrl,
-            webhookSecret
-          )),
-        });
-
-        if (updateRes.ok) {
-          console.log(`[elevenlabs] Updated agent ${existing.agent_id}`);
-
-          // Verify update took effect
-          const updateVerification = await verifyAgentExists(existing.agent_id, ctx.elevenLabsApiKey);
-          if (!updateVerification.exists) {
-            throw new Error(`Agent update verification failed for ${existing.agent_id}`);
-          }
-
-          // Check if tools were applied
-          const tools = updateVerification.agent?.platform_settings?.tools || [];
-          const hasSaveDraftTool = tools.some((t: any) => t.name === 'save_panel_draft');
-          if (!hasSaveDraftTool) {
-            console.warn(`[elevenlabs] WARNING: save_panel_draft tool not found after update!`);
-            console.warn(`[elevenlabs] Tools found: ${tools.map((t: any) => t.name).join(', ') || 'none'}`);
-          }
-        } else {
-          const errorText = await updateRes.text();
-          console.error(`[elevenlabs] Failed to update agent: ${errorText}`);
-          throw new Error(`Failed to update ElevenLabs agent: ${errorText}`);
-        }
-
-        return {
-          nextState: 'WEBHOOK_REGISTERING',
-          metadata: {
-            ...ctx.metadata,
-            elevenLabsAgentId: existing.agent_id,
-            elevenLabsAgentName: existing.name,
-            elevenLabsToolUrl: toolWebhookUrl,
-            elevenLabsRouterUrl: routerWebhookUrl,
-            elevenLabsVerified: true,
-          },
-        };
+        throw new Error(`Agent verification failed after update`);
       }
+
+      return {
+        nextState: 'WEBHOOK_REGISTERING',
+        metadata: {
+          ...ctx.metadata,
+          elevenLabsAgentId: existing.agent_id,
+          elevenLabsAgentName: existing.name,
+          elevenLabsToolId: toolId,
+          elevenLabsToolUrl: toolWebhookUrl,
+          elevenLabsRouterUrl: routerWebhookUrl,
+          elevenLabsVerified: true,
+        },
+      };
     }
   }
 
-  // Create new agent
+  // Step 3: Create new agent with tool_ids
   console.log(`[elevenlabs] Creating new agent: ${agentName}`);
+
+  const agentConfig = {
+    name: agentName,
+    conversation_config: {
+      agent: {
+        prompt: {
+          prompt: SETUP_AGENT_PROMPT.replace(/\{platformName\}/g, ctx.platformName),
+          tool_ids: [toolId],
+        },
+        first_message: `Hello! I'm Sandra, your AI setup assistant for ${ctx.platformName}. I'll help you create a custom interview panel. Ready to get started?`,
+        language: 'en',
+      },
+      tts: {
+        voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah voice
+        model_id: 'eleven_flash_v2',
+      },
+      stt: {
+        provider: 'elevenlabs',
+      },
+      turn: {
+        mode: 'turn',
+      },
+      conversation: {
+        max_duration_seconds: 3600,
+      },
+    },
+    platform_settings: {
+      webhook: {
+        url: routerWebhookUrl,
+        events: ['conversation.ended', 'conversation.transcript'],
+      },
+    },
+  };
+
+  console.log(`[elevenlabs] Agent config:`, JSON.stringify(agentConfig, null, 2));
 
   const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(buildAgentConfig(
-      agentName,
-      ctx.platformName,
-      toolWebhookUrl,
-      routerWebhookUrl,
-      webhookSecret
-    )),
+    body: JSON.stringify(agentConfig),
   });
 
   if (!createRes.ok) {
@@ -260,26 +345,22 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   const agent = await createRes.json();
   console.log(`[elevenlabs] Created agent: ${agent.agent_id}`);
 
-  // CRITICAL: Verify the agent was actually created
+  // Verify the agent was created correctly
   console.log(`[elevenlabs] Verifying agent creation...`);
-
-  // Wait a moment for propagation
   await new Promise(r => setTimeout(r, 1000));
 
   const verification = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
   if (!verification.exists) {
-    throw new Error(`Agent creation verification failed: ${agent.agent_id} not found after creation`);
+    throw new Error(`Agent creation verification failed: ${agent.agent_id} not found`);
   }
 
-  // Check if tools were applied
-  const tools = verification.agent?.platform_settings?.tools || [];
-  const hasSaveDraftTool = tools.some((t: any) => t.name === 'save_panel_draft');
-  if (!hasSaveDraftTool) {
-    console.warn(`[elevenlabs] WARNING: save_panel_draft tool not found after creation!`);
-    console.warn(`[elevenlabs] Tools found: ${tools.map((t: any) => t.name).join(', ') || 'none'}`);
+  // Check if tool_ids are present
+  const toolIds = verification.agent?.conversation_config?.agent?.prompt?.tool_ids || [];
+  if (!toolIds.includes(toolId)) {
+    console.warn(`[elevenlabs] WARNING: tool_id ${toolId} not found in agent's tool_ids: ${JSON.stringify(toolIds)}`);
+  } else {
+    console.log(`[elevenlabs] Tool properly linked to agent`);
   }
-
-  console.log(`[elevenlabs] Agent verified successfully: ${agent.agent_id}`);
 
   return {
     nextState: 'WEBHOOK_REGISTERING',
@@ -287,6 +368,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       ...ctx.metadata,
       elevenLabsAgentId: agent.agent_id,
       elevenLabsAgentName: agentName,
+      elevenLabsToolId: toolId,
       elevenLabsToolUrl: toolWebhookUrl,
       elevenLabsRouterUrl: routerWebhookUrl,
       elevenLabsVerified: true,

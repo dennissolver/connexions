@@ -286,6 +286,7 @@ export async function verifyVercelEnvVars(ctx: ProvisionContext): Promise<Verifi
  */
 export async function verifyElevenLabs(ctx: ProvisionContext): Promise<VerificationResult> {
   const agentId = ctx.metadata.elevenLabsAgentId;
+  const expectedToolId = ctx.metadata.elevenLabsToolId;
 
   if (!agentId) {
     return { success: false, error: 'No ElevenLabs agent ID in metadata' };
@@ -306,18 +307,12 @@ export async function verifyElevenLabs(ctx: ProvisionContext): Promise<Verificat
 
     const agent = await res.json();
 
-    // Log full structure for debugging
+    // Log structure for debugging
     console.log(`[verify] Agent name: ${agent.name}`);
-    console.log(`[verify] Agent has platform_settings: ${!!agent.platform_settings}`);
 
-    // Check different possible locations for tools
-    const platformTools = agent.platform_settings?.tools || [];
-    const conversationTools = agent.conversation_config?.agent?.tools || [];
-    const allTools = [...platformTools, ...conversationTools];
-
-    console.log(`[verify] platform_settings.tools count: ${platformTools.length}`);
-    console.log(`[verify] conversation_config.agent.tools count: ${conversationTools.length}`);
-    console.log(`[verify] All tool names: ${allTools.map((t: any) => t.name || t.tool_name || 'unnamed').join(', ') || 'none'}`);
+    // Check for tool_ids in the new location (conversation_config.agent.prompt.tool_ids)
+    const toolIds = agent.conversation_config?.agent?.prompt?.tool_ids || [];
+    console.log(`[verify] Agent tool_ids: ${JSON.stringify(toolIds)}`);
 
     // Verify webhook URL is configured correctly
     const webhookUrl = agent.platform_settings?.webhook?.url;
@@ -327,24 +322,29 @@ export async function verifyElevenLabs(ctx: ProvisionContext): Promise<Verificat
       console.warn(`[verify] Agent webhook URL mismatch. Expected: ${expectedRouterUrl}, Got: ${webhookUrl}`);
     }
 
-    // Look for save_panel_draft tool in any location
-    const saveDraftTool = allTools.find((t: any) =>
-      t.name === 'save_panel_draft' || t.tool_name === 'save_panel_draft'
-    );
-
-    if (!saveDraftTool) {
-      // This is now a warning, not a failure - we want to see what's happening
-      console.warn(`[verify] save_panel_draft tool not found on agent`);
-      console.warn(`[verify] Full platform_settings: ${JSON.stringify(agent.platform_settings, null, 2)}`);
-
+    // Check if the expected tool ID is linked to the agent
+    if (expectedToolId && !toolIds.includes(expectedToolId)) {
       return {
         success: false,
-        error: `save_panel_draft tool not configured on agent. Tools found: ${allTools.map((t: any) => t.name || t.tool_name).join(', ') || 'none'}`,
+        error: `Tool ${expectedToolId} not linked to agent. Agent has tool_ids: ${JSON.stringify(toolIds)}`,
         details: {
           agentId,
           agentName: agent.name,
-          platformToolsCount: platformTools.length,
-          conversationToolsCount: conversationTools.length,
+          toolIds,
+          expectedToolId,
+        }
+      };
+    }
+
+    // If no expected tool ID but we need at least one tool
+    if (!expectedToolId && toolIds.length === 0) {
+      return {
+        success: false,
+        error: 'No tools linked to agent',
+        details: {
+          agentId,
+          agentName: agent.name,
+          toolIds,
         }
       };
     }
@@ -355,8 +355,8 @@ export async function verifyElevenLabs(ctx: ProvisionContext): Promise<Verificat
         agentId,
         agentName: agent.name,
         webhookConfigured: !!webhookUrl,
-        toolsCount: allTools.length,
-        hasSaveDraftTool: true,
+        toolIds,
+        toolCount: toolIds.length,
       }
     };
   } catch (err: any) {

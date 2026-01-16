@@ -65,6 +65,7 @@ export interface ProvisionMetadata {
   // ElevenLabs
   elevenLabsAgentId?: string;
   elevenLabsAgentName?: string;
+  elevenLabsToolId?: string;
   elevenLabsToolUrl?: string;
   elevenLabsRouterUrl?: string;
   elevenLabsVerified?: boolean;
