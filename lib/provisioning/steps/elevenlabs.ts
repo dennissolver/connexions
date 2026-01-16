@@ -4,32 +4,42 @@ import { ProvisionContext, ProvisionStepResult } from '../types';
 
 const ELEVENLABS_API = 'https://api.elevenlabs.io/v1';
 
-const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent. Your goal is to gather information from the user to create their custom AI interview panel.
+const SETUP_AGENT_PROMPT = `You are Sandra, a warm and friendly AI Setup Agent. Your goal is to help users create their custom AI interview panel through a natural conversation.
 
-## Ask these questions conversationally (one at a time):
-1. What name do you want for your Interview Panel?
-2. What type of interviews do you want to conduct? (e.g., customer feedback, employee onboarding, market research)
-3. Who will be interviewed? (e.g., customers, job candidates, employees)
-4. What tone should the interviewer have? (e.g., professional, friendly, casual)
-5. How long should interviews typically last? (e.g., 5 minutes, 10 minutes, 15 minutes)
-6. What are 3-5 key questions or topics the interviewer should cover?
+## Information to Gather (ask conversationally, one at a time):
+1. Panel name - What do they want to call their interview panel?
+2. Interview type - What kind of interviews? (customer feedback, market research, employee check-ins, candidate screening, etc.)
+3. Target audience - Who will be interviewed? (customers, employees, job candidates, etc.)
+4. Tone - How should the AI interviewer sound? (professional, friendly, casual, empathetic)
+5. Duration - How long should interviews typically last? (5, 10, or 15 minutes)
+6. Key questions - What 3-5 questions or topics should be covered?
 
-## Rules
-- Be conversational and natural
-- Ask ONE question at a time
-- Keep responses under 30 words
-- Confirm details before saving
+## Conversation Style
+- Be warm, encouraging, and conversational
+- Ask ONE question at a time, then listen
+- Keep your responses short (under 30 words)
+- Use their answers to inform follow-up questions
+- If something is unclear, ask a brief clarifying question
+- Acknowledge good ideas with brief positive feedback
 
-## Wrap Up
-When you have all the information, use the save_panel_draft tool to save it. Then say: "Perfect! I've saved your panel as a draft. Check your screen to review and finalize it!"`;
+## Before Saving
+Briefly summarize what you've collected:
+"So just to confirm - you want [panel name] for [interview type] interviews with [audience], using a [tone] tone, lasting about [duration] minutes, covering [brief topic summary]. Does that sound right?"
+
+Wait for their confirmation before saving.
+
+## After Saving (IMPORTANT)
+Once you've used the save_panel_draft tool successfully, say exactly this:
+"Perfect! Your draft is saved. Now just click the red End Call button on your screen, and you'll be taken straight to your draft page where you can review everything and make any tweaks before going live. Like magic!"
+
+Do NOT continue the conversation after this - let them end the call.`;
 
 /**
- * Create a unique tool for this agent with agent_id baked into the URL
+ * Create a unique tool for this agent pointing directly to the child platform
  */
 async function createAgentTool(
   apiKey: string,
-  agentId: string,
-  routerBaseUrl: string
+  childPlatformUrl: string
 ): Promise<string> {
   const headers = {
     'xi-api-key': apiKey,
@@ -37,13 +47,12 @@ async function createAgentTool(
   };
 
   const toolName = 'save_panel_draft';
-  const toolDescription = 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.';
+  const toolDescription = 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this ONLY after the user has confirmed all details are correct.';
 
-  // Bake the agent_id into the URL so the router knows where to forward
-  const toolUrl = `${routerBaseUrl}?agent_id=${agentId}`;
+  // Point directly to the child platform's save-draft endpoint
+  const toolUrl = `${childPlatformUrl}/api/tools/save-draft`;
 
-  console.log(`[elevenlabs] Creating tool for agent ${agentId}`);
-  console.log(`[elevenlabs] Tool URL: ${toolUrl}`);
+  console.log(`[elevenlabs] Creating tool with URL: ${toolUrl}`);
 
   const toolConfig = {
     tool_config: {
@@ -65,13 +74,13 @@ async function createAgentTool(
               description: 'List of interview questions',
               items: { type: 'string', description: 'A single interview question' }
             },
-            tone: { type: 'string', description: 'Interview tone (e.g., professional, friendly)' },
+            tone: { type: 'string', description: 'Interview tone (e.g., professional, friendly, casual)' },
             target_audience: { type: 'string', description: 'Who will be interviewed' },
             duration_minutes: { type: 'number', description: 'Expected interview duration in minutes' },
-            agent_name: { type: 'string', description: 'Name for the AI interviewer' },
-            voice_gender: { type: 'string', description: 'Voice gender: male or female' },
+            agent_name: { type: 'string', description: 'Name for the AI interviewer (optional)' },
+            voice_gender: { type: 'string', description: 'Voice gender preference: male or female' },
             closing_message: { type: 'string', description: 'Thank you message at end of interview' },
-            greeting: { type: 'string', description: 'Optional custom opening line' },
+            greeting: { type: 'string', description: 'Custom opening line for interviews (optional)' },
           },
         },
       },
@@ -121,10 +130,10 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exi
 export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
 
-  // Tool routes through the parent's save-draft-router
-  const toolRouterUrl = `${ctx.publicBaseUrl}/api/tools/save-draft-router`;
+  // Child platform URL - where the tool will point directly
+  const childPlatformUrl = ctx.childPlatformUrl || ctx.expectedVercelUrl;
 
-  // Webhooks route through the parent's elevenlabs-router
+  // Webhooks still route through parent for centralized tracking
   const webhookRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
   const headers = {
@@ -133,7 +142,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   };
 
   console.log(`[elevenlabs] Agent name: ${agentName}`);
-  console.log(`[elevenlabs] Tool router base URL: ${toolRouterUrl}`);
+  console.log(`[elevenlabs] Child platform URL: ${childPlatformUrl}`);
   console.log(`[elevenlabs] Webhook router URL: ${webhookRouterUrl}`);
 
   // Check if agent already exists for this platform
@@ -146,8 +155,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
     if (existing) {
       console.log(`[elevenlabs] Found existing agent: ${existing.agent_id}`);
 
-      // Create a new tool with correct URL for this agent
-      const toolId = await createAgentTool(ctx.elevenLabsApiKey, existing.agent_id, toolRouterUrl);
+      // Create a new tool pointing to the child platform
+      const toolId = await createAgentTool(ctx.elevenLabsApiKey, childPlatformUrl);
 
       // Update agent with new tool and webhook
       console.log(`[elevenlabs] Updating agent with new tool...`);
@@ -161,7 +170,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
                 prompt: SETUP_AGENT_PROMPT,
                 tool_ids: [toolId],
               },
-              first_message: `Hello! I'm Sandra, your AI setup assistant for ${ctx.platformName}. I'll help you create a custom interview panel. Ready to get started?`,
+              first_message: `Hi there! I'm Sandra, and I'm here to help you set up your interview panel for ${ctx.platformName}. This will only take a few minutes. Ready to get started?`,
               language: 'en',
             },
             tts: {
@@ -193,8 +202,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           elevenLabsAgentId: existing.agent_id,
           elevenLabsAgentName: agentName,
           elevenLabsToolId: toolId,
-          elevenLabsToolUrl: `${toolRouterUrl}?agent_id=${existing.agent_id}`,
-          elevenLabsRouterUrl: webhookRouterUrl,
+          elevenLabsToolUrl: `${childPlatformUrl}/api/tools/save-draft`,
+          elevenLabsWebhookUrl: webhookRouterUrl,
           elevenLabsVerified: true,
         },
       };
@@ -210,9 +219,9 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       agent: {
         prompt: {
           prompt: SETUP_AGENT_PROMPT,
-          tool_ids: [], // Will add tool after we have agent_id
+          tool_ids: [], // Will add tool after creation
         },
-        first_message: `Hello! I'm Sandra, your AI setup assistant for ${ctx.platformName}. I'll help you create a custom interview panel. Ready to get started?`,
+        first_message: `Hi there! I'm Sandra, and I'm here to help you set up your interview panel for ${ctx.platformName}. This will only take a few minutes. Ready to get started?`,
         language: 'en',
       },
       tts: {
@@ -252,8 +261,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
   const agent = await createRes.json();
   console.log(`[elevenlabs] Created agent: ${agent.agent_id}`);
 
-  // Now create the tool with the agent_id baked into the URL
-  const toolId = await createAgentTool(ctx.elevenLabsApiKey, agent.agent_id, toolRouterUrl);
+  // Now create the tool pointing to the child platform
+  const toolId = await createAgentTool(ctx.elevenLabsApiKey, childPlatformUrl);
 
   // Update the agent to use the tool
   console.log(`[elevenlabs] Updating agent with tool...`);
@@ -291,8 +300,8 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       elevenLabsAgentId: agent.agent_id,
       elevenLabsAgentName: agentName,
       elevenLabsToolId: toolId,
-      elevenLabsToolUrl: `${toolRouterUrl}?agent_id=${agent.agent_id}`,
-      elevenLabsRouterUrl: webhookRouterUrl,
+      elevenLabsToolUrl: `${childPlatformUrl}/api/tools/save-draft`,
+      elevenLabsWebhookUrl: webhookRouterUrl,
       elevenLabsVerified: true,
     },
   };
