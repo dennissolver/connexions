@@ -77,13 +77,13 @@ export async function POST(req: NextRequest) {
     if (!childUrl) {
       console.error('[save-draft-router] Could not determine child platform for agent:', agentId);
 
-      // Log for debugging
-      await supabase.from('webhook_logs').insert({
+      // Log for debugging (fire and forget)
+      supabase.from('webhook_logs').insert({
         webhook_type: 'save-draft-router',
         agent_id: agentId,
         conversation_id: conversationId,
         error_message: 'Could not determine child platform',
-      }).catch(() => {});
+      }).then(() => {});
 
       return NextResponse.json(
         { error: 'Could not determine child platform', agent_id: agentId },
@@ -110,14 +110,14 @@ export async function POST(req: NextRequest) {
     console.log('[save-draft-router] Child response status:', forwardRes.status);
     console.log('[save-draft-router] Child response:', responseText);
 
-    // Log successful routing
-    await supabase.from('webhook_logs').insert({
+    // Log successful routing (fire and forget)
+    supabase.from('webhook_logs').insert({
       webhook_type: 'save-draft-router',
       agent_id: agentId,
       conversation_id: conversationId,
       platform_url: childUrl,
       forward_status: forwardRes.status,
-    }).catch(() => {});
+    }).then(() => {});
 
     // Return the child's response
     let responseData;
