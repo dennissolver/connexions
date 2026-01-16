@@ -130,8 +130,12 @@ async function verifyAgentExists(agentId: string, apiKey: string): Promise<{ exi
 export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
 
-  // Child platform URL - where the tool will point directly
-  const childPlatformUrl = ctx.childPlatformUrl || ctx.expectedVercelUrl;
+  // Child platform URL from metadata (set by Vercel provisioning step)
+  const childPlatformUrl = ctx.metadata.vercelUrl;
+
+  if (!childPlatformUrl) {
+    throw new Error('Child platform URL not available - Vercel provisioning must complete first');
+  }
 
   // Webhooks still route through parent for centralized tracking
   const webhookRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
@@ -203,7 +207,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
           elevenLabsAgentName: agentName,
           elevenLabsToolId: toolId,
           elevenLabsToolUrl: `${childPlatformUrl}/api/tools/save-draft`,
-          elevenLabsWebhookUrl: webhookRouterUrl,
+          elevenLabsRouterUrl: webhookRouterUrl,
           elevenLabsVerified: true,
         },
       };
@@ -301,7 +305,7 @@ export async function createElevenLabsAgent(ctx: ProvisionContext): Promise<Prov
       elevenLabsAgentName: agentName,
       elevenLabsToolId: toolId,
       elevenLabsToolUrl: `${childPlatformUrl}/api/tools/save-draft`,
-      elevenLabsWebhookUrl: webhookRouterUrl,
+      elevenLabsRouterUrl: webhookRouterUrl,
       elevenLabsVerified: true,
     },
   };
