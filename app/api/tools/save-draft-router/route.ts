@@ -1,5 +1,4 @@
 // app/api/tools/save-draft-router/route.ts
-// Routes save_panel_draft tool calls from ElevenLabs to the correct child platform
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -13,13 +12,30 @@ export async function POST(req: NextRequest) {
   console.log('[save-draft-router] Received tool call');
 
   try {
+    // Log ALL headers to see what ElevenLabs sends
+    const headers: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    console.log('[save-draft-router] Headers:', JSON.stringify(headers, null, 2));
+
     const body = await req.json();
     console.log('[save-draft-router] Body:', JSON.stringify(body, null, 2));
 
-    // ElevenLabs sends conversation context in headers or body
-    // We need to identify which child platform this belongs to
-    const conversationId = req.headers.get('x-conversation-id') || body.conversation_id;
-    const agentId = req.headers.get('x-agent-id') || body.agent_id;
+    // ElevenLabs sends these in various places - check all possibilities
+    const conversationId =
+      req.headers.get('x-elevenlabs-conversation-id') ||
+      req.headers.get('x-conversation-id') ||
+      req.headers.get('elevenlabs-conversation-id') ||
+      body.conversation_id ||
+      body.metadata?.conversation_id;
+
+    const agentId =
+      req.headers.get('x-elevenlabs-agent-id') ||
+      req.headers.get('x-agent-id') ||
+      req.headers.get('elevenlabs-agent-id') ||
+      body.agent_id ||
+      body.metadata?.agent_id;
 
     console.log('[save-draft-router] Conversation ID:', conversationId);
     console.log('[save-draft-router] Agent ID:', agentId);
@@ -30,28 +46,28 @@ export async function POST(req: NextRequest) {
     if (agentId) {
       const { data: route } = await supabase
         .from('agent_routes')
-        .select('child_url')
+        .select('platform_url')
         .eq('agent_id', agentId)
         .single();
 
-      if (route?.child_url) {
-        childUrl = route.child_url;
+      if (route?.platform_url) {
+        childUrl = route.platform_url;
         console.log('[save-draft-router] Found child URL from agent_routes:', childUrl);
       }
     }
 
-    // Method 2: Look up by agent_id in provisioned_platforms metadata
+    // Method 2: Look up by agent_id in provision_runs metadata
     if (!childUrl && agentId) {
-      const { data: platforms } = await supabase
-        .from('provisioned_platforms')
+      const { data: runs } = await supabase
+        .from('provision_runs')
         .select('metadata')
         .eq('state', 'COMPLETE');
 
-      if (platforms) {
-        for (const platform of platforms) {
-          if (platform.metadata?.elevenLabsAgentId === agentId) {
-            childUrl = platform.metadata.vercelUrl;
-            console.log('[save-draft-router] Found child URL from provisioned_platforms:', childUrl);
+      if (runs) {
+        for (const run of runs) {
+          if (run.metadata?.elevenLabsAgentId === agentId) {
+            childUrl = run.metadata.vercelUrl;
+            console.log('[save-draft-router] Found child URL from provision_runs:', childUrl);
             break;
           }
         }
@@ -63,16 +79,14 @@ export async function POST(req: NextRequest) {
 
       // Log for debugging
       await supabase.from('webhook_logs').insert({
-        source: 'save-draft-router',
-        event_type: 'routing_failed',
+        webhook_type: 'save-draft-router',
         agent_id: agentId,
         conversation_id: conversationId,
-        payload: body,
-        error: 'Could not determine child platform',
-      });
+        error_message: 'Could not determine child platform',
+      }).catch(() => {});
 
       return NextResponse.json(
-        { error: 'Could not determine child platform' },
+        { error: 'Could not determine child platform', agent_id: agentId },
         { status: 400 }
       );
     }
@@ -98,14 +112,12 @@ export async function POST(req: NextRequest) {
 
     // Log successful routing
     await supabase.from('webhook_logs').insert({
-      source: 'save-draft-router',
-      event_type: 'routed',
+      webhook_type: 'save-draft-router',
       agent_id: agentId,
       conversation_id: conversationId,
-      payload: body,
-      child_url: childUrl,
-      response_status: forwardRes.status,
-    });
+      platform_url: childUrl,
+      forward_status: forwardRes.status,
+    }).catch(() => {});
 
     // Return the child's response
     let responseData;
@@ -127,14 +139,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Handle OPTIONS for CORS preflight
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-conversation-id, x-agent-id',
+      'Access-Control-Allow-Headers': 'Content-Type, x-conversation-id, x-agent-id, x-elevenlabs-agent-id, x-elevenlabs-conversation-id',
     },
   });
 }
