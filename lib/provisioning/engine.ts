@@ -1,5 +1,38 @@
 // lib/provisioning/engine.ts
 
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { ProvisionState, ALLOWED_TRANSITIONS } from './states';
+import { ProvisionRun, ProvisionMetadata } from './types';
+
+export async function getProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
+  const { data, error } = await supabaseAdmin
+    .from('provision_runs')
+    .select('*')
+    .eq('project_slug', projectSlug)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ProvisionRun | null;
+}
+
+export async function createProvisionRun(projectSlug: string, platformName: string, companyName: string): Promise<ProvisionRun> {
+  const existing = await getProvisionRun(projectSlug);
+  if (existing) return existing;
+
+  const { data, error } = await supabaseAdmin
+    .from('provision_runs')
+    .insert({
+      project_slug: projectSlug,
+      platform_name: platformName,
+      company_name: companyName,
+      state: 'INIT',
+      metadata: {}
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProvisionRun;
+}
+
 export async function advanceState(
   projectSlug: string,
   from: ProvisionState,
@@ -20,18 +53,51 @@ export async function advanceState(
     .eq('project_slug', projectSlug)
     .eq('state', from)
     .select()
-    .maybeSingle();  // ← Changed from .single()
+    .maybeSingle();
 
   if (error) throw error;
 
-  // If no row was updated, the state already changed - fetch current state
   if (!data) {
     const current = await getProvisionRun(projectSlug);
     if (!current) throw new Error(`Provision run not found: ${projectSlug}`);
-    // Log but don't fail - this is likely a race condition
     console.warn(`[${projectSlug}] State already changed from ${from}, current: ${current.state}`);
     return current;
   }
 
   return data as ProvisionRun;
+}
+
+export async function failRun(projectSlug: string, errorMessage: string): Promise<void> {
+  await supabaseAdmin
+    .from('provision_runs')
+    .update({
+      state: 'FAILED',
+      last_error: errorMessage,
+      updated_at: new Date().toISOString()
+    })
+    .eq('project_slug', projectSlug);
+}
+
+export async function deleteProvisionRun(projectSlug: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('provision_runs')
+    .delete()
+    .eq('project_slug', projectSlug);
+  if (error) throw error;
+}
+
+export async function resetProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
+  const { data, error } = await supabaseAdmin
+    .from('provision_runs')
+    .update({
+      state: 'INIT',
+      metadata: {},
+      last_error: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProvisionRun | null;
 }
