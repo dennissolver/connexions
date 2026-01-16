@@ -17,7 +17,7 @@ import {
   FileEdit,
   CheckCircle
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 type CallStatus = 'idle' | 'connecting' | 'connected' | 'error';
 
@@ -43,11 +43,16 @@ function CreateAgentContent() {
   const [draftReady, setDraftReady] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
   const [callStartTime, setCallStartTime] = useState<Date | null>(null);
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const supabaseRef = useRef<SupabaseClient | null>(null);
 
   // Initialize Supabase client once
   useEffect(() => {
-    supabaseRef.current = createClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      supabaseRef.current = createClient(supabaseUrl, supabaseAnonKey);
+    }
   }, []);
 
   // REAL-TIME SUBSCRIPTION: Listen for new drafts while call is in progress
