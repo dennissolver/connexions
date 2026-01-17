@@ -1,72 +1,42 @@
 // lib/provisioning/store.ts
 
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { ProvisionState } from './states';
+export async function createProvisionRun(params: {
+  platformName: string;
+  companyName?: string;
+  metadata?: Record<string, any>;
+}) {
+  const baseSlug = slugify(params.platformName, {
+    lower: true,
+    strict: true,
+  });
 
-export interface CreateProvisionRunInput {
-  projectSlug: string;
-  initialState: ProvisionState;
-  setupPayload: Record<string, any>;
-}
+  let slug = baseSlug;
+  let i = 1;
 
-export async function createProvisionRun({
-  projectSlug,
-  initialState,
-  setupPayload,
-}: CreateProvisionRunInput) {
+  while (true) {
+    const { data: existing } = await supabaseAdmin
+      .from("provision_runs")
+      .select("id")
+      .eq("project_slug", slug)
+      .maybeSingle();
+
+    if (!existing) break;
+    slug = `${baseSlug}-${i++}`;
+  }
+
   const { data, error } = await supabaseAdmin
-    .from('provision_runs')
+    .from("provision_runs")
     .insert({
-      project_slug: projectSlug,
-      state: initialState,
-      setup_payload: setupPayload,
-      metadata: {},
+      project_slug: slug,
+      state: "SUPABASE_CREATING",
+      platform_name: params.platformName,
+      company_name: params.companyName,
+      metadata: params.metadata ?? {},
     })
     .select()
     .single();
 
   if (error) throw error;
+
   return data;
-}
-
-export async function getProvisionRunBySlug(projectSlug: string) {
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .select('*')
-    .eq('project_slug', projectSlug)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    throw error;
-  }
-
-  return data ?? null;
-}
-
-export async function updateProvisionRun(
-  projectSlug: string,
-  updates: {
-    state?: ProvisionState;
-    metadata?: Record<string, any>;
-    last_error?: string;
-  }
-) {
-  const { error } = await supabaseAdmin
-    .from('provision_runs')
-    .update(updates)
-    .eq('project_slug', projectSlug);
-
-  if (error) throw error;
-}
-
-/**
- * ✅ THIS IS WHAT WAS MISSING
- */
-export async function deleteProvisionRunBySlug(projectSlug: string) {
-  const { error } = await supabaseAdmin
-    .from('provision_runs')
-    .delete()
-    .eq('project_slug', projectSlug);
-
-  if (error) throw error;
 }
