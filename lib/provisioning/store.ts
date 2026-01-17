@@ -230,6 +230,7 @@ export function getServiceStates(run: ProvisionRun): ServiceStates {
     sandra: run.sandra_state,
     kira: run.kira_state,
     webhooks: run.webhooks_state,
+    finalize: (run as any).finalize_state || 'PENDING',
   };
 }
 
