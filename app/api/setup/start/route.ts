@@ -3,7 +3,6 @@
 import { NextResponse } from "next/server";
 import { createProvisionRun } from "@/lib/provisioning/store";
 import { runProvisioning } from "@/lib/provisioning/orchestrator";
-import { ProvisionState } from "@/lib/provisioning";
 
 export async function POST(req: Request) {
   let body: any;
@@ -52,7 +51,6 @@ export async function POST(req: Request) {
   // 4. Create provisioning run (idempotent)
   await createProvisionRun({
     projectSlug,
-    initialState: "SUPABASE_CREATING" as ProvisionState,
     companyName,
     platformName,
     metadata: {

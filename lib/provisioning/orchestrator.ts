@@ -1,22 +1,34 @@
 // lib/provisioning/orchestrator.ts
-// Loop controller - repeatedly calls engine until done or waiting
-// Safe to invoke from cron, webhook, or manual trigger
+// Parallel orchestrator - processes all services concurrently
 
-import { advance, AdvanceResult } from './engine';
+import { advanceService, ServiceAdvanceResult } from './engine';
 import {
   getProvisionRunBySlug,
   getActiveProvisionRuns,
   createProvisionRun,
+  setOverallStatus,
+  getServiceStates,
 } from './store';
-import { isWaitingState, isTerminalState, ProvisionState } from './types';
-import { sleep } from './sleep';
+import {
+  ServiceName,
+  ServiceStates,
+  allServicesComplete,
+  allServicesReady,
+  anyServiceFailed,
+  isServiceActionable,
+} from './types';
 
-// =============================================================================
-// CONFIGURATION
-// =============================================================================
+const ALL_SERVICES: ServiceName[] = [
+  'supabase',
+  'github', 
+  'vercel',
+  'sandra',
+  'kira',
+  'webhooks',
+];
 
-const MAX_ITERATIONS = 50; // Safety limit per run
-const STEP_DELAY_MS = 500; // Delay between steps to avoid hammering APIs
+const MAX_ITERATIONS = 100;
+const POLL_INTERVAL_MS = 2000;
 
 // =============================================================================
 // SINGLE PROJECT ORCHESTRATION
@@ -24,18 +36,47 @@ const STEP_DELAY_MS = 500; // Delay between steps to avoid hammering APIs
 
 export interface OrchestrationResult {
   projectSlug: string;
-  startState: ProvisionState;
-  endState: ProvisionState;
+  services: ServiceStates;
   iterations: number;
-  completed: boolean;
-  waiting: boolean;
-  error?: string;
+  complete: boolean;
+  success: boolean;
+  results: ServiceAdvanceResult[];
 }
 
 /**
- * Run provisioning for a single project until completion or waiting state.
- *
- * Idempotent - safe to call multiple times.
+ * Run one iteration of parallel provisioning.
+ * Advances all actionable services concurrently.
+ */
+async function runIteration(projectSlug: string): Promise<ServiceAdvanceResult[]> {
+  const run = await getProvisionRunBySlug(projectSlug);
+  if (!run) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
+  }
+
+  const services = getServiceStates(run);
+  
+  // Find all services that can be advanced
+  const actionableServices = ALL_SERVICES.filter(
+    service => isServiceActionable(services[service])
+  );
+
+  if (actionableServices.length === 0) {
+    return [];
+  }
+
+  console.log(`[orchestrator] ${projectSlug}: advancing ${actionableServices.join(', ')}`);
+
+  // Run all actionable services in parallel
+  const results = await Promise.all(
+    actionableServices.map(service => advanceService(projectSlug, service))
+  );
+
+  return results;
+}
+
+/**
+ * Run provisioning until complete or max iterations.
+ * All services execute in parallel, waiting only on their specific dependencies.
  */
 export async function runProvisioning(projectSlug: string): Promise<OrchestrationResult> {
   const run = await getProvisionRunBySlug(projectSlug);
@@ -43,60 +84,57 @@ export async function runProvisioning(projectSlug: string): Promise<Orchestratio
     throw new Error(`Provision run not found: ${projectSlug}`);
   }
 
-  const startState = run.state;
-  let currentState = startState;
   let iterations = 0;
-  let lastError: string | undefined;
+  const allResults: ServiceAdvanceResult[] = [];
 
-  // Already terminal? Nothing to do
-  if (isTerminalState(startState)) {
-    return {
-      projectSlug,
-      startState,
-      endState: startState,
-      iterations: 0,
-      completed: startState === 'COMPLETE',
-      waiting: false,
-    };
-  }
-
-  // Loop until terminal, waiting, or max iterations
   while (iterations < MAX_ITERATIONS) {
     iterations++;
 
-    const result = await advance(projectSlug);
-    currentState = result.currentState;
-    lastError = result.error;
+    // Run one parallel iteration
+    const results = await runIteration(projectSlug);
+    allResults.push(...results);
 
-    console.log(`[orchestrator] ${projectSlug}: ${result.previousState} → ${currentState}`);
+    // Check if we're done
+    const currentRun = await getProvisionRunBySlug(projectSlug);
+    const services = getServiceStates(currentRun!);
 
-    // Terminal state reached
-    if (result.done) {
-      break;
+    if (allServicesComplete(services)) {
+      // Determine final status
+      const success = allServicesReady(services);
+      await setOverallStatus(projectSlug, success ? 'complete' : 'failed');
+
+      console.log(`[orchestrator] ${projectSlug}: ${success ? 'COMPLETE ✓' : 'FAILED ✗'}`);
+
+      return {
+        projectSlug,
+        services,
+        iterations,
+        complete: true,
+        success,
+        results: allResults,
+      };
     }
 
-    // Waiting state - stop and let polling resume later
-    if (isWaitingState(currentState)) {
-      console.log(`[orchestrator] ${projectSlug}: entering wait state`);
-      break;
+    // If no services advanced, wait before polling again
+    const anyAdvanced = results.some(r => r.previousState !== r.currentState);
+    if (!anyAdvanced) {
+      await sleep(POLL_INTERVAL_MS);
     }
-
-    // Brief delay between steps
-    await sleep(STEP_DELAY_MS);
   }
 
-  if (iterations >= MAX_ITERATIONS) {
-    console.warn(`[orchestrator] ${projectSlug}: hit max iterations`);
-  }
+  // Hit max iterations - still running
+  const finalRun = await getProvisionRunBySlug(projectSlug);
+  const finalServices = getServiceStates(finalRun!);
+
+  console.warn(`[orchestrator] ${projectSlug}: max iterations reached`);
 
   return {
     projectSlug,
-    startState,
-    endState: currentState,
+    services: finalServices,
     iterations,
-    completed: currentState === 'COMPLETE',
-    waiting: isWaitingState(currentState),
-    error: lastError,
+    complete: false,
+    success: false,
+    results: allResults,
   };
 }
 
@@ -107,14 +145,13 @@ export async function runProvisioning(projectSlug: string): Promise<Orchestratio
 export interface BatchResult {
   processed: number;
   completed: number;
-  waiting: number;
   failed: number;
+  running: number;
   results: OrchestrationResult[];
 }
 
 /**
- * Process all active (non-terminal) provision runs.
- *
+ * Process all active provision runs.
  * Call this from a cron job to resume waiting provisions.
  */
 export async function processActiveRuns(): Promise<BatchResult> {
@@ -122,17 +159,43 @@ export async function processActiveRuns(): Promise<BatchResult> {
   const results: OrchestrationResult[] = [];
 
   let completed = 0;
-  let waiting = 0;
   let failed = 0;
+  let running = 0;
 
   for (const run of activeRuns) {
     try {
-      const result = await runProvisioning(run.project_slug);
-      results.push(result);
+      // Run just one iteration for batch processing
+      const iterationResults = await runIteration(run.project_slug);
+      
+      const currentRun = await getProvisionRunBySlug(run.project_slug);
+      const services = getServiceStates(currentRun!);
 
-      if (result.completed) completed++;
-      else if (result.waiting) waiting++;
-      else if (result.endState === 'FAILED') failed++;
+      if (allServicesComplete(services)) {
+        const success = allServicesReady(services);
+        await setOverallStatus(run.project_slug, success ? 'complete' : 'failed');
+        
+        if (success) completed++;
+        else failed++;
+
+        results.push({
+          projectSlug: run.project_slug,
+          services,
+          iterations: 1,
+          complete: true,
+          success,
+          results: iterationResults,
+        });
+      } else {
+        running++;
+        results.push({
+          projectSlug: run.project_slug,
+          services,
+          iterations: 1,
+          complete: false,
+          success: false,
+          results: iterationResults,
+        });
+      }
     } catch (err) {
       console.error(`[orchestrator] Error processing ${run.project_slug}:`, err);
       failed++;
@@ -142,8 +205,8 @@ export async function processActiveRuns(): Promise<BatchResult> {
   return {
     processed: activeRuns.length,
     completed,
-    waiting,
     failed,
+    running,
     results,
   };
 }
@@ -154,15 +217,14 @@ export async function processActiveRuns(): Promise<BatchResult> {
 
 export interface StartProvisioningParams {
   projectSlug: string;
-  clientId: string;
+  clientId?: string;
   companyName: string;
   platformName: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**
- * Start a new provisioning run.
- *
- * Creates the run record and begins orchestration.
+ * Start a new provisioning run with parallel execution.
  */
 export async function startProvisioning(params: StartProvisioningParams): Promise<OrchestrationResult> {
   // Check if already exists
@@ -172,14 +234,23 @@ export async function startProvisioning(params: StartProvisioningParams): Promis
     return runProvisioning(params.projectSlug);
   }
 
-  // Create new run
+  // Create new run - all services start PENDING
   await createProvisionRun({
     projectSlug: params.projectSlug,
     clientId: params.clientId,
     companyName: params.companyName,
     platformName: params.platformName,
+    metadata: params.metadata,
   });
 
-  // Begin orchestration
+  // Begin parallel orchestration
   return runProvisioning(params.projectSlug);
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

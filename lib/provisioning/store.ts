@@ -1,12 +1,15 @@
 // lib/provisioning/store.ts
-// Database operations ONLY - no business logic
+// Database operations for parallel provisioning model
 
 import { createClient } from '@supabase/supabase-js';
 import {
   ProvisionRun,
-  ProvisionState,
+  ServiceState,
+  ServiceName,
+  ServiceStates,
   ProvisionMetadata,
   ProvisionContext,
+  INITIAL_SERVICE_STATES,
 } from './types';
 
 const supabase = createClient(
@@ -25,15 +28,13 @@ export async function createProvisionRun(params: {
   clientId?: string;
   companyName: string;
   platformName: string;
-  initialState?: ProvisionState;
   metadata?: Record<string, unknown>;
 }): Promise<ProvisionRun> {
-  const {
-    projectSlug,
-    clientId,
-    companyName,
-    platformName,
-    initialState = 'SUPABASE_CREATING',
+  const { 
+    projectSlug, 
+    clientId, 
+    companyName, 
+    platformName, 
     metadata: additionalMetadata = {},
   } = params;
 
@@ -42,7 +43,17 @@ export async function createProvisionRun(params: {
     .insert({
       project_slug: projectSlug,
       client_id: clientId || null,
-      state: initialState,
+      
+      // All services start PENDING
+      supabase_state: 'PENDING',
+      github_state: 'PENDING',
+      vercel_state: 'PENDING',
+      sandra_state: 'PENDING',
+      kira_state: 'PENDING',
+      webhooks_state: 'PENDING',
+      
+      status: 'running',
+      
       metadata: {
         company_name: companyName,
         platform_name: platformName,
@@ -72,23 +83,6 @@ export async function getProvisionRunBySlug(projectSlug: string): Promise<Provis
 
   if (error) {
     if (error.code === 'PGRST116') {
-      return null; // Not found
-    }
-    throw new Error(`Failed to get provision run: ${error.message}`);
-  }
-
-  return data as ProvisionRun;
-}
-
-export async function getProvisionRunById(id: string): Promise<ProvisionRun | null> {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
       return null;
     }
     throw new Error(`Failed to get provision run: ${error.message}`);
@@ -101,7 +95,7 @@ export async function getActiveProvisionRuns(): Promise<ProvisionRun[]> {
   const { data, error } = await supabase
     .from(TABLE)
     .select('*')
-    .not('state', 'in', '("COMPLETE","FAILED")')
+    .eq('status', 'running')
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -112,34 +106,31 @@ export async function getActiveProvisionRuns(): Promise<ProvisionRun[]> {
 }
 
 // =============================================================================
-// UPDATE
+// UPDATE SERVICE STATE
 // =============================================================================
 
-export async function updateProvisionRun(
+export async function setServiceState(
   projectSlug: string,
-  updates: {
-    state?: ProvisionState;
-    metadata?: Partial<ProvisionMetadata>;
-  }
+  service: ServiceName,
+  state: ServiceState,
+  metadata?: Partial<ProvisionMetadata>
 ): Promise<ProvisionRun> {
-  // If metadata updates provided, merge with existing
+  // Build update payload
+  const stateColumn = `${service}_state`;
   const updatePayload: Record<string, unknown> = {
+    [stateColumn]: state,
     updated_at: new Date().toISOString(),
   };
 
-  if (updates.state) {
-    updatePayload.state = updates.state;
-  }
-
-  if (updates.metadata) {
-    // Fetch current to merge metadata
+  // Merge metadata if provided
+  if (metadata) {
     const current = await getProvisionRunBySlug(projectSlug);
     if (!current) {
       throw new Error(`Provision run not found: ${projectSlug}`);
     }
     updatePayload.metadata = {
       ...current.metadata,
-      ...updates.metadata,
+      ...metadata,
     };
   }
 
@@ -151,35 +142,106 @@ export async function updateProvisionRun(
     .single();
 
   if (error) {
-    throw new Error(`Failed to update provision run: ${error.message}`);
+    throw new Error(`Failed to update service state: ${error.message}`);
   }
 
   return data as ProvisionRun;
 }
 
-export async function setProvisionState(
+export async function setServiceError(
   projectSlug: string,
-  state: ProvisionState,
-  metadata?: Partial<ProvisionMetadata>
+  service: ServiceName,
+  errorMsg: string
 ): Promise<ProvisionRun> {
-  return updateProvisionRun(projectSlug, { state, metadata });
-}
-
-export async function recordProvisionError(
-  projectSlug: string,
-  error: string
-): Promise<ProvisionRun> {
-  const current = await getProvisionRunBySlug(projectSlug);
-  const errorCount = ((current?.metadata?.error_count as number) || 0) + 1;
-
-  return updateProvisionRun(projectSlug, {
-    metadata: {
-      last_error: error,
-      error_count: errorCount,
-    },
+  const errorKey = `${service}_error`;
+  return setServiceState(projectSlug, service, 'FAILED', {
+    [errorKey]: errorMsg,
   });
 }
 
+// =============================================================================
+// UPDATE OVERALL STATUS
+// =============================================================================
+
+export async function setOverallStatus(
+  projectSlug: string,
+  status: 'running' | 'complete' | 'failed'
+): Promise<ProvisionRun> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({ 
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update overall status: ${error.message}`);
+  }
+
+  return data as ProvisionRun;
+}
+
+// =============================================================================
+// UPDATE METADATA
+// =============================================================================
+
+export async function updateMetadata(
+  projectSlug: string,
+  metadata: Partial<ProvisionMetadata>
+): Promise<ProvisionRun> {
+  const current = await getProvisionRunBySlug(projectSlug);
+  if (!current) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
+  }
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({
+      metadata: {
+        ...current.metadata,
+        ...metadata,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update metadata: ${error.message}`);
+  }
+
+  return data as ProvisionRun;
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+export function getServiceStates(run: ProvisionRun): ServiceStates {
+  return {
+    supabase: run.supabase_state,
+    github: run.github_state,
+    vercel: run.vercel_state,
+    sandra: run.sandra_state,
+    kira: run.kira_state,
+    webhooks: run.webhooks_state,
+  };
+}
+
+export function runToContext(run: ProvisionRun): ProvisionContext {
+  return {
+    projectSlug: run.project_slug,
+    clientId: run.client_id,
+    companyName: (run.metadata.company_name as string) || '',
+    platformName: (run.metadata.platform_name as string) || '',
+    metadata: run.metadata,
+    services: getServiceStates(run),
+  };
+}
 // =============================================================================
 // DELETE
 // =============================================================================
@@ -193,18 +255,4 @@ export async function deleteProvisionRunBySlug(projectSlug: string): Promise<voi
   if (error) {
     throw new Error(`Failed to delete provision run: ${error.message}`);
   }
-}
-
-// =============================================================================
-// HELPERS
-// =============================================================================
-
-export function runToContext(run: ProvisionRun): ProvisionContext {
-  return {
-    projectSlug: run.project_slug,
-    clientId: run.client_id,
-    companyName: (run.metadata.company_name as string) || '',
-    platformName: (run.metadata.platform_name as string) || '',
-    metadata: run.metadata,
-  };
 }

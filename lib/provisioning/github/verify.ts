@@ -1,64 +1,79 @@
 // lib/provisioning/github/verify.ts
-// Verifies GitHub repository exists with expected structure
+// Verifies GitHub repo exists with expected files
 
 import { ProvisionContext, StepResult } from '../types';
-import { getRepo, getLatestCommit, fileExists } from './client';
+
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 export async function githubVerify(ctx: ProvisionContext): Promise<StepResult> {
-  const repoFullName = ctx.metadata.github_repo;
+  const repoFullName = ctx.metadata.github_repo as string;
 
   if (!repoFullName) {
     return {
       status: 'fail',
-      error: 'No GitHub repo in metadata',
+      error: 'No github_repo in metadata',
     };
   }
 
-  // Extract repo name from full name (org/repo)
-  const repoName = (repoFullName as string).split('/')[1];
-
   try {
-    // Verify repo exists
-    const repo = await getRepo(repoName);
-    if (!repo) {
-      console.log(`[github.verify] Repo ${repoName} not found`);
-      return {
-        status: 'wait',
-      };
+    // Check repo exists
+    const repoRes = await fetch(`https://api.github.com/repos/${repoFullName}`, {
+      headers: {
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+      },
+    });
+
+    if (!repoRes.ok) {
+      console.log(`[github.verify] Repo not found: ${repoRes.status}`);
+      return { status: 'wait' };
     }
 
-    // Verify expected files exist (template should have these)
-    const hasPackageJson = await fileExists(repoName, 'package.json');
-    if (!hasPackageJson) {
-      console.log(`[github.verify] package.json not found in ${repoName}`);
-      return {
-        status: 'wait',
-      };
+    // Check for package.json (template should have it)
+    const fileRes = await fetch(
+      `https://api.github.com/repos/${repoFullName}/contents/package.json`,
+      {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+        },
+      }
+    );
+
+    if (!fileRes.ok) {
+      console.log(`[github.verify] package.json not found yet`);
+      return { status: 'wait' };
     }
 
     // Get latest commit
-    const commit = await getLatestCommit(repoName);
-    if (!commit) {
-      console.log(`[github.verify] No commits found in ${repoName}`);
-      return {
-        status: 'wait',
-      };
+    const commitsRes = await fetch(
+      `https://api.github.com/repos/${repoFullName}/commits?per_page=1`,
+      {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+        },
+      }
+    );
+
+    if (!commitsRes.ok) {
+      console.log(`[github.verify] Commits not available`);
+      return { status: 'wait' };
     }
 
-    console.log(`[github.verify] Repo ${repoName} verified, commit: ${commit.sha.slice(0, 7)}`);
+    const commits = await commitsRes.json();
+    const commitSha = commits[0]?.sha;
+
+    console.log(`[github.verify] Verified: ${repoFullName} @ ${commitSha?.slice(0, 7)}`);
 
     return {
       status: 'advance',
       metadata: {
-        github_commit_sha: commit.sha,
+        github_commit_sha: commitSha,
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[github.verify] Error:`, msg);
-
-    return {
-      status: 'wait',
-    };
+    console.log(`[github.verify] Error, will retry: ${err}`);
+    return { status: 'wait' };
   }
 }

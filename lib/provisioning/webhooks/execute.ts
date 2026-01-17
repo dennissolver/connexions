@@ -1,34 +1,30 @@
 // lib/provisioning/webhooks/execute.ts
-// Registers webhooks for the child platform
+// Registers webhooks - DEPENDS ON: sandra, kira, vercel
 
 import { ProvisionContext, StepResult } from '../types';
-import { generatePassword } from '../../security/passwords';
 
-export async function webhookExecute(ctx: ProvisionContext): Promise<StepResult> {
-  // Already have webhook secret? Skip (idempotent)
+export async function webhooksExecute(ctx: ProvisionContext): Promise<StepResult> {
+  // Already configured? Skip (idempotent)
   if (ctx.metadata.webhook_secret) {
-    console.log(`[webhook.execute] Webhook already configured`);
-    return {
-      status: 'advance',
-      metadata: ctx.metadata,
-    };
+    console.log(`[webhooks.execute] Already configured`);
+    return { status: 'advance' };
+  }
+
+  // Dependencies are enforced by registry, but sanity check
+  if (!ctx.metadata.vercel_url || !ctx.metadata.sandra_agent_id || !ctx.metadata.kira_agent_id) {
+    return { status: 'wait' };
   }
 
   try {
     // Generate webhook secret
-    const webhookSecret = generatePassword(32);
-
-    // The webhook registration happens via updating the child platform's
-    // environment variables and registering with ElevenLabs
-    
-    // For ElevenLabs, we need to register the webhook URL
+    const webhookSecret = generateSecret(32);
     const webhookUrl = `${ctx.metadata.vercel_url}/api/webhooks/elevenlabs`;
 
-    // TODO: Actually register with ElevenLabs when their API supports it
-    // For now, the child platform will be configured to accept webhooks
-    // and the parent platform will route based on agent ID
+    // TODO: When ElevenLabs supports webhook registration via API, register here
+    // For now, webhooks are configured in the child platform code to accept
+    // callbacks, and the parent platform routes based on agent ID
 
-    console.log(`[webhook.execute] Webhook URL: ${webhookUrl}`);
+    console.log(`[webhooks.execute] Configured: ${webhookUrl}`);
 
     return {
       status: 'advance',
@@ -38,12 +34,16 @@ export async function webhookExecute(ctx: ProvisionContext): Promise<StepResult>
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[webhook.execute] Failed:`, msg);
-
     return {
       status: 'fail',
-      error: `Webhook registration failed: ${msg}`,
+      error: `Webhook setup failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
+
+function generateSecret(length: number): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, x => chars[x % chars.length]).join('');
 }

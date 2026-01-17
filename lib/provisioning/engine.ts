@@ -1,118 +1,160 @@
 // lib/provisioning/engine.ts
-// Executes exactly ONE state advancement
-// No loops, no business logic, just dispatch
+// Processes a single service - called by orchestrator for each service in parallel
 
 import {
-  ProvisionState,
+  ServiceName,
+  ServiceState,
   StepResult,
-  isTerminalState,
+  ProvisionContext,
 } from './types';
 import {
   getProvisionRunBySlug,
-  setProvisionState,
-  recordProvisionError,
+  setServiceState,
+  setServiceError,
+  updateMetadata,
   runToContext,
+  getServiceStates,
 } from './store';
 import {
-  getHandler,
-  getNextState,
-  getWaitingState,
+  EXECUTE_HANDLERS,
+  VERIFY_HANDLERS,
+  areDependenciesReady,
+  getBlockingDependencies,
 } from './registry';
 
-export interface AdvanceResult {
-  previousState: ProvisionState;
-  currentState: ProvisionState;
-  done: boolean;
+export interface ServiceAdvanceResult {
+  service: ServiceName;
+  previousState: ServiceState;
+  currentState: ServiceState;
+  blocking?: ServiceName[];
   error?: string;
 }
 
 /**
- * Advance a provision run by exactly one step.
- *
- * Returns the result of that single advancement.
- * Does NOT loop - that's the orchestrator's job.
+ * Advance a single service by one step.
+ * 
+ * State transitions:
+ *   PENDING → CREATING (if dependencies ready) or stays PENDING
+ *   CREATING → VERIFYING (after execute succeeds)
+ *   VERIFYING → READY (if verified) or WAITING (if not yet)
+ *   WAITING → VERIFYING (retry verification)
+ *   READY → (no action)
+ *   FAILED → (no action)
  */
-export async function advance(projectSlug: string): Promise<AdvanceResult> {
-  // 1. Load current state
+export async function advanceService(
+  projectSlug: string,
+  service: ServiceName
+): Promise<ServiceAdvanceResult> {
+  // Load current state
   const run = await getProvisionRunBySlug(projectSlug);
   if (!run) {
     throw new Error(`Provision run not found: ${projectSlug}`);
   }
 
-  const previousState = run.state;
-
-  // 2. Check if already terminal
-  if (isTerminalState(previousState)) {
-    return {
-      previousState,
-      currentState: previousState,
-      done: true,
-    };
-  }
-
-  // 3. Get handler for current state
-  const handler = getHandler(previousState);
-  if (!handler) {
-    // No handler means nothing to do (shouldn't happen for non-terminal states)
-    console.warn(`[engine] No handler for state: ${previousState}`);
-    return {
-      previousState,
-      currentState: previousState,
-      done: true,
-      error: `No handler for state: ${previousState}`,
-    };
-  }
-
-  // 4. Execute the handler
   const ctx = runToContext(run);
+  const services = getServiceStates(run);
+  const previousState = services[service];
+
+  // Already terminal? Nothing to do
+  if (previousState === 'READY' || previousState === 'FAILED') {
+    return {
+      service,
+      previousState,
+      currentState: previousState,
+    };
+  }
+
+  // Check dependencies before doing anything
+  if (!areDependenciesReady(service, services)) {
+    const blocking = getBlockingDependencies(service, services);
+    console.log(`[engine] ${service}: waiting on dependencies: ${blocking.join(', ')}`);
+    
+    // Stay in current state (PENDING or WAITING)
+    return {
+      service,
+      previousState,
+      currentState: previousState,
+      blocking,
+    };
+  }
+
+  let newState: ServiceState = previousState;
   let result: StepResult;
 
   try {
-    result = await handler(ctx);
+    switch (previousState) {
+      case 'PENDING':
+        // Dependencies ready - start creating
+        await setServiceState(projectSlug, service, 'CREATING');
+        newState = 'CREATING';
+        
+        // Immediately execute
+        result = await EXECUTE_HANDLERS[service](ctx);
+        
+        if (result.status === 'fail') {
+          await setServiceError(projectSlug, service, result.error || 'Execute failed');
+          newState = 'FAILED';
+        } else {
+          // Save any metadata from execute
+          if (result.metadata) {
+            await updateMetadata(projectSlug, result.metadata);
+          }
+          await setServiceState(projectSlug, service, 'VERIFYING');
+          newState = 'VERIFYING';
+        }
+        break;
+
+      case 'CREATING':
+        // Execute in progress - run execute again (idempotent)
+        result = await EXECUTE_HANDLERS[service](ctx);
+        
+        if (result.status === 'fail') {
+          await setServiceError(projectSlug, service, result.error || 'Execute failed');
+          newState = 'FAILED';
+        } else {
+          if (result.metadata) {
+            await updateMetadata(projectSlug, result.metadata);
+          }
+          await setServiceState(projectSlug, service, 'VERIFYING');
+          newState = 'VERIFYING';
+        }
+        break;
+
+      case 'VERIFYING':
+      case 'WAITING':
+        // Run verification
+        // Reload context to get latest metadata
+        const freshRun = await getProvisionRunBySlug(projectSlug);
+        const freshCtx = runToContext(freshRun!);
+        
+        result = await VERIFY_HANDLERS[service](freshCtx);
+        
+        if (result.status === 'advance') {
+          if (result.metadata) {
+            await updateMetadata(projectSlug, result.metadata);
+          }
+          await setServiceState(projectSlug, service, 'READY');
+          newState = 'READY';
+          console.log(`[engine] ${service}: READY ✓`);
+        } else if (result.status === 'wait') {
+          await setServiceState(projectSlug, service, 'WAITING');
+          newState = 'WAITING';
+        } else if (result.status === 'fail') {
+          await setServiceError(projectSlug, service, result.error || 'Verify failed');
+          newState = 'FAILED';
+        }
+        break;
+    }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    await recordProvisionError(projectSlug, errorMsg);
-    await setProvisionState(projectSlug, 'FAILED');
-    return {
-      previousState,
-      currentState: 'FAILED',
-      done: true,
-      error: errorMsg,
-    };
+    console.error(`[engine] ${service} error:`, errorMsg);
+    await setServiceError(projectSlug, service, errorMsg);
+    newState = 'FAILED';
   }
-
-  // 5. Process the result
-  let nextState: ProvisionState;
-
-  switch (result.status) {
-    case 'advance':
-      // Use explicit next state if provided, otherwise get from registry
-      nextState = result.next || getNextState(previousState) || 'FAILED';
-      break;
-
-    case 'wait':
-      // Move to waiting state
-      nextState = getWaitingState(previousState) || previousState;
-      break;
-
-    case 'fail':
-      nextState = 'FAILED';
-      if (result.error) {
-        await recordProvisionError(projectSlug, result.error);
-      }
-      break;
-
-    default:
-      nextState = 'FAILED';
-  }
-
-  // 6. Persist new state and metadata
-  await setProvisionState(projectSlug, nextState, result.metadata);
 
   return {
+    service,
     previousState,
-    currentState: nextState,
-    done: isTerminalState(nextState),
-    error: result.error,
+    currentState: newState,
   };
 }

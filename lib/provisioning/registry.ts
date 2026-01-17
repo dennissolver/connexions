@@ -1,178 +1,200 @@
 // lib/provisioning/registry.ts
-// SINGLE SOURCE OF TRUTH for state machine routing
-// No other file decides transitions or handlers
+// Dependency graph and handler routing for parallel execution
 
 import {
-  ProvisionState,
+  ServiceName,
+  ServiceState,
+  ServiceStates,
   ProvisionContext,
   StepResult,
-  StepHandler,
-  isTerminalState,
+  ExecuteHandler,
+  VerifyHandler,
 } from './types';
 
-// Service handlers
+// Service handlers - imported lazily to avoid circular deps
 import { supabaseExecute } from './supabase/execute';
 import { supabaseVerify } from './supabase/verify';
 import { githubExecute } from './github/execute';
 import { githubVerify } from './github/verify';
 import { vercelExecute } from './vercel/execute';
 import { vercelVerify } from './vercel/verify';
-import { sandraExecute, kiraExecute } from './elevenlabs/execute';
-import { sandraVerify, kiraVerify } from './elevenlabs/verify';
-import { webhookExecute } from './webhooks/execute';
-import { webhookVerify } from './webhooks/verify';
+import { sandraExecute } from './elevenlabs/sandra.execute';
+import { sandraVerify } from './elevenlabs/sandra.verify';
+import { kiraExecute } from './elevenlabs/kira.execute';
+import { kiraVerify } from './elevenlabs/kira.verify';
+import { webhooksExecute } from './webhooks/execute';
+import { webhooksVerify } from './webhooks/verify';
 
 // =============================================================================
-// STATE TRANSITIONS
+// DEPENDENCY GRAPH
 // =============================================================================
 
-// Defines what state follows successful completion of current state
-const TRANSITIONS: Record<ProvisionState, ProvisionState | null> = {
-  // Supabase
-  'SUPABASE_CREATING': 'SUPABASE_VERIFYING',
-  'SUPABASE_VERIFYING': 'SUPABASE_READY',
-  'WAITING_SUPABASE': 'SUPABASE_VERIFYING',
-  'SUPABASE_READY': 'GITHUB_CREATING',
-
-  // GitHub
-  'GITHUB_CREATING': 'GITHUB_VERIFYING',
-  'GITHUB_VERIFYING': 'GITHUB_READY',
-  'WAITING_GITHUB': 'GITHUB_VERIFYING',
-  'GITHUB_READY': 'VERCEL_CREATING',
-
-  // Vercel
-  'VERCEL_CREATING': 'VERCEL_VERIFYING',
-  'VERCEL_VERIFYING': 'VERCEL_READY',
-  'WAITING_VERCEL': 'VERCEL_VERIFYING',
-  'VERCEL_READY': 'SANDRA_CREATING',
-
-  // Sandra (ElevenLabs setup agent)
-  'SANDRA_CREATING': 'SANDRA_VERIFYING',
-  'SANDRA_VERIFYING': 'SANDRA_READY',
-  'WAITING_SANDRA': 'SANDRA_VERIFYING',
-  'SANDRA_READY': 'KIRA_CREATING',
-
-  // Kira (ElevenLabs insights agent)
-  'KIRA_CREATING': 'KIRA_VERIFYING',
-  'KIRA_VERIFYING': 'KIRA_READY',
-  'WAITING_KIRA': 'KIRA_VERIFYING',
-  'KIRA_READY': 'WEBHOOK_REGISTERING',
-
-  // Webhooks
-  'WEBHOOK_REGISTERING': 'WEBHOOK_VERIFYING',
-  'WEBHOOK_VERIFYING': 'COMPLETE',
-
-  // Terminal
-  'COMPLETE': null,
-  'FAILED': null,
+// Which services must be READY before this service can proceed?
+export const DEPENDENCIES: Record<ServiceName, ServiceName[]> = {
+  supabase: [],                           // No dependencies - starts immediately
+  github: [],                             // No dependencies - starts immediately
+  vercel: ['github'],                     // Needs GitHub repo
+  sandra: ['vercel', 'supabase'],         // Needs Vercel URL + Supabase for config
+  kira: ['vercel', 'supabase'],           // Needs Vercel URL + Supabase for config
+  webhooks: ['sandra', 'kira', 'vercel'], // Needs agents + deployment URL
 };
 
 // =============================================================================
-// HANDLER ROUTING
+// HANDLER REGISTRY
 // =============================================================================
 
-// Maps states to their handler functions
-const HANDLERS: Partial<Record<ProvisionState, StepHandler>> = {
-  // Supabase
-  'SUPABASE_CREATING': supabaseExecute,
-  'SUPABASE_VERIFYING': supabaseVerify,
-  'WAITING_SUPABASE': supabaseVerify,
+export const EXECUTE_HANDLERS: Record<ServiceName, ExecuteHandler> = {
+  supabase: supabaseExecute,
+  github: githubExecute,
+  vercel: vercelExecute,
+  sandra: sandraExecute,
+  kira: kiraExecute,
+  webhooks: webhooksExecute,
+};
 
-  // GitHub
-  'GITHUB_CREATING': githubExecute,
-  'GITHUB_VERIFYING': githubVerify,
-  'WAITING_GITHUB': githubVerify,
-
-  // Vercel
-  'VERCEL_CREATING': vercelExecute,
-  'VERCEL_VERIFYING': vercelVerify,
-  'WAITING_VERCEL': vercelVerify,
-
-  // Sandra
-  'SANDRA_CREATING': sandraExecute,
-  'SANDRA_VERIFYING': sandraVerify,
-  'WAITING_SANDRA': sandraVerify,
-
-  // Kira
-  'KIRA_CREATING': kiraExecute,
-  'KIRA_VERIFYING': kiraVerify,
-  'WAITING_KIRA': kiraVerify,
-
-  // Webhooks
-  'WEBHOOK_REGISTERING': webhookExecute,
-  'WEBHOOK_VERIFYING': webhookVerify,
+export const VERIFY_HANDLERS: Record<ServiceName, VerifyHandler> = {
+  supabase: supabaseVerify,
+  github: githubVerify,
+  vercel: vercelVerify,
+  sandra: sandraVerify,
+  kira: kiraVerify,
+  webhooks: webhooksVerify,
 };
 
 // =============================================================================
-// PUBLIC API
+// DEPENDENCY CHECKS
 // =============================================================================
 
-export function getHandler(state: ProvisionState): StepHandler | null {
-  if (isTerminalState(state)) {
-    return null;
-  }
-  return HANDLERS[state] || null;
+export function areDependenciesReady(
+  service: ServiceName,
+  services: ServiceStates
+): boolean {
+  const deps = DEPENDENCIES[service];
+  return deps.every(dep => services[dep] === 'READY');
 }
 
-export function getNextState(currentState: ProvisionState): ProvisionState | null {
-  return TRANSITIONS[currentState];
-}
-
-export function getWaitingState(currentState: ProvisionState): ProvisionState | null {
-  // Map verifying states to their waiting counterparts
-  const waitMap: Partial<Record<ProvisionState, ProvisionState>> = {
-    'SUPABASE_VERIFYING': 'WAITING_SUPABASE',
-    'GITHUB_VERIFYING': 'WAITING_GITHUB',
-    'VERCEL_VERIFYING': 'WAITING_VERCEL',
-    'SANDRA_VERIFYING': 'WAITING_SANDRA',
-    'KIRA_VERIFYING': 'WAITING_KIRA',
-  };
-  return waitMap[currentState] || null;
+export function getBlockingDependencies(
+  service: ServiceName,
+  services: ServiceStates
+): ServiceName[] {
+  const deps = DEPENDENCIES[service];
+  return deps.filter(dep => services[dep] !== 'READY');
 }
 
 // =============================================================================
 // UI METADATA
 // =============================================================================
 
-export interface StepUiMeta {
+export interface ServiceUiMeta {
   title: string;
-  description: string;
-  progress: number;
+  description: Record<ServiceState, string>;
+  order: number; // Display order
 }
 
-export function getStepUiMeta(state: ProvisionState): StepUiMeta {
-  const meta: Record<ProvisionState, StepUiMeta> = {
-    'SUPABASE_CREATING': { title: 'Database', description: 'Creating Supabase project...', progress: 5 },
-    'SUPABASE_VERIFYING': { title: 'Database', description: 'Verifying database...', progress: 10 },
-    'WAITING_SUPABASE': { title: 'Database', description: 'Waiting for database...', progress: 10 },
-    'SUPABASE_READY': { title: 'Database', description: 'Database ready', progress: 15 },
+export const SERVICE_UI: Record<ServiceName, ServiceUiMeta> = {
+  supabase: {
+    title: 'Database',
+    order: 1,
+    description: {
+      PENDING: 'Waiting to start...',
+      CREATING: 'Creating Supabase project...',
+      VERIFYING: 'Verifying database...',
+      WAITING: 'Waiting for database...',
+      READY: 'Database ready',
+      FAILED: 'Database setup failed',
+    },
+  },
+  github: {
+    title: 'Repository',
+    order: 2,
+    description: {
+      PENDING: 'Waiting to start...',
+      CREATING: 'Creating GitHub repository...',
+      VERIFYING: 'Verifying repository...',
+      WAITING: 'Waiting for repository...',
+      READY: 'Repository ready',
+      FAILED: 'Repository setup failed',
+    },
+  },
+  vercel: {
+    title: 'Deployment',
+    order: 3,
+    description: {
+      PENDING: 'Waiting for repository...',
+      CREATING: 'Creating Vercel project...',
+      VERIFYING: 'Verifying deployment...',
+      WAITING: 'Waiting for deployment...',
+      READY: 'Deployment ready',
+      FAILED: 'Deployment failed',
+    },
+  },
+  sandra: {
+    title: 'Setup Agent',
+    order: 4,
+    description: {
+      PENDING: 'Waiting for deployment...',
+      CREATING: 'Creating Sandra agent...',
+      VERIFYING: 'Verifying Sandra...',
+      WAITING: 'Waiting for Sandra...',
+      READY: 'Sandra ready',
+      FAILED: 'Sandra setup failed',
+    },
+  },
+  kira: {
+    title: 'Insights Agent',
+    order: 5,
+    description: {
+      PENDING: 'Waiting for deployment...',
+      CREATING: 'Creating Kira agent...',
+      VERIFYING: 'Verifying Kira...',
+      WAITING: 'Waiting for Kira...',
+      READY: 'Kira ready',
+      FAILED: 'Kira setup failed',
+    },
+  },
+  webhooks: {
+    title: 'Webhooks',
+    order: 6,
+    description: {
+      PENDING: 'Waiting for agents...',
+      CREATING: 'Registering webhooks...',
+      VERIFYING: 'Verifying webhooks...',
+      WAITING: 'Waiting for webhook verification...',
+      READY: 'Webhooks configured',
+      FAILED: 'Webhook setup failed',
+    },
+  },
+};
 
-    'GITHUB_CREATING': { title: 'Repository', description: 'Creating repository...', progress: 20 },
-    'GITHUB_VERIFYING': { title: 'Repository', description: 'Verifying repository...', progress: 25 },
-    'WAITING_GITHUB': { title: 'Repository', description: 'Waiting for repository...', progress: 25 },
-    'GITHUB_READY': { title: 'Repository', description: 'Repository ready', progress: 30 },
+export function getServiceUiMeta(service: ServiceName, state: ServiceState): { title: string; description: string; order: number } {
+  const meta = SERVICE_UI[service];
+  return {
+    title: meta.title,
+    description: meta.description[state],
+    order: meta.order,
+  };
+}
 
-    'VERCEL_CREATING': { title: 'Deployment', description: 'Creating deployment...', progress: 40 },
-    'VERCEL_VERIFYING': { title: 'Deployment', description: 'Verifying deployment...', progress: 50 },
-    'WAITING_VERCEL': { title: 'Deployment', description: 'Waiting for deployment...', progress: 50 },
-    'VERCEL_READY': { title: 'Deployment', description: 'Deployment ready', progress: 55 },
-
-    'SANDRA_CREATING': { title: 'Setup Agent', description: 'Creating Sandra...', progress: 60 },
-    'SANDRA_VERIFYING': { title: 'Setup Agent', description: 'Verifying Sandra...', progress: 65 },
-    'WAITING_SANDRA': { title: 'Setup Agent', description: 'Waiting for Sandra...', progress: 65 },
-    'SANDRA_READY': { title: 'Setup Agent', description: 'Sandra ready', progress: 70 },
-
-    'KIRA_CREATING': { title: 'Insights Agent', description: 'Creating Kira...', progress: 75 },
-    'KIRA_VERIFYING': { title: 'Insights Agent', description: 'Verifying Kira...', progress: 80 },
-    'WAITING_KIRA': { title: 'Insights Agent', description: 'Waiting for Kira...', progress: 80 },
-    'KIRA_READY': { title: 'Insights Agent', description: 'Kira ready', progress: 85 },
-
-    'WEBHOOK_REGISTERING': { title: 'Webhooks', description: 'Registering webhooks...', progress: 90 },
-    'WEBHOOK_VERIFYING': { title: 'Webhooks', description: 'Verifying webhooks...', progress: 95 },
-
-    'COMPLETE': { title: 'Complete', description: 'Platform ready', progress: 100 },
-    'FAILED': { title: 'Failed', description: 'Provisioning failed', progress: 100 },
+export function calculateOverallProgress(services: ServiceStates): number {
+  const weights: Record<ServiceName, number> = {
+    supabase: 15,
+    github: 15,
+    vercel: 25,
+    sandra: 15,
+    kira: 15,
+    webhooks: 15,
   };
 
-  return meta[state];
+  let progress = 0;
+  for (const [service, state] of Object.entries(services) as [ServiceName, ServiceState][]) {
+    if (state === 'READY') {
+      progress += weights[service];
+    } else if (state === 'VERIFYING' || state === 'WAITING') {
+      progress += weights[service] * 0.7;
+    } else if (state === 'CREATING') {
+      progress += weights[service] * 0.3;
+    }
+  }
+
+  return Math.round(progress);
 }

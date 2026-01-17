@@ -1,8 +1,8 @@
 // lib/provisioning/index.ts
-// Public API for provisioning system
+// Public API for parallel provisioning system
 
 // =============================================================================
-// ORCHESTRATION (Main entry points)
+// ORCHESTRATION
 // =============================================================================
 
 export {
@@ -15,31 +15,26 @@ export {
 } from './orchestrator';
 
 // =============================================================================
-// ENGINE (For advanced use cases)
+// STORE
 // =============================================================================
 
 export {
-  advance,
-  type AdvanceResult,
-} from './engine';
-
-// =============================================================================
-// STORE (For querying provision state)
-// =============================================================================
-
-export {
+  createProvisionRun,
   getProvisionRunBySlug,
-  getProvisionRunById,
   getActiveProvisionRuns,
+  setServiceState,
+  getServiceStates,
 } from './store';
 
 // =============================================================================
-// REGISTRY (For UI metadata)
+// REGISTRY (for UI)
 // =============================================================================
 
 export {
-  getStepUiMeta,
-  type StepUiMeta,
+  getServiceUiMeta,
+  calculateOverallProgress,
+  SERVICE_UI,
+  DEPENDENCIES,
 } from './registry';
 
 // =============================================================================
@@ -47,7 +42,9 @@ export {
 // =============================================================================
 
 export type {
-  ProvisionState,
+  ServiceState,
+  ServiceName,
+  ServiceStates,
   ProvisionContext,
   ProvisionMetadata,
   ProvisionRun,
@@ -56,9 +53,17 @@ export type {
 } from './types';
 
 export {
-  isTerminalState,
-  isWaitingState,
-  isExecutableState,
-  isVerifyingState,
-  isReadyState,
+  INITIAL_SERVICE_STATES,
+  isServiceComplete,
+  isServiceActionable,
+  allServicesComplete,
+  allServicesReady,
+  anyServiceFailed,
 } from './types';
+
+// =============================================================================
+// LEGACY COMPATIBILITY
+// =============================================================================
+
+// Map old ProvisionState to new model for gradual migration
+export type { ServiceState as ProvisionState } from './types';

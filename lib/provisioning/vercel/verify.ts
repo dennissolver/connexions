@@ -1,79 +1,81 @@
 // lib/provisioning/vercel/verify.ts
-// Verifies Vercel deployment is ready
+// Verifies Vercel deployment is ready and accessible
 
 import { ProvisionContext, StepResult } from '../types';
-import { getProject, getLatestDeployment } from './client';
+
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
 
 export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
-  const projectId = ctx.metadata.vercel_project_id;
+  const projectId = ctx.metadata.vercel_project_id as string;
+  const vercelUrl = ctx.metadata.vercel_url as string;
 
   if (!projectId) {
     return {
       status: 'fail',
-      error: 'No Vercel project ID in metadata',
+      error: 'No vercel_project_id in metadata',
     };
   }
 
   try {
-    // Verify project exists
-    const project = await getProject(projectId as string);
-    if (!project) {
-      console.log(`[vercel.verify] Project ${projectId} not found`);
-      return {
-        status: 'wait',
-      };
-    }
-
     // Check for deployment
-    const deployment = await getLatestDeployment(projectId as string);
-    if (!deployment) {
-      console.log(`[vercel.verify] No deployment found for ${projectId}`);
-      return {
-        status: 'wait',
-      };
+    const deploymentsUrl = new URL(`https://api.vercel.com/v6/deployments`);
+    deploymentsUrl.searchParams.set('projectId', projectId);
+    deploymentsUrl.searchParams.set('limit', '1');
+    if (VERCEL_TEAM_ID) deploymentsUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
+
+    const deploymentsRes = await fetch(deploymentsUrl.toString(), {
+      headers: {
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
+      },
+    });
+
+    if (!deploymentsRes.ok) {
+      console.log(`[vercel.verify] Could not fetch deployments: ${deploymentsRes.status}`);
+      return { status: 'wait' };
     }
 
-    // Check deployment state
+    const { deployments } = await deploymentsRes.json();
+
+    if (!deployments || deployments.length === 0) {
+      console.log(`[vercel.verify] No deployments yet`);
+      return { status: 'wait' };
+    }
+
+    const deployment = deployments[0];
+
     if (deployment.readyState !== 'READY') {
-      console.log(`[vercel.verify] Deployment ${deployment.id} not ready: ${deployment.readyState}`);
-      return {
-        status: 'wait',
-      };
+      console.log(`[vercel.verify] Deployment state: ${deployment.readyState}`);
+      return { status: 'wait' };
     }
 
-    // Optional: Health check the deployment URL
-    const deploymentUrl = ctx.metadata.vercel_url as string;
-    if (deploymentUrl) {
+    // Health check the URL
+    if (vercelUrl) {
       try {
-        const res = await fetch(deploymentUrl, { method: 'HEAD' });
-        if (!res.ok) {
-          console.log(`[vercel.verify] Health check failed: ${res.status}`);
-          return {
-            status: 'wait',
-          };
+        const healthRes = await fetch(vercelUrl, { method: 'HEAD' });
+        if (!healthRes.ok && healthRes.status !== 404) {
+          // 404 is ok - might not have a root page, but deployment is up
+          console.log(`[vercel.verify] Health check: ${healthRes.status}`);
+          if (healthRes.status >= 500) {
+            return { status: 'wait' };
+          }
         }
       } catch {
-        console.log(`[vercel.verify] Health check error, waiting...`);
-        return {
-          status: 'wait',
-        };
+        console.log(`[vercel.verify] Health check failed, retrying...`);
+        return { status: 'wait' };
       }
     }
 
-    console.log(`[vercel.verify] Deployment ${deployment.id} verified`);
+    console.log(`[vercel.verify] Verified: ${projectId}`);
 
     return {
       status: 'advance',
       metadata: {
-        vercel_deployment_id: deployment.id,
+        vercel_deployment_id: deployment.uid,
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[vercel.verify] Error:`, msg);
-
-    return {
-      status: 'wait',
-    };
+    console.log(`[vercel.verify] Error, will retry: ${err}`);
+    return { status: 'wait' };
   }
 }

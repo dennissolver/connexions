@@ -1,76 +1,115 @@
 // lib/provisioning/vercel/execute.ts
-// Creates Vercel project linked to GitHub - idempotent
+// Creates Vercel project - DEPENDS ON: github (needs repo)
+// Dependency check happens in engine/registry, not here
 
 import { ProvisionContext, StepResult } from '../types';
-import { createProject, getProjectByName, setEnvironmentVariables, getDeploymentUrl } from './client';
+
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
 
 export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> {
-  const projectName = `cx-${ctx.projectSlug}`;
-
-  // Already have a project? Skip creation (idempotent)
+  // Already have a project? Skip (idempotent)
   if (ctx.metadata.vercel_project_id) {
-    console.log(`[vercel.execute] Project already exists: ${ctx.metadata.vercel_project_id}`);
-    return {
-      status: 'advance',
-      metadata: ctx.metadata,
-    };
+    console.log(`[vercel.execute] Already exists: ${ctx.metadata.vercel_project_id}`);
+    return { status: 'advance' };
   }
 
-  // Need GitHub repo first
-  if (!ctx.metadata.github_repo) {
+  if (!VERCEL_TOKEN) {
     return {
       status: 'fail',
-      error: 'GitHub repo required before Vercel deployment',
+      error: 'VERCEL_TOKEN not configured',
     };
   }
 
+  // GitHub repo is required (dependency enforced by registry)
+  const githubRepo = ctx.metadata.github_repo as string;
+  if (!githubRepo) {
+    // This shouldn't happen if dependencies are checked, but be safe
+    return {
+      status: 'wait',
+    };
+  }
+
+  const projectName = `cx-${ctx.projectSlug}`;
+
   try {
-    // Check if project already exists
-    const existing = await getProjectByName(projectName);
-    if (existing) {
-      console.log(`[vercel.execute] Found existing project: ${existing.id}`);
+    // Check if already exists
+    const checkUrl = new URL(`https://api.vercel.com/v9/projects/${projectName}`);
+    if (VERCEL_TEAM_ID) checkUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
+
+    const checkRes = await fetch(checkUrl.toString(), {
+      headers: {
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
+      },
+    });
+
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      console.log(`[vercel.execute] Found existing: ${existing.id}`);
       return {
         status: 'advance',
         metadata: {
           vercel_project_id: existing.id,
-          vercel_url: getDeploymentUrl(projectName),
+          vercel_url: `https://${projectName}.vercel.app`,
         },
       };
     }
 
     // Build environment variables
-    const envVars = [
-      { key: 'NEXT_PUBLIC_SUPABASE_URL', value: ctx.metadata.supabase_url as string, target: ['production', 'preview', 'development'] },
-      { key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: ctx.metadata.supabase_anon_key as string, target: ['production', 'preview', 'development'] },
-      { key: 'SUPABASE_SERVICE_ROLE_KEY', value: ctx.metadata.supabase_service_role_key as string, target: ['production', 'preview', 'development'] },
-    ].filter(v => v.value); // Only include if value exists
+    const envVars = [];
+    if (ctx.metadata.supabase_url) {
+      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_URL', value: ctx.metadata.supabase_url, target: ['production', 'preview', 'development'] });
+    }
+    if (ctx.metadata.supabase_anon_key) {
+      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: ctx.metadata.supabase_anon_key, target: ['production', 'preview', 'development'] });
+    }
+    if (ctx.metadata.supabase_service_role_key) {
+      envVars.push({ key: 'SUPABASE_SERVICE_ROLE_KEY', value: ctx.metadata.supabase_service_role_key, target: ['production', 'preview', 'development'] });
+    }
 
     // Create project
-    const project = await createProject({
-      name: projectName,
-      gitRepository: {
-        repo: ctx.metadata.github_repo as string,
-        type: 'github',
+    const createUrl = new URL('https://api.vercel.com/v10/projects');
+    if (VERCEL_TEAM_ID) createUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
+
+    const createRes = await fetch(createUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
       },
-      environmentVariables: envVars,
+      body: JSON.stringify({
+        name: projectName,
+        framework: 'nextjs',
+        gitRepository: {
+          repo: githubRepo,
+          type: 'github',
+        },
+        environmentVariables: envVars,
+      }),
     });
 
-    console.log(`[vercel.execute] Created project: ${project.id}`);
+    if (!createRes.ok) {
+      const text = await createRes.text();
+      return {
+        status: 'fail',
+        error: `Vercel API error (${createRes.status}): ${text}`,
+      };
+    }
+
+    const project = await createRes.json();
+    console.log(`[vercel.execute] Created: ${project.id}`);
 
     return {
       status: 'advance',
       metadata: {
         vercel_project_id: project.id,
-        vercel_url: getDeploymentUrl(projectName),
+        vercel_url: `https://${projectName}.vercel.app`,
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[vercel.execute] Failed:`, msg);
-
     return {
       status: 'fail',
-      error: `Vercel project creation failed: ${msg}`,
+      error: `Vercel creation failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }
