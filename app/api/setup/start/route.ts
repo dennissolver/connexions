@@ -1,49 +1,61 @@
 // app/api/setup/start/route.ts
 
 import { NextResponse } from 'next/server';
-import { createProvisionRun } from '@/lib/provisioning/store';
+import { createProvisionRun, getProvisionRunBySlug } from '@/lib/provisioning/store';
 import { runProvisioning } from '@/lib/provisioning/orchestrator';
+import { generateProjectSlug } from '@/lib/utils/generateProjectSlug';
 
 export async function POST(req: Request) {
-  let body: unknown;
+  let payload: any;
 
-  // 1. Parse JSON defensively
   try {
-    body = await req.json();
+    payload = await req.json();
   } catch {
     return NextResponse.json(
-      { error: 'Invalid or missing JSON body' },
+      { error: 'Invalid JSON body' },
       { status: 400 }
     );
   }
 
-  // 2. Validate shape safely
-  if (
-    !body ||
-    typeof body !== 'object' ||
-    !('projectSlug' in body) ||
-    typeof (body as any).projectSlug !== 'string'
-  ) {
+  const platformName = payload?.platformName;
+
+  if (!platformName || typeof platformName !== 'string') {
     return NextResponse.json(
-      { error: 'projectSlug is required and must be a string' },
+      { error: 'platformName is required' },
       { status: 400 }
     );
   }
 
-  const projectSlug = (body as any).projectSlug;
+  // 🔐 Server-generated slug
+  let projectSlug: string;
+  let attempts = 0;
 
-  // 3. Create provisioning run
+  while (true) {
+    projectSlug = generateProjectSlug(platformName);
+    const existing = await getProvisionRunBySlug(projectSlug);
+    if (!existing) break;
+    attempts++;
+    if (attempts > 5) {
+      return NextResponse.json(
+        { error: 'Failed to generate unique project slug' },
+        { status: 500 }
+      );
+    }
+  }
+
   await createProvisionRun({
     projectSlug,
     initialState: 'SUPABASE_CREATING',
-    metadata: {},
+    setupPayload: payload, // 🔥 FULL payload persisted
   });
 
-  // 4. Fire-and-forget orchestrator
+  // Fire-and-forget orchestration
   runProvisioning(projectSlug).catch((err) => {
     console.error('[Provisioning] Orchestrator error:', err);
   });
 
-  // 5. Respond immediately
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    projectSlug,
+  });
 }
