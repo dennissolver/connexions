@@ -89,7 +89,7 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
   const webhookRouterUrl = ctx.parentWebhookUrl || `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
   const agentName = `${ctx.platformName} Setup Agent`;
 
-  // Define tool inline with agent creation
+  // Tool with api_schema inside webhook
   const saveDraftTool = {
     type: 'webhook',
     name: 'save_draft',
@@ -97,18 +97,18 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
     webhook: {
       url: `${childPlatformUrl}/api/tools/save-draft`,
       method: 'POST',
-    },
-    parameters: {
-      type: 'object',
-      properties: {
-        panel_name: { type: 'string', description: 'Name for the interview panel' },
-        research_objective: { type: 'string', description: 'What the research aims to discover' },
-        target_audience: { type: 'string', description: 'Who will be interviewed' },
-        interview_style: { type: 'string', description: 'Formal or conversational, duration' },
-        key_topics: { type: 'array', items: { type: 'string' }, description: 'Main topics to cover' },
-        special_requirements: { type: 'string', description: 'Special requirements or considerations' },
+      api_schema: {
+        type: 'object',
+        properties: {
+          panel_name: { type: 'string', description: 'Name for the interview panel' },
+          research_objective: { type: 'string', description: 'What the research aims to discover' },
+          target_audience: { type: 'string', description: 'Who will be interviewed' },
+          interview_style: { type: 'string', description: 'Formal or conversational, duration' },
+          key_topics: { type: 'array', items: { type: 'string' }, description: 'Main topics to cover' },
+          special_requirements: { type: 'string', description: 'Special requirements or considerations' },
+        },
+        required: ['panel_name', 'research_objective', 'target_audience'],
       },
-      required: ['panel_name', 'research_objective', 'target_audience'],
     },
   };
 
@@ -188,47 +188,56 @@ export async function createKiraAgent(ctx: ProvisionContext): Promise<ProvisionS
   const webhookRouterUrl = ctx.parentWebhookUrl || `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
   const agentName = `${ctx.platformName} Insights Agent`;
 
-  // Define Kira's tools inline
+  // Kira's tools with api_schema inside webhook
   const kiraTools = [
     {
       type: 'webhook',
       name: 'search_insights',
       description: 'Search interviews for specific topics, themes, or keywords',
-      webhook: { url: `${childPlatformUrl}/api/insights/search`, method: 'POST' },
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search query' },
-          panel_id: { type: 'string', description: 'Optional panel ID to search within' },
+      webhook: {
+        url: `${childPlatformUrl}/api/insights/search`,
+        method: 'POST',
+        api_schema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+            panel_id: { type: 'string', description: 'Optional panel ID to search within' },
+          },
+          required: ['query'],
         },
-        required: ['query'],
       },
     },
     {
       type: 'webhook',
       name: 'get_panel_summary',
       description: 'Get a summary of insights from a panel',
-      webhook: { url: `${childPlatformUrl}/api/insights/summary`, method: 'POST' },
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_id: { type: 'string', description: 'Panel ID to summarize' },
+      webhook: {
+        url: `${childPlatformUrl}/api/insights/summary`,
+        method: 'POST',
+        api_schema: {
+          type: 'object',
+          properties: {
+            panel_id: { type: 'string', description: 'Panel ID to summarize' },
+          },
+          required: ['panel_id'],
         },
-        required: ['panel_id'],
       },
     },
     {
       type: 'webhook',
       name: 'get_quotes',
       description: 'Get notable quotes from interviews',
-      webhook: { url: `${childPlatformUrl}/api/insights/quotes`, method: 'POST' },
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_id: { type: 'string', description: 'Panel ID' },
-          theme: { type: 'string', description: 'Optional theme to filter by' },
+      webhook: {
+        url: `${childPlatformUrl}/api/insights/quotes`,
+        method: 'POST',
+        api_schema: {
+          type: 'object',
+          properties: {
+            panel_id: { type: 'string', description: 'Panel ID' },
+            theme: { type: 'string', description: 'Optional theme to filter by' },
+          },
+          required: ['panel_id'],
         },
-        required: ['panel_id'],
       },
     },
   ];
