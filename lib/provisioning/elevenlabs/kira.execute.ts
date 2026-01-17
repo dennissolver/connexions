@@ -57,7 +57,7 @@ Be analytical, clear, and objective. Support conclusions with evidence.`;
             provider: 'elevenlabs',
           },
           turn: {
-            mode: 'turn_based',
+            mode: 'turn',
           },
         },
       }),

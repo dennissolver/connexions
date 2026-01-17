@@ -59,7 +59,7 @@ At the end, summarize the interview configuration for confirmation.`;
             provider: 'elevenlabs',
           },
           turn: {
-            mode: 'turn_based',
+            mode: 'turn',
           },
         },
       }),
