@@ -1,20 +1,13 @@
-// lib/provisioning/orchestrator.ts
 
-import { advanceProvision } from './engine';
-import { getProvisionRunBySlug } from './store';
-import { ProvisionState } from './states';
+import { advance } from './engine';
+import { getRun } from './store';
+import { sleep } from './sleep';
 
-const TERMINAL: ProvisionState[] = ['COMPLETE', 'FAILED'];
-
-export async function runProvisioning(projectSlug: string) {
+export async function runProvisioningV2(projectSlug: string) {
   while (true) {
-    const run = await getProvisionRunBySlug(projectSlug);
-    if (!run) throw new Error('Provision run missing');
-
-    if (TERMINAL.includes(run.state as ProvisionState)) {
-      return;
-    }
-
-    await advanceProvision(projectSlug);
+    const run = await getRun(projectSlug);
+    if (!run || run.state === 'COMPLETE' || run.state === 'FAILED') return;
+    await advance(projectSlug);
+    await sleep(3000);
   }
 }
