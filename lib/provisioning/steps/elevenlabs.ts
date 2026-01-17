@@ -514,6 +514,9 @@ export async function createSetupAgent(ctx: ProvisionContext): Promise<{
 }> {
   const agentName = `${ctx.companyName || ctx.platformName} Setup Agent`;
   const childPlatformUrl = ctx.metadata.vercelUrl;
+  if (!childPlatformUrl) {
+    throw new Error('[elevenlabs] vercelUrl not found - Vercel provisioning must complete first');
+  }
   const webhookRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
   const headers = {
@@ -603,6 +606,9 @@ export async function createInsightsAgent(ctx: ProvisionContext): Promise<{
 }> {
   const agentName = `${ctx.companyName || ctx.platformName} Insights Agent`;
   const childPlatformUrl = ctx.metadata.vercelUrl;
+  if (!childPlatformUrl) {
+    throw new Error('[elevenlabs] vercelUrl not found - Vercel provisioning must complete first');
+  }
   const webhookRouterUrl = `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
 
   const headers = {
