@@ -1,38 +1,14 @@
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { ProvisionRun } from './types';
+import { executeProvisionStep } from './executeStep';
+import { isExecutableState, ProvisionState } from './states';
+import { ProvisionContext } from './types';
 
-export async function getProvisionRunBySlug(projectSlug: string): Promise<ProvisionRun | null> {
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .select('*')
-    .eq('project_slug', projectSlug)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw error;
+export async function runProvisionStep(
+  state: ProvisionState,
+  ctx: ProvisionContext
+) {
+  if (!isExecutableState(state)) {
+    return null;
   }
 
-  return data as ProvisionRun;
-}
-
-export async function updateProvisionRun(
-  projectSlug: string,
-  patch: Partial<ProvisionRun>
-): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('provision_runs')
-    .update(patch)
-    .eq('project_slug', projectSlug);
-
-  if (error) throw error;
-}
-
-export async function deleteProvisionRunBySlug(projectSlug: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('provision_runs')
-    .delete()
-    .eq('project_slug', projectSlug);
-
-  if (error) throw error;
+  return executeProvisionStep(state, ctx);
 }

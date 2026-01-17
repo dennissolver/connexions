@@ -1,13 +1,10 @@
-// lib/provisioning/executeStep.ts
-import { ProvisionState } from './states';
+import { ExecutableState } from './states';
 import { ProvisionContext, ProvisionStepResult } from './types';
-import { STEPS } from './steps';
+import { STEPS } from './registry';
 
-export async function executeProvisionStep(state: ProvisionState, context: ProvisionContext): Promise<ProvisionStepResult> {
-  const step = STEPS[state];
-  if (step) {
-    return step(context);
-  }
-  // No step for this state - return current state with unchanged metadata
-  return { nextState: state, metadata: context.metadata };
+export async function executeProvisionStep(
+  state: ExecutableState,
+  context: ProvisionContext
+): Promise<ProvisionStepResult> {
+  return STEPS[state](context);
 }
