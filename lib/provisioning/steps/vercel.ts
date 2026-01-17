@@ -136,7 +136,7 @@ export async function triggerVercelDeployment(ctx: ProvisionContext): Promise<Pr
   const metadata = { ...ctx.metadata, vercelDeploymentId: deployment.uid };
 
   if (deployment.readyState === 'READY') {
-    return { nextState: 'ELEVENLABS_CREATING', metadata };
+    return { nextState: 'SANDRA_CREATING', metadata };
   }
 
   if (deployment.readyState === 'ERROR' || deployment.readyState === 'CANCELED') {
