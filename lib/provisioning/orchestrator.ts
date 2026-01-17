@@ -8,8 +8,8 @@ import { STEPS, isTerminalState } from './steps';
 function buildContext(run: ProvisionRun, publicBaseUrl: string): ProvisionContext {
   return {
     projectSlug: run.project_slug,
-    platformName: run.platform_name,
-    companyName: run.company_name,
+    platformName: run.platform_name || run.project_slug,
+    companyName: run.company_name || '',
     metadata: run.metadata || {},
     publicBaseUrl,
     parentWebhookUrl: `${publicBaseUrl}/api/webhooks/elevenlabs-router`,
