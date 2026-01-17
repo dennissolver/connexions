@@ -1,33 +1,65 @@
-import { createClient } from '@supabase/supabase-js';
-import { ProvisionRun } from './types';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { ProvisionState } from './states';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export interface ProvisionRun {
+  project_slug: string;
+  state: ProvisionState;
+  metadata?: Record<string, any>;
+}
 
-export async function getProvisionRunBySlug(projectSlug: string): Promise<ProvisionRun | null> {
-  const { data } = await supabase
+export async function createProvisionRun(
+  projectSlug: string,
+  initialState: ProvisionState = 'SUPABASE_CREATING'
+): Promise<ProvisionRun> {
+  const { data, error } = await supabaseAdmin
+    .from('provision_runs')
+    .insert({
+      project_slug: projectSlug,
+      state: initialState,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProvisionRun(
+  projectSlug: string,
+  state: ProvisionState,
+  metadata?: Record<string, any>
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('provision_runs')
+    .update({
+      state,
+      metadata,
+    })
+    .eq('project_slug', projectSlug);
+
+  if (error) throw error;
+}
+
+export async function getProvisionRunBySlug(
+  projectSlug: string
+): Promise<ProvisionRun | null> {
+  const { data, error } = await supabaseAdmin
     .from('provision_runs')
     .select('*')
     .eq('project_slug', projectSlug)
     .single();
-  return data ?? null;
+
+  if (error) return null;
+  return data;
 }
 
-export async function updateProvisionRunBySlug(
-  projectSlug: string,
-  patch: Partial<ProvisionRun>
-) {
-  await supabase
-    .from('provision_runs')
-    .update(patch)
-    .eq('project_slug', projectSlug);
-}
-
-export async function deleteProvisionRunBySlug(projectSlug: string) {
-  await supabase
+export async function deleteProvisionRunBySlug(
+  projectSlug: string
+): Promise<void> {
+  const { error } = await supabaseAdmin
     .from('provision_runs')
     .delete()
     .eq('project_slug', projectSlug);
+
+  if (error) throw error;
 }

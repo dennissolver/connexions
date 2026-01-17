@@ -1,8 +1,17 @@
-
-export async function createSandra(ctx: any) {
-  return { nextState: 'SANDRA_VERIFYING', metadata: ctx.metadata };
+export async function createSandraAgent(ctx: {
+  projectSlug: string;
+}) {
+  return {
+    nextState: 'SANDRA_READY',
+    metadata: {},
+  };
 }
 
-export async function createKira(ctx: any) {
-  return { nextState: 'KIRA_VERIFYING', metadata: ctx.metadata };
+export async function createKiraAgent(ctx: {
+  projectSlug: string;
+}) {
+  return {
+    nextState: 'KIRA_READY',
+    metadata: {},
+  };
 }

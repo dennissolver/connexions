@@ -1,4 +1,8 @@
-
-export async function createVercel(ctx: any) {
-  return { nextState: 'VERCEL_VERIFYING', metadata: ctx.metadata };
+export async function createVercelProject(ctx: {
+  projectSlug: string;
+}) {
+  return {
+    nextState: 'VERCEL_READY',
+    metadata: {},
+  };
 }

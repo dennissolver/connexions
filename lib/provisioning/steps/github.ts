@@ -1,4 +1,8 @@
-
-export async function createGithub(ctx: any) {
-  return { nextState: 'GITHUB_VERIFYING', metadata: ctx.metadata };
+export async function createGithubRepo(ctx: {
+  projectSlug: string;
+}) {
+  return {
+    nextState: 'GITHUB_READY',
+    metadata: {},
+  };
 }
