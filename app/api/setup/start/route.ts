@@ -1,5 +1,6 @@
 // app/api/setup/start/route.ts
 import { NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { startProvisioning } from '@/lib/provisioning/orchestrator';
 
 export async function POST(req: Request) {
@@ -7,7 +8,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { platformName, companyName, contactEmail } = body;
 
-    // Validate required fields
     if (!platformName || !companyName) {
       return NextResponse.json(
         { error: 'Missing required fields: platformName, companyName' },
@@ -15,29 +15,32 @@ export async function POST(req: Request) {
       );
     }
 
-    // Generate project slug from platform name
     const projectSlug = platformName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 50);
 
-    // Start provisioning with object parameter
-    const result = await startProvisioning({
-      projectSlug,
-      platformName,
-      companyName,
-      metadata: { contactEmail },
+    // Run provisioning in background after response is sent
+    after(async () => {
+      try {
+        await startProvisioning({
+          projectSlug,
+          platformName,
+          companyName,
+          metadata: { contactEmail },
+        });
+      } catch (err) {
+        console.error('Background provisioning error:', err);
+      }
     });
 
+    // Return immediately
     return NextResponse.json({
       ok: true,
       projectSlug,
-      complete: result.complete,
-      success: result.success,
       message: 'Provisioning started',
     });
-
   } catch (err: any) {
     console.error('Setup start error:', err);
     return NextResponse.json(
