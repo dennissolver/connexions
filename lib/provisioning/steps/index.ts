@@ -10,19 +10,37 @@ import { createVercelProject, triggerVercelDeployment } from './vercel';
 import { createSandraAgent, createKiraAgent } from './elevenlabs';
 import { registerWebhook } from './webhook';
 
-// Simple init step that just advances to SUPABASE_CREATING
-async function initStep(ctx: ProvisionContext): Promise<ProvisionStepResult> {
-  return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
-}
+// Transition steps for _READY states
+const transitionTo = (nextState: ProvisionState) => 
+  async (ctx: ProvisionContext): Promise<ProvisionStepResult> => 
+    ({ nextState, metadata: ctx.metadata });
 
 export const STEPS: Partial<Record<ProvisionState, (ctx: ProvisionContext) => Promise<ProvisionStepResult>>> = {
-  INIT: initStep,
+  // Init
+  INIT: transitionTo('SUPABASE_CREATING'),
+  
+  // Supabase
   SUPABASE_CREATING: createSupabaseProject,
+  SUPABASE_READY: transitionTo('GITHUB_CREATING'),
+  
+  // GitHub
   GITHUB_CREATING: createGithubRepo,
+  GITHUB_READY: transitionTo('VERCEL_CREATING'),
+  
+  // Vercel
   VERCEL_CREATING: createVercelProject,
   VERCEL_DEPLOYING: triggerVercelDeployment,
+  VERCEL_READY: transitionTo('SANDRA_CREATING'),
+  
+  // Sandra
   SANDRA_CREATING: createSandraAgent,
+  SANDRA_READY: transitionTo('KIRA_CREATING'),
+  
+  // Kira
   KIRA_CREATING: createKiraAgent,
+  KIRA_READY: transitionTo('WEBHOOK_REGISTERING'),
+  
+  // Webhook
   WEBHOOK_REGISTERING: registerWebhook,
 };
 
