@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProvisionRunBySlug, deleteProvisionRunBySlug } from '@/lib/provisioning/engine';
+import { deleteProvisionRunBySlug } from '@/lib/provisioning/store';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const projectSlug = body.projectSlug;
+  const { projectSlug } = body;
 
   if (!projectSlug) {
     return NextResponse.json({ error: 'Missing projectSlug' }, { status: 400 });
-  }
-
-  const run = await getProvisionRunBySlug(projectSlug);
-  if (!run) {
-    return NextResponse.json({ error: 'Run not found' }, { status: 404 });
   }
 
   await deleteProvisionRunBySlug(projectSlug);

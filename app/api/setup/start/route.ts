@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateProvisionRun } from '@/lib/provisioning/engine';
+import { updateProvisionRunBySlug } from '@/lib/provisioning/store';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { projectSlug } = body;
+  const { projectSlug, state } = body;
 
-  if (!projectSlug) {
-    return NextResponse.json({ error: 'Missing projectSlug' }, { status: 400 });
+  if (!projectSlug || !state) {
+    return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
   }
 
-  await updateProvisionRun(projectSlug, { state: 'INIT' });
+  await updateProvisionRunBySlug(projectSlug, { state });
   return NextResponse.json({ success: true });
 }
