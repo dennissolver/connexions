@@ -5,5 +5,9 @@ import { STEPS } from './steps';
 
 export async function executeProvisionStep(state: ProvisionState, context: ProvisionContext): Promise<ProvisionStepResult> {
   const step = STEPS[state];
-  return step ? step(context) : {};
+  if (step) {
+    return step(context);
+  }
+  // No step for this state - return current state with unchanged metadata
+  return { nextState: state, metadata: context.metadata };
 }
