@@ -22,6 +22,7 @@ export type ProvisionState =
 
 export interface ProvisionContext {
   projectSlug: string;
+  state: ProvisionState;
   metadata: Record<string, any>;
 }
 
