@@ -51,17 +51,14 @@ export interface ProvisionMetadata {
   supabaseAnonKey?: string;
   supabaseServiceKey?: string;
   supabaseAuthConfigured?: boolean;
-
   // GitHub
   githubRepoName?: string;
   githubRepoUrl?: string;
-
   // Vercel
   vercelProjectId?: string;
   vercelUrl?: string;
   vercelDeploymentId?: string;
   vercelEnvUpdated?: boolean;
-
   // ElevenLabs
   elevenLabsAgentId?: string;
   elevenLabsAgentName?: string;
@@ -69,18 +66,22 @@ export interface ProvisionMetadata {
   elevenLabsToolUrl?: string;
   elevenLabsRouterUrl?: string;
   elevenLabsVerified?: boolean;
-
+  // Sandra (Setup Agent)
+  setupAgentId?: string;
+  setupAgentName?: string;
+  setupAgentToolIds?: string[];
+  // Kira (Insights Agent)
+  insightsAgentId?: string;
+  insightsAgentName?: string;
+  insightsAgentToolIds?: string[];
   // Webhook
   webhookRegistered?: boolean;
-
   // Verification tracking
   verificationPassed?: boolean;
-
   // Error tracking
   lastError?: string;
   error?: string;
   retryCount?: number;
-
   // Cleanup tracking
   cleanupCompleted?: boolean;
   cleanupDeleted?: string[];
