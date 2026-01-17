@@ -4,15 +4,10 @@ import { ProvisionContext, ProvisionStepResult } from '../types';
 
 const ELEVENLABS_API = 'https://api.elevenlabs.io/v1';
 
-// Voice IDs
 const VOICES = {
-  SANDRA: 'EXAVITQu4vr4xnSDxMaL', // Sarah - friendly, professional
-  KIRA: 'XB0fDUnXU5powFXDhCwa',   // Charlotte - warm, analytical
+  SANDRA: 'EXAVITQu4vr4xnSDxMaL',
+  KIRA: 'XB0fDUnXU5powFXDhCwa',
 };
-
-// ============================================================================
-// PROMPTS
-// ============================================================================
 
 const SANDRA_PROMPT = `You are Sandra, a friendly AI Setup Agent. Your goal is to gather information from the user to create their custom AI interview panel.
 
@@ -49,26 +44,16 @@ const KIRA_PROMPT = `You are Kira, an AI Insights Agent. Your role is to help us
 2. Get summaries of interview panels
 3. Find specific quotes and themes
 4. Compare results across panels
-5. Identify trends and patterns
 
 ## How to Respond
 - Understand what the user wants to know
 - Use tools to gather relevant data
 - Present findings with specific examples
-- Cite which interviews your insights come from
 
 ## Important
 - Be accurate - only report what the data shows
-- Acknowledge limitations if data is sparse
-- Make insights actionable`;
+- Acknowledge limitations if data is sparse`;
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Verify an agent exists in ElevenLabs
- */
 export async function verifyAgentExists(
   agentId: string,
   apiKey: string
@@ -77,7 +62,6 @@ export async function verifyAgentExists(
     const res = await fetch(`${ELEVENLABS_API}/convai/agents/${agentId}`, {
       headers: { 'xi-api-key': apiKey },
     });
-
     if (res.ok) {
       const agent = await res.json();
       return { exists: true, agent };
@@ -88,51 +72,6 @@ export async function verifyAgentExists(
     return { exists: false };
   }
 }
-
-/**
- * Create a webhook tool for an agent
- */
-async function createAgentTool(
-  apiKey: string,
-  toolConfig: {
-    name: string;
-    description: string;
-    url: string;
-    parameters: Record<string, any>;
-  }
-): Promise<string> {
-  const res = await fetch(`${ELEVENLABS_API}/convai/agents/tools`, {
-    method: 'POST',
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      type: 'webhook',
-      name: toolConfig.name,
-      description: toolConfig.description,
-      webhook: {
-        url: toolConfig.url,
-        method: 'POST',
-      },
-      parameters: toolConfig.parameters,
-    }),
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Failed to create tool: ${error}`);
-  }
-
-  const tool = await res.json();
-  console.log(`[elevenlabs] Created tool: ${tool.tool_id}`);
-  return tool.tool_id;
-}
-
-// ============================================================================
-// SANDRA (SETUP AGENT)
-// State: SANDRA_CREATING → SANDRA_READY
-// ============================================================================
 
 export async function createSandraAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   console.log(`[sandra] Creating Setup Agent for ${ctx.platformName}...`);
@@ -150,12 +89,15 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
   const webhookRouterUrl = ctx.parentWebhookUrl || `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
   const agentName = `${ctx.platformName} Setup Agent`;
 
-  // Create the save_draft tool
-  console.log(`[sandra] Creating save_draft tool...`);
-  const toolId = await createAgentTool(ctx.elevenLabsApiKey, {
+  // Define tool inline with agent creation
+  const saveDraftTool = {
+    type: 'webhook',
     name: 'save_draft',
     description: 'Save the interview panel draft with all collected information',
-    url: `${childPlatformUrl}/api/tools/save-draft`,
+    webhook: {
+      url: `${childPlatformUrl}/api/tools/save-draft`,
+      method: 'POST',
+    },
     parameters: {
       type: 'object',
       properties: {
@@ -168,17 +110,15 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
       },
       required: ['panel_name', 'research_objective', 'target_audience'],
     },
-  });
+  };
 
-  // Create the agent
-  console.log(`[sandra] Creating agent...`);
   const agentConfig = {
     name: agentName,
     conversation_config: {
       agent: {
         prompt: {
           prompt: SANDRA_PROMPT,
-          tool_ids: [toolId],
+          tools: [saveDraftTool],
         },
         first_message: `Hi! I'm Sandra, your research design partner. I'll help you create a custom AI interviewer. What's your name?`,
         language: 'en',
@@ -196,6 +136,7 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
     },
   };
 
+  console.log(`[sandra] Creating agent with inline tools...`);
   const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
     headers,
@@ -211,34 +152,25 @@ export async function createSandraAgent(ctx: ProvisionContext): Promise<Provisio
   const agent = await createRes.json();
   console.log(`[sandra] Created agent: ${agent.agent_id}`);
 
-  // Verify
   await new Promise(r => setTimeout(r, 1000));
   const verification = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
   if (!verification.exists) {
     throw new Error(`Sandra verification failed: ${agent.agent_id} not found`);
   }
 
-  console.log(`[sandra] ✓ Sandra created and verified`);
-
+  console.log(`[sandra] Sandra created and verified`);
   return {
     nextState: 'SANDRA_READY',
     metadata: {
       ...ctx.metadata,
       sandraAgentId: agent.agent_id,
       sandraAgentName: agentName,
-      sandraToolId: toolId,
       sandraVerified: true,
-      // Legacy compatibility
       elevenLabsAgentId: agent.agent_id,
       setupAgentId: agent.agent_id,
     },
   };
 }
-
-// ============================================================================
-// KIRA (INSIGHTS AGENT)
-// State: KIRA_CREATING → KIRA_READY
-// ============================================================================
 
 export async function createKiraAgent(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   console.log(`[kira] Creating Insights Agent for ${ctx.platformName}...`);
@@ -256,84 +188,60 @@ export async function createKiraAgent(ctx: ProvisionContext): Promise<ProvisionS
   const webhookRouterUrl = ctx.parentWebhookUrl || `${ctx.publicBaseUrl}/api/webhooks/elevenlabs-router`;
   const agentName = `${ctx.platformName} Insights Agent`;
 
-  // Create Kira's tools
-  console.log(`[kira] Creating insights tools...`);
-
-  const searchToolId = await createAgentTool(ctx.elevenLabsApiKey, {
-    name: 'search_insights',
-    description: 'Search interviews by topic, sentiment, or keywords',
-    url: `${childPlatformUrl}/api/insights/search`,
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Search query' },
-        sentiment: { type: 'string', enum: ['positive', 'negative', 'neutral', 'mixed'], description: 'Filter by sentiment' },
-        panel_id: { type: 'string', description: 'Limit to specific panel' },
-        limit: { type: 'number', description: 'Max results (default 10)' },
+  // Define Kira's tools inline
+  const kiraTools = [
+    {
+      type: 'webhook',
+      name: 'search_insights',
+      description: 'Search interviews for specific topics, themes, or keywords',
+      webhook: { url: `${childPlatformUrl}/api/insights/search`, method: 'POST' },
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          panel_id: { type: 'string', description: 'Optional panel ID to search within' },
+        },
+        required: ['query'],
       },
-      required: ['query'],
     },
-  });
-
-  const summaryToolId = await createAgentTool(ctx.elevenLabsApiKey, {
-    name: 'get_panel_summary',
-    description: 'Get aggregated summary for an interview panel',
-    url: `${childPlatformUrl}/api/insights/summary`,
-    parameters: {
-      type: 'object',
-      properties: {
-        panel_id: { type: 'string', description: 'Panel ID to summarize' },
-        include_themes: { type: 'boolean', description: 'Include theme analysis' },
-        include_sentiment: { type: 'boolean', description: 'Include sentiment breakdown' },
+    {
+      type: 'webhook',
+      name: 'get_panel_summary',
+      description: 'Get a summary of insights from a panel',
+      webhook: { url: `${childPlatformUrl}/api/insights/summary`, method: 'POST' },
+      parameters: {
+        type: 'object',
+        properties: {
+          panel_id: { type: 'string', description: 'Panel ID to summarize' },
+        },
+        required: ['panel_id'],
       },
-      required: ['panel_id'],
     },
-  });
-
-  const quotesToolId = await createAgentTool(ctx.elevenLabsApiKey, {
-    name: 'get_quotes',
-    description: 'Get specific quotes from interviews on a topic',
-    url: `${childPlatformUrl}/api/insights/quotes`,
-    parameters: {
-      type: 'object',
-      properties: {
-        topic: { type: 'string', description: 'Topic to find quotes about' },
-        panel_id: { type: 'string', description: 'Panel to search' },
-        sentiment: { type: 'string', enum: ['positive', 'negative', 'neutral'], description: 'Filter by sentiment' },
-        limit: { type: 'number', description: 'Max quotes (default 5)' },
+    {
+      type: 'webhook',
+      name: 'get_quotes',
+      description: 'Get notable quotes from interviews',
+      webhook: { url: `${childPlatformUrl}/api/insights/quotes`, method: 'POST' },
+      parameters: {
+        type: 'object',
+        properties: {
+          panel_id: { type: 'string', description: 'Panel ID' },
+          theme: { type: 'string', description: 'Optional theme to filter by' },
+        },
+        required: ['panel_id'],
       },
-      required: ['topic'],
     },
-  });
+  ];
 
-  const compareToolId = await createAgentTool(ctx.elevenLabsApiKey, {
-    name: 'compare_panels',
-    description: 'Compare results across multiple panels',
-    url: `${childPlatformUrl}/api/insights/compare`,
-    parameters: {
-      type: 'object',
-      properties: {
-        panel_ids: { type: 'array', items: { type: 'string' }, description: 'Panel IDs to compare' },
-        comparison_type: { type: 'string', enum: ['sentiment', 'themes', 'completion_rate', 'all'], description: 'What to compare' },
-      },
-      required: ['panel_ids'],
-    },
-  });
-
-  const toolIds = [searchToolId, summaryToolId, quotesToolId, compareToolId];
-  console.log(`[kira] Created ${toolIds.length} tools`);
-
-  // Create the agent
-  console.log(`[kira] Creating agent...`);
   const agentConfig = {
     name: agentName,
     conversation_config: {
       agent: {
         prompt: {
           prompt: KIRA_PROMPT,
-          tool_ids: toolIds,
+          tools: kiraTools,
         },
-        first_message: `Hi! I'm Kira, your insights assistant. I can help you explore your interview data. What would you like to know?`,
+        first_message: `Hi! I'm Kira, your insights analyst. I can help you explore your interview data. What would you like to know?`,
         language: 'en',
       },
       tts: { voice_id: VOICES.KIRA, model_id: 'eleven_flash_v2' },
@@ -349,6 +257,7 @@ export async function createKiraAgent(ctx: ProvisionContext): Promise<ProvisionS
     },
   };
 
+  console.log(`[kira] Creating agent with inline tools...`);
   const createRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
     headers,
@@ -364,24 +273,20 @@ export async function createKiraAgent(ctx: ProvisionContext): Promise<ProvisionS
   const agent = await createRes.json();
   console.log(`[kira] Created agent: ${agent.agent_id}`);
 
-  // Verify
   await new Promise(r => setTimeout(r, 1000));
   const verification = await verifyAgentExists(agent.agent_id, ctx.elevenLabsApiKey);
   if (!verification.exists) {
     throw new Error(`Kira verification failed: ${agent.agent_id} not found`);
   }
 
-  console.log(`[kira] ✓ Kira created and verified`);
-
+  console.log(`[kira] Kira created and verified`);
   return {
     nextState: 'KIRA_READY',
     metadata: {
       ...ctx.metadata,
       kiraAgentId: agent.agent_id,
       kiraAgentName: agentName,
-      kiraToolIds: toolIds,
       kiraVerified: true,
-      // For UI components
       insightsAgentId: agent.agent_id,
     },
   };
