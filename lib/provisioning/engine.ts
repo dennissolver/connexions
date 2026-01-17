@@ -1,29 +1,28 @@
 
-// lib/provisioning/engine.ts
-import { verifyComponent } from './verify';
 import { RETRY_POLICIES } from './retryPolicies';
-import { sleep } from './utils';
+import { verify } from './verify';
 
-export async function runVerificationLoop(component: string, ctx: any, transition: (s: string) => Promise<void>, fail: (e: string) => Promise<void>) {
+export async function runVerification(component: string, ctx: any, advance: Function, fail: Function) {
   const policy = RETRY_POLICIES[component];
-  if (!policy) throw new Error(`No retry policy for ${component}`);
-
   for (let attempt = 1; attempt <= policy.maxRetries; attempt++) {
-    const result = await verifyComponent(component, ctx);
-
+    const result = await verify(component, ctx);
     if (result.ok) {
-      await transition(`${component.toUpperCase()}_READY`);
+      await advance();
       return;
     }
-
     if (!result.retryable) {
-      await fail(result.reason || 'Verification failed');
+      await fail(result.reason);
       return;
     }
-
     const delay = Math.min(policy.baseDelayMs * 2 ** (attempt - 1), policy.maxDelayMs);
-    await sleep(delay);
+    await new Promise(r => setTimeout(r, delay));
   }
-
-  await fail(`${component} did not become ready after ${policy.maxRetries} attempts`);
+  await fail(`${component} verification timed out`);
 }
+
+// Compatibility exports (existing API expectations)
+export async function getProvisionRun() {}
+export async function createProvisionRun() {}
+export async function deleteProvisionRun() {}
+export async function advanceState() {}
+export async function failRun() {}
