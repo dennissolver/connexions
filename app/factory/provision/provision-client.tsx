@@ -14,110 +14,293 @@ import {
   Brain,
   Webhook,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Shield,
+  Clock,
 } from 'lucide-react';
 
 /* ============================================================================
  * TYPES
  * ==========================================================================*/
 
-type ProvisionState =
-  | 'INIT'
-  | 'SUPABASE_CREATING' | 'SUPABASE_READY'
-  | 'GITHUB_CREATING' | 'GITHUB_READY'
-  | 'VERCEL_CREATING' | 'VERCEL_DEPLOYING' | 'VERCEL_READY'
-  | 'SANDRA_CREATING' | 'SANDRA_READY'
-  | 'KIRA_CREATING' | 'KIRA_READY'
-  | 'WEBHOOK_REGISTERING'
-  | 'COMPLETE'
-  | 'FAILED';
+type ServiceState = 'PENDING' | 'CREATING' | 'VERIFYING' | 'WAITING' | 'READY' | 'FAILED';
 
-interface ProvisionStatus {
-  state: ProvisionState;
-  metadata?: {
-    error?: string;
-    errorState?: string;
-    vercelUrl?: string;
-    githubRepoUrl?: string;
-    sandraAgentId?: string;
-    kiraAgentId?: string;
-    sandraVerified?: boolean;
-    kiraVerified?: boolean;
-  };
-  platform_name?: string;
+type ServiceName =
+  | 'supabase'
+  | 'github'
+  | 'vercel'
+  | 'supabase-config'
+  | 'sandra'
+  | 'kira'
+  | 'webhooks';
+
+interface ServiceStates {
+  supabase: ServiceState;
+  github: ServiceState;
+  vercel: ServiceState;
+  'supabase-config': ServiceState;
+  sandra: ServiceState;
+  kira: ServiceState;
+  webhooks: ServiceState;
 }
 
-interface StepConfig {
-  id: string;
+interface ProvisionStatus {
+  project_slug: string;
+  status: 'running' | 'complete' | 'failed';
+  supabase_state: ServiceState;
+  github_state: ServiceState;
+  vercel_state: ServiceState;
+  'supabase-config_state'?: ServiceState;
+  sandra_state: ServiceState;
+  kira_state: ServiceState;
+  webhooks_state: ServiceState;
+  metadata?: {
+    error?: string;
+    vercel_url?: string;
+    platform_name?: string;
+    company_name?: string;
+  };
+}
+
+interface ServiceConfig {
+  id: ServiceName;
   label: string;
   icon: React.ReactNode;
-  states: ProvisionState[];
-  description: string;
+  description: Record<ServiceState, string>;
 }
 
 /* ============================================================================
- * STEP CONFIG
+ * SERVICE CONFIG
  * ==========================================================================*/
 
-const PROVISION_STEPS: StepConfig[] = [
-  { id: 'supabase', label: 'Database', icon: <Database className="w-5 h-5" />, states: ['SUPABASE_CREATING','SUPABASE_READY'], description: 'Setting up database and authentication' },
-  { id: 'github', label: 'Repository', icon: <GitBranch className="w-5 h-5" />, states: ['GITHUB_CREATING','GITHUB_READY'], description: 'Creating GitHub repository' },
-  { id: 'vercel', label: 'Deployment', icon: <Globe className="w-5 h-5" />, states: ['VERCEL_CREATING','VERCEL_DEPLOYING','VERCEL_READY'], description: 'Deploying platform to Vercel' },
-  { id: 'sandra', label: 'Sandra', icon: <Mic className="w-5 h-5" />, states: ['SANDRA_CREATING','SANDRA_READY'], description: 'Creating your setup agent' },
-  { id: 'kira', label: 'Kira', icon: <Brain className="w-5 h-5" />, states: ['KIRA_CREATING','KIRA_READY'], description: 'Creating your insights agent' },
-  { id: 'webhooks', label: 'Webhooks', icon: <Webhook className="w-5 h-5" />, states: ['WEBHOOK_REGISTERING'], description: 'Registering platform webhooks' },
+const SERVICES: ServiceConfig[] = [
+  {
+    id: 'supabase',
+    label: 'Database',
+    icon: <Database className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting to start...',
+      CREATING: 'Creating Supabase project...',
+      VERIFYING: 'Verifying database & fetching keys...',
+      WAITING: 'Waiting for database to be ready...',
+      READY: 'Database ready',
+      FAILED: 'Database setup failed',
+    },
+  },
+  {
+    id: 'github',
+    label: 'Repository',
+    icon: <GitBranch className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting to start...',
+      CREATING: 'Creating GitHub repository...',
+      VERIFYING: 'Verifying repository...',
+      WAITING: 'Waiting for repository...',
+      READY: 'Repository ready',
+      FAILED: 'Repository setup failed',
+    },
+  },
+  {
+    id: 'vercel',
+    label: 'Deployment',
+    icon: <Globe className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for repository & database...',
+      CREATING: 'Creating Vercel project...',
+      VERIFYING: 'Deploying & verifying...',
+      WAITING: 'Waiting for deployment...',
+      READY: 'Deployment ready',
+      FAILED: 'Deployment failed',
+    },
+  },
+  {
+    id: 'supabase-config',
+    label: 'Auth Config',
+    icon: <Shield className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for deployment...',
+      CREATING: 'Configuring auth URLs...',
+      VERIFYING: 'Verifying configuration...',
+      WAITING: 'Waiting for configuration...',
+      READY: 'Auth configured',
+      FAILED: 'Auth config failed',
+    },
+  },
+  {
+    id: 'sandra',
+    label: 'Setup Agent',
+    icon: <Mic className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for deployment...',
+      CREATING: 'Creating Sandra agent...',
+      VERIFYING: 'Verifying Sandra...',
+      WAITING: 'Waiting for Sandra...',
+      READY: 'Sandra ready',
+      FAILED: 'Sandra setup failed',
+    },
+  },
+  {
+    id: 'kira',
+    label: 'Insights Agent',
+    icon: <Brain className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for deployment...',
+      CREATING: 'Creating Kira agent...',
+      VERIFYING: 'Verifying Kira...',
+      WAITING: 'Waiting for Kira...',
+      READY: 'Kira ready',
+      FAILED: 'Kira setup failed',
+    },
+  },
+  {
+    id: 'webhooks',
+    label: 'Webhooks',
+    icon: <Webhook className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for agents...',
+      CREATING: 'Registering webhooks...',
+      VERIFYING: 'Verifying webhooks...',
+      WAITING: 'Waiting for webhook verification...',
+      READY: 'Webhooks configured',
+      FAILED: 'Webhook setup failed',
+    },
+  },
 ];
 
 /* ============================================================================
  * HELPERS
  * ==========================================================================*/
 
-function getStateMessage(state: ProvisionState): string {
-  const map: Record<ProvisionState, string> = {
-    INIT: 'Initializing...',
-    SUPABASE_CREATING: 'Creating database...',
-    SUPABASE_READY: 'Database ready',
-    GITHUB_CREATING: 'Creating repository...',
-    GITHUB_READY: 'Repository ready',
-    VERCEL_CREATING: 'Creating deployment...',
-    VERCEL_DEPLOYING: 'Deploying platform...',
-    VERCEL_READY: 'Deployment ready',
-    SANDRA_CREATING: 'Creating Sandra (Setup Agent)...',
-    SANDRA_READY: 'Sandra ready',
-    KIRA_CREATING: 'Creating Kira (Insights Agent)...',
-    KIRA_READY: 'Kira ready',
-    WEBHOOK_REGISTERING: 'Registering webhooks...',
-    COMPLETE: 'Platform ready!',
-    FAILED: 'Provisioning failed',
-  };
-  return map[state];
+function getServiceState(status: ProvisionStatus, serviceId: ServiceName): ServiceState {
+  const stateKey = serviceId === 'supabase-config'
+    ? 'supabase-config_state'
+    : `${serviceId}_state` as keyof ProvisionStatus;
+  return (status[stateKey] as ServiceState) || 'PENDING';
 }
-function getProgressPercent(state: ProvisionState): number {
-  const progressMap: Record<ProvisionState, number> = {
-    INIT: 0,
 
-    SUPABASE_CREATING: 3,
-    SUPABASE_READY: 10,
+function getStateColor(state: ServiceState): string {
+  switch (state) {
+    case 'READY': return 'bg-emerald-500';
+    case 'CREATING':
+    case 'VERIFYING': return 'bg-blue-500';
+    case 'WAITING': return 'bg-amber-500';
+    case 'FAILED': return 'bg-red-500';
+    default: return 'bg-slate-600';
+  }
+}
 
-    SANDRA_CREATING: 15,
-    SANDRA_READY: 25,
+function getStateTextColor(state: ServiceState): string {
+  switch (state) {
+    case 'READY': return 'text-emerald-400';
+    case 'CREATING':
+    case 'VERIFYING': return 'text-blue-400';
+    case 'WAITING': return 'text-amber-400';
+    case 'FAILED': return 'text-red-400';
+    default: return 'text-slate-500';
+  }
+}
 
-    KIRA_CREATING: 30,
-    KIRA_READY: 35,
+function getStateProgress(state: ServiceState): number {
+  switch (state) {
+    case 'READY': return 100;
+    case 'VERIFYING': return 75;
+    case 'WAITING': return 60;
+    case 'CREATING': return 30;
+    case 'FAILED': return 100;
+    default: return 0;
+  }
+}
 
-    GITHUB_CREATING: 50,
-    GITHUB_READY: 65,
-
-    VERCEL_CREATING: 70,
-    VERCEL_DEPLOYING: 85,
-    VERCEL_READY: 95,
-
-    WEBHOOK_REGISTERING: 98,
-    COMPLETE: 100,
-    FAILED: 100,
+function getOverallProgress(status: ProvisionStatus): number {
+  const weights: Record<ServiceName, number> = {
+    supabase: 15,
+    github: 10,
+    vercel: 25,
+    'supabase-config': 5,
+    sandra: 15,
+    kira: 15,
+    webhooks: 15,
   };
 
-  return progressMap[state] ?? 0;
+  let totalProgress = 0;
+  let totalWeight = 0;
+
+  for (const service of SERVICES) {
+    const state = getServiceState(status, service.id);
+    const weight = weights[service.id];
+    totalWeight += weight;
+    totalProgress += (getStateProgress(state) / 100) * weight;
+  }
+
+  return Math.round((totalProgress / totalWeight) * 100);
+}
+
+function countByState(status: ProvisionStatus): { ready: number; active: number; pending: number; failed: number } {
+  let ready = 0, active = 0, pending = 0, failed = 0;
+
+  for (const service of SERVICES) {
+    const state = getServiceState(status, service.id);
+    switch (state) {
+      case 'READY': ready++; break;
+      case 'CREATING':
+      case 'VERIFYING':
+      case 'WAITING': active++; break;
+      case 'FAILED': failed++; break;
+      default: pending++; break;
+    }
+  }
+
+  return { ready, active, pending, failed };
+}
+
+/* ============================================================================
+ * SERVICE ROW COMPONENT
+ * ==========================================================================*/
+
+function ServiceRow({ service, state }: { service: ServiceConfig; state: ServiceState }) {
+  const isActive = state === 'CREATING' || state === 'VERIFYING' || state === 'WAITING';
+  const progress = getStateProgress(state);
+
+  return (
+    <div className="flex items-center gap-4 py-3 border-b border-slate-800 last:border-0">
+      {/* Icon */}
+      <div className={`p-2 rounded-lg ${
+        state === 'READY' ? 'bg-emerald-500/20 text-emerald-400' :
+        state === 'FAILED' ? 'bg-red-500/20 text-red-400' :
+        isActive ? 'bg-blue-500/20 text-blue-400' :
+        'bg-slate-700/50 text-slate-500'
+      }`}>
+        {state === 'READY' ? <CheckCircle2 className="w-5 h-5" /> :
+         state === 'FAILED' ? <XCircle className="w-5 h-5" /> :
+         isActive ? <Loader2 className="w-5 h-5 animate-spin" /> :
+         service.icon}
+      </div>
+
+      {/* Label & Description */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-white">{service.label}</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            state === 'READY' ? 'bg-emerald-500/20 text-emerald-400' :
+            state === 'FAILED' ? 'bg-red-500/20 text-red-400' :
+            isActive ? 'bg-blue-500/20 text-blue-400' :
+            'bg-slate-700 text-slate-400'
+          }`}>
+            {state}
+          </span>
+        </div>
+        <p className="text-sm text-slate-400 truncate">{service.description[state]}</p>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full transition-all duration-500 ${getStateColor(state)}`}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /* ============================================================================
@@ -157,84 +340,110 @@ export default function ProvisionClient() {
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-  const state = status?.state ?? 'INIT';
-  const isComplete = state === 'COMPLETE';
-  const isFailed = state === 'FAILED';
+  if (!status) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+      </div>
+    );
+  }
+
+  const isComplete = status.status === 'complete';
+  const isFailed = status.status === 'failed';
+  const overallProgress = getOverallProgress(status);
+  const counts = countByState(status);
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8">
-      <div className="bg-slate-900 rounded-2xl p-8 max-w-lg w-full">
+      <div className="bg-slate-900 rounded-2xl p-8 max-w-2xl w-full">
 
         {/* HEADER */}
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-white">
             {isComplete ? '🎉 Platform Ready!' : isFailed ? '❌ Setup Failed' : 'Building Your Platform'}
           </h1>
-          <p className="text-slate-400 mt-1">{status?.platform_name || projectSlug}</p>
-          {!isComplete && !isFailed && (
-            <p className="text-sm text-slate-500 mt-2">Elapsed: {formatTime(elapsed)}</p>
-          )}
+          <p className="text-slate-400 mt-1">
+            {status.metadata?.platform_name || projectSlug}
+          </p>
         </div>
-{/* OVERALL PROGRESS BAR */}
-{!isComplete && !isFailed && (
-  <div className="mb-6">
-    <div className="flex justify-between text-xs text-slate-500 mb-1">
-      <span>Overall progress</span>
-      <span>{getProgressPercent(state)}%</span>
-    </div>
-    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-gradient-to-r from-purple-500 to-green-500 transition-all duration-700 ease-out"
-        style={{ width: `${getProgressPercent(state)}%` }}
-      />
-    </div>
-  </div>
-)}
 
-        {/* EXPECTATION SETTING (NEW) */}
+        {/* OVERALL PROGRESS */}
+        <div className="mb-6">
+          <div className="flex justify-between text-sm mb-2">
+            <div className="flex items-center gap-4 text-slate-400">
+              <span className="flex items-center gap-1">
+                <Clock className="w-4 h-4" />
+                {formatTime(elapsed)}
+              </span>
+              <span>{counts.ready}/{SERVICES.length} complete</span>
+            </div>
+            <span className="text-white font-medium">{overallProgress}%</span>
+          </div>
+          <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-700 ease-out ${
+                isFailed ? 'bg-red-500' : 
+                isComplete ? 'bg-emerald-500' : 
+                'bg-gradient-to-r from-purple-500 to-blue-500'
+              }`}
+              style={{ width: `${overallProgress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* STATUS SUMMARY */}
+        {!isComplete && !isFailed && (
+          <div className="flex gap-4 mb-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-emerald-500" />
+              <span className="text-slate-400">{counts.ready} Ready</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-slate-400">{counts.active} Active</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-slate-600" />
+              <span className="text-slate-400">{counts.pending} Pending</span>
+            </div>
+            {counts.failed > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-slate-400">{counts.failed} Failed</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SERVICE LIST */}
+        <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
+          {SERVICES.map(service => (
+            <ServiceRow
+              key={service.id}
+              service={service}
+              state={getServiceState(status, service.id)}
+            />
+          ))}
+        </div>
+
+        {/* EXPECTATION SETTING */}
         {!isComplete && !isFailed && (
           <div className="mb-6 bg-slate-800/60 border border-slate-700 rounded-lg p-4 text-sm text-slate-300">
             <p className="mb-2">
-              We’re setting everything up automatically — database, AI agents,
-              code repository, and deployment.
-            </p>
-            <p className="mb-2">
-              <strong>Typical setup time:</strong> 10–20 minutes.
-              Occasionally it may take a little longer depending on external services.
+              Services run in parallel where possible. Database and Repository start immediately,
+              while Deployment waits for both to complete.
             </p>
             <p className="text-slate-400">
-              You don’t need to stay on this page. Feel free to grab a coffee ☕
-              and come back shortly — everything continues in the background.
+              <strong>Typical setup time:</strong> 5–15 minutes depending on external services.
             </p>
           </div>
         )}
 
-        {/* CURRENT STATE */}
-        <div className="bg-slate-800 rounded-lg p-4 mb-4 flex items-center gap-3">
-          {isComplete ? <CheckCircle2 className="text-green-500" /> :
-           isFailed ? <XCircle className="text-red-500" /> :
-           <Loader2 className="animate-spin text-purple-400" />}
-          <span className="text-purple-300 font-medium">{getStateMessage(state)}</span>
-        </div>
-
-        {/* CONTEXTUAL REASSURANCE (NEW) */}
-        {state === 'GITHUB_CREATING' && (
-          <p className="text-xs text-slate-500 mb-4">
-            This step can take a few minutes while your repository is prepared.
-          </p>
-        )}
-
-        {state === 'VERCEL_DEPLOYING' && (
-          <p className="text-xs text-slate-500 mb-4">
-            Deployments often take several minutes on first setup.
-          </p>
-        )}
-
-        {/* ACTION */}
-        {isComplete && status?.metadata?.vercelUrl && (
+        {/* ACTION BUTTONS */}
+        {isComplete && status.metadata?.vercel_url && (
           <button
-            onClick={() => window.location.href = `${status.metadata!.vercelUrl}/create`}
-            className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+            onClick={() => window.location.href = `${status.metadata!.vercel_url}/create`}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
           >
             <Sparkles className="w-5 h-5" />
             Go to Your Platform
@@ -243,12 +452,17 @@ export default function ProvisionClient() {
         )}
 
         {isFailed && (
-          <button
-            onClick={() => router.push('/factory')}
-            className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
-          >
-            Back to Factory
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => router.push('/factory')}
+              className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+            >
+              Back to Factory
+            </button>
+            <p className="text-center text-sm text-slate-500">
+              Check the failed service above for details
+            </p>
+          </div>
         )}
 
       </div>
