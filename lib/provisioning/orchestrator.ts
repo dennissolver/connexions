@@ -1,25 +1,20 @@
-import { supabaseAdmin } from '@/lib/supabase/admin';
+// lib/provisioning/orchestrator.ts
+
 import { advanceProvision } from './engine';
-import { ProvisionExecutionState } from './types';
+import { getProvisionRunBySlug } from './store';
+import { ProvisionState } from './states';
 
-const EXECUTABLE: ProvisionExecutionState[] = [
-  'SUPABASE_CREATING',
-  'GITHUB_CREATING',
-  'VERCEL_CREATING',
-  'SANDRA_CREATING',
-  'KIRA_CREATING',
-  'WEBHOOK_REGISTERING',
-];
+const TERMINAL: ProvisionState[] = ['COMPLETE', 'FAILED'];
 
-export async function runProvisioningCycle(projectSlug: string) {
-  const { data: run } = await supabaseAdmin
-    .from('provision_runs')
-    .select('*')
-    .eq('project_slug', projectSlug)
-    .single();
+export async function runProvisioning(projectSlug: string) {
+  while (true) {
+    const run = await getProvisionRunBySlug(projectSlug);
+    if (!run) throw new Error('Provision run missing');
 
-  if (!run) return;
-  if (!EXECUTABLE.includes(run.state)) return;
+    if (TERMINAL.includes(run.state as ProvisionState)) {
+      return;
+    }
 
-  await advanceProvision(run);
+    await advanceProvision(projectSlug);
+  }
 }
