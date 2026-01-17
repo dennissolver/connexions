@@ -4,72 +4,64 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { ProvisionState } from '@/lib/provisioning/states';
 
 /* ============================================================================
- * UI CONFIG (INTENTIONALLY LOCAL, DOMAIN-SAFE)
+ * UI STATE MAP — MUST MATCH ProvisionState EXACTLY
  * ==========================================================================*/
 
 const UI_MAP: Record<
   ProvisionState,
   { title: string; description: string }
 > = {
+  // Executable states
   SUPABASE_CREATING: {
     title: 'Database',
     description: 'Creating Supabase project',
   },
-  SUPABASE_READY: {
-    title: 'Database',
-    description: 'Database ready',
-  },
-
   GITHUB_CREATING: {
     title: 'Repository',
     description: 'Creating GitHub repository',
   },
-  GITHUB_READY: {
-    title: 'Repository',
-    description: 'Repository ready',
-  },
-
   VERCEL_CREATING: {
     title: 'Deployment',
     description: 'Creating Vercel project',
   },
-  VERCEL_DEPLOYING: {
-    title: 'Deployment',
-    description: 'Deploying application',
-  },
-  VERCEL_READY: {
-    title: 'Deployment',
-    description: 'Deployment complete',
-  },
-
   SANDRA_CREATING: {
     title: 'Setup Agent',
     description: 'Creating Sandra',
   },
-  SANDRA_READY: {
-    title: 'Setup Agent',
-    description: 'Sandra ready',
-  },
-
   KIRA_CREATING: {
     title: 'Insights Agent',
     description: 'Creating Kira',
   },
-  KIRA_READY: {
-    title: 'Insights Agent',
-    description: 'Kira ready',
-  },
-
   WEBHOOK_REGISTERING: {
     title: 'Webhooks',
     description: 'Registering callbacks',
   },
 
+  // Terminal states
+  SUPABASE_READY: {
+    title: 'Database',
+    description: 'Database ready',
+  },
+  GITHUB_READY: {
+    title: 'Repository',
+    description: 'Repository ready',
+  },
+  VERCEL_READY: {
+    title: 'Deployment',
+    description: 'Deployment ready',
+  },
+  SANDRA_READY: {
+    title: 'Setup Agent',
+    description: 'Sandra ready',
+  },
+  KIRA_READY: {
+    title: 'Insights Agent',
+    description: 'Kira ready',
+  },
   COMPLETE: {
     title: 'Complete',
     description: 'Platform is ready',
   },
-
   FAILED: {
     title: 'Failed',
     description: 'Provisioning failed',
@@ -86,8 +78,7 @@ type Props = {
 
 export default function ProvisioningProgress({ state }: Props) {
   const ui =
-    UI_MAP[state] ??
-    {
+    UI_MAP[state] ?? {
       title: 'Starting',
       description: 'Preparing provisioning workflow',
     };
