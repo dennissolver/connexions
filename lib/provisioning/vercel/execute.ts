@@ -1,11 +1,18 @@
 // lib/provisioning/vercel/execute.ts
-// Creates Vercel project - DEPENDS ON: github (needs repo)
-// Dependency check happens in engine/registry, not here
+// Creates Vercel project - DEPENDS ON: github, supabase (needs repo + keys)
 
 import { ProvisionContext, StepResult } from '../types';
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
+
+// Env vars to copy from parent Connexions to child platforms
+const PARENT_ENV_VARS = [
+  'ELEVENLABS_API_KEY',
+  'ELEVENLABS_WEBHOOK_SECRET',
+  'ANTHROPIC_API_KEY',
+  'TOOL_SHARED_SECRET',
+];
 
 export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> {
   // Already have a project? Skip (idempotent)
@@ -24,10 +31,13 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
   // GitHub repo is required (dependency enforced by registry)
   const githubRepo = ctx.metadata.github_repo as string;
   if (!githubRepo) {
-    // This shouldn't happen if dependencies are checked, but be safe
-    return {
-      status: 'wait',
-    };
+    return { status: 'wait' };
+  }
+
+  // Supabase keys are required (dependency enforced by registry)
+  if (!ctx.metadata.supabase_url || !ctx.metadata.supabase_anon_key || !ctx.metadata.supabase_service_role_key) {
+    console.log(`[vercel.execute] Waiting for Supabase keys`);
+    return { status: 'wait' };
   }
 
   const projectName = `cx-${ctx.projectSlug}`;
@@ -56,16 +66,54 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
     }
 
     // Build environment variables
-    const envVars = [];
-    if (ctx.metadata.supabase_url) {
-      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_URL', value: ctx.metadata.supabase_url, target: ['production', 'preview', 'development'], type: 'plain' });
+    const envVars: Array<{ key: string; value: string; target: string[]; type: string }> = [];
+
+    // Supabase vars (public ones as plain, secret as encrypted)
+    envVars.push({
+      key: 'NEXT_PUBLIC_SUPABASE_URL',
+      value: ctx.metadata.supabase_url as string,
+      target: ['production', 'preview', 'development'],
+      type: 'plain',
+    });
+    envVars.push({
+      key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      value: ctx.metadata.supabase_anon_key as string,
+      target: ['production', 'preview', 'development'],
+      type: 'plain',
+    });
+    envVars.push({
+      key: 'SUPABASE_SERVICE_ROLE_KEY',
+      value: ctx.metadata.supabase_service_role_key as string,
+      target: ['production', 'preview', 'development'],
+      type: 'encrypted',
+    });
+
+    // Copy parent env vars to child
+    for (const key of PARENT_ENV_VARS) {
+      const value = process.env[key];
+      if (value) {
+        envVars.push({
+          key,
+          value,
+          target: ['production', 'preview', 'development'],
+          type: 'encrypted',
+        });
+      }
     }
-    if (ctx.metadata.supabase_anon_key) {
-      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: ctx.metadata.supabase_anon_key, target: ['production', 'preview', 'development'], type: 'plain' });
-    }
-    if (ctx.metadata.supabase_service_role_key) {
-      envVars.push({ key: 'SUPABASE_SERVICE_ROLE_KEY', value: ctx.metadata.supabase_service_role_key, target: ['production', 'preview', 'development'], type: 'encrypted' });
-    }
+
+    // Add platform-specific vars
+    envVars.push({
+      key: 'NEXT_PUBLIC_PLATFORM_NAME',
+      value: ctx.platformName,
+      target: ['production', 'preview', 'development'],
+      type: 'plain',
+    });
+    envVars.push({
+      key: 'NEXT_PUBLIC_COMPANY_NAME',
+      value: ctx.companyName,
+      target: ['production', 'preview', 'development'],
+      type: 'plain',
+    });
 
     // Create project
     const createUrl = new URL('https://api.vercel.com/v10/projects');
@@ -99,6 +147,9 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
     const project = await createRes.json();
     console.log(`[vercel.execute] Created: ${project.id}`);
 
+    // Trigger initial deployment since Git commit happened before project was created
+    await triggerDeployment(project.id, githubRepo);
+
     return {
       status: 'advance',
       metadata: {
@@ -114,3 +165,37 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
   }
 }
 
+async function triggerDeployment(projectId: string, githubRepo: string): Promise<void> {
+  try {
+    const deployUrl = new URL('https://api.vercel.com/v13/deployments');
+    if (VERCEL_TEAM_ID) deployUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
+
+    const res = await fetch(deployUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: projectId,
+        project: projectId,
+        gitSource: {
+          type: 'github',
+          repo: githubRepo,
+          ref: 'main',
+        },
+        target: 'production',
+      }),
+    });
+
+    if (res.ok) {
+      console.log(`[vercel.execute] Triggered deployment for ${projectId}`);
+    } else {
+      const text = await res.text();
+      console.log(`[vercel.execute] Deployment trigger failed (non-fatal): ${text}`);
+      // Non-fatal - Git integration might trigger it anyway
+    }
+  } catch (err) {
+    console.log(`[vercel.execute] Deployment trigger error (non-fatal): ${err}`);
+  }
+}

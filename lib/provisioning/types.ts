@@ -1,88 +1,55 @@
 // lib/provisioning/types.ts
-// Parallel execution model - each service has independent state
+// Core types for the parallel provisioning system
 
 // =============================================================================
-// PER-SERVICE STATES
+// SERVICE TYPES
 // =============================================================================
 
-export type ServiceState = 
-  | 'PENDING'    // Not yet started
-  | 'CREATING'   // Execution in progress
-  | 'VERIFYING'  // Checking invariants
-  | 'WAITING'    // Dependency not ready, will retry
-  | 'READY'      // Verified complete
-  | 'FAILED';    // Unrecoverable error
-
-export type ServiceName = 
+export type ServiceName =
   | 'supabase'
   | 'github'
   | 'vercel'
+  | 'supabase-config'
   | 'sandra'
   | 'kira'
   | 'webhooks';
 
-// =============================================================================
-// STEP INTERFACES
-// =============================================================================
+export type ServiceState =
+  | 'PENDING'   // Not started, waiting for dependencies
+  | 'CREATING'  // Execute in progress
+  | 'VERIFYING' // Verify in progress
+  | 'WAITING'   // Verify returned wait, will retry
+  | 'READY'     // Complete and verified
+  | 'FAILED';   // Failed with error
 
-export type StepStatus = 'advance' | 'wait' | 'fail';
-
-export interface StepResult {
-  status: StepStatus;
-  error?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ProvisionContext {
-  projectSlug: string;
-  clientId: string | null;
-  companyName: string;
-  platformName: string;
-  metadata: ProvisionMetadata;
-  // Current state of all services (for dependency checks)
-  services: ServiceStates;
-}
-
-// =============================================================================
-// SERVICE STATES
-// =============================================================================
-
-export interface ServiceStates {
-  supabase: ServiceState;
-  github: ServiceState;
-  vercel: ServiceState;
-  sandra: ServiceState;
-  kira: ServiceState;
-  webhooks: ServiceState;
-}
+export type ServiceStates = Record<ServiceName, ServiceState>;
 
 export const INITIAL_SERVICE_STATES: ServiceStates = {
   supabase: 'PENDING',
   github: 'PENDING',
   vercel: 'PENDING',
+  'supabase-config': 'PENDING',
   sandra: 'PENDING',
   kira: 'PENDING',
   webhooks: 'PENDING',
 };
 
 // =============================================================================
-// METADATA
+// PROVISION RUN
 // =============================================================================
 
 export interface ProvisionMetadata {
   // Setup info
   company_name?: string;
   platform_name?: string;
-  contact_email?: string;
-  owner_name?: string;
-  owner_role?: string;
-  voice_preference?: string;
+  contactEmail?: string;
 
   // Supabase
   supabase_project_ref?: string;
   supabase_url?: string;
   supabase_anon_key?: string;
   supabase_service_role_key?: string;
+  supabase_urls_configured?: boolean;
 
   // GitHub
   github_repo?: string;
@@ -93,7 +60,7 @@ export interface ProvisionMetadata {
   vercel_url?: string;
   vercel_deployment_id?: string;
 
-  // ElevenLabs
+  // ElevenLabs agents
   sandra_agent_id?: string;
   kira_agent_id?: string;
 
@@ -101,46 +68,67 @@ export interface ProvisionMetadata {
   webhook_secret?: string;
   webhook_url?: string;
 
-  // Errors (per service)
+  // Errors (stored in metadata for history)
   supabase_error?: string;
   github_error?: string;
   vercel_error?: string;
   sandra_error?: string;
   kira_error?: string;
   webhooks_error?: string;
+  'supabase-config_error'?: string;
 
-  // Extensible
+  // Allow additional fields
   [key: string]: unknown;
 }
-
-// =============================================================================
-// DATABASE ROW
-// =============================================================================
 
 export interface ProvisionRun {
   id: string;
   project_slug: string;
-  client_id: string | null;
-  
-  // Per-service states
+  client_id?: string;
+
+  // Service states
   supabase_state: ServiceState;
   github_state: ServiceState;
   vercel_state: ServiceState;
+  'supabase-config_state'?: ServiceState;
   sandra_state: ServiceState;
   kira_state: ServiceState;
   webhooks_state: ServiceState;
-  
+
   // Overall status
   status: 'running' | 'complete' | 'failed';
-  
+
+  // All metadata in one JSONB column
   metadata: ProvisionMetadata;
+
   created_at: string;
   updated_at: string;
 }
 
 // =============================================================================
-// STEP HANDLER SIGNATURE
+// CONTEXT FOR HANDLERS
 // =============================================================================
+
+export interface ProvisionContext {
+  projectSlug: string;
+  clientId?: string;
+  companyName: string;
+  platformName: string;
+  metadata: ProvisionMetadata;
+  services: ServiceStates;
+}
+
+// =============================================================================
+// STEP RESULTS
+// =============================================================================
+
+export type StepStatus = 'advance' | 'wait' | 'fail';
+
+export interface StepResult {
+  status: StepStatus;
+  error?: string;
+  metadata?: Partial<ProvisionMetadata>;
+}
 
 export type ExecuteHandler = (ctx: ProvisionContext) => Promise<StepResult>;
 export type VerifyHandler = (ctx: ProvisionContext) => Promise<StepResult>;
@@ -149,23 +137,20 @@ export type VerifyHandler = (ctx: ProvisionContext) => Promise<StepResult>;
 // HELPERS
 // =============================================================================
 
-export function isServiceComplete(state: ServiceState): boolean {
-  return state === 'READY' || state === 'FAILED';
-}
-
 export function isServiceActionable(state: ServiceState): boolean {
-  // Can we do something with this service?
-  return state === 'PENDING' || state === 'CREATING' || state === 'VERIFYING' || state === 'WAITING';
+  return state !== 'READY' && state !== 'FAILED';
 }
 
 export function allServicesComplete(services: ServiceStates): boolean {
-  return Object.values(services).every(isServiceComplete);
+  return Object.values(services).every(
+    state => state === 'READY' || state === 'FAILED'
+  );
 }
 
 export function allServicesReady(services: ServiceStates): boolean {
-  return Object.values(services).every(s => s === 'READY');
+  return Object.values(services).every(state => state === 'READY');
 }
 
 export function anyServiceFailed(services: ServiceStates): boolean {
-  return Object.values(services).some(s => s === 'FAILED');
+  return Object.values(services).some(state => state === 'FAILED');
 }

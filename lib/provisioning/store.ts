@@ -9,7 +9,6 @@ import {
   ServiceStates,
   ProvisionMetadata,
   ProvisionContext,
-  INITIAL_SERVICE_STATES,
 } from './types';
 
 const supabase = createClient(
@@ -30,11 +29,11 @@ export async function createProvisionRun(params: {
   platformName: string;
   metadata?: Record<string, unknown>;
 }): Promise<ProvisionRun> {
-  const { 
-    projectSlug, 
-    clientId, 
-    companyName, 
-    platformName, 
+  const {
+    projectSlug,
+    clientId,
+    companyName,
+    platformName,
     metadata: additionalMetadata = {},
   } = params;
 
@@ -43,17 +42,18 @@ export async function createProvisionRun(params: {
     .insert({
       project_slug: projectSlug,
       client_id: clientId || null,
-      
+
       // All services start PENDING
       supabase_state: 'PENDING',
       github_state: 'PENDING',
       vercel_state: 'PENDING',
+      'supabase-config_state': 'PENDING',
       sandra_state: 'PENDING',
       kira_state: 'PENDING',
       webhooks_state: 'PENDING',
-      
+
       status: 'running',
-      
+
       metadata: {
         company_name: companyName,
         platform_name: platformName,
@@ -115,7 +115,7 @@ export async function setServiceState(
   state: ServiceState,
   metadata?: Partial<ProvisionMetadata>
 ): Promise<ProvisionRun> {
-  // Build update payload
+  // Build the column name - handle hyphenated service names
   const stateColumn = `${service}_state`;
   const updatePayload: Record<string, unknown> = {
     [stateColumn]: state,
@@ -169,7 +169,7 @@ export async function setOverallStatus(
 ): Promise<ProvisionRun> {
   const { data, error } = await supabase
     .from(TABLE)
-    .update({ 
+    .update({
       status,
       updated_at: new Date().toISOString(),
     })
@@ -226,6 +226,7 @@ export function getServiceStates(run: ProvisionRun): ServiceStates {
     supabase: run.supabase_state,
     github: run.github_state,
     vercel: run.vercel_state,
+    'supabase-config': (run as any)['supabase-config_state'] || 'PENDING',
     sandra: run.sandra_state,
     kira: run.kira_state,
     webhooks: run.webhooks_state,
@@ -242,6 +243,7 @@ export function runToContext(run: ProvisionRun): ProvisionContext {
     services: getServiceStates(run),
   };
 }
+
 // =============================================================================
 // DELETE
 // =============================================================================

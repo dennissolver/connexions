@@ -24,6 +24,8 @@ export async function kiraExecute(ctx: ProvisionContext): Promise<StepResult> {
     return { status: 'wait' };
   }
 
+  const vercelUrl = ctx.metadata.vercel_url as string;
+
   try {
     const systemPrompt = `You are Kira, the insights analyst for ${ctx.platformName}.
 
@@ -58,6 +60,15 @@ Be analytical, clear, and objective. Support conclusions with evidence.`;
           },
           turn: {
             mode: 'turn',
+          },
+          conversation: {
+            max_duration_seconds: 3600,
+          },
+        },
+        platform_settings: {
+          webhook: {
+            url: `${vercelUrl}/api/webhooks/elevenlabs`,
+            secret: process.env.ELEVENLABS_WEBHOOK_SECRET || 'connexions-webhook-secret',
           },
         },
       }),

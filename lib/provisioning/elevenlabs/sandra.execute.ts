@@ -24,6 +24,8 @@ export async function sandraExecute(ctx: ProvisionContext): Promise<StepResult> 
     return { status: 'wait' };
   }
 
+  const vercelUrl = ctx.metadata.vercel_url as string;
+
   try {
     const systemPrompt = `You are Sandra, the setup consultant for ${ctx.platformName}.
 
@@ -35,7 +37,7 @@ Your role is to help ${ctx.companyName} design their interview agent by understa
 - Any constraints or requirements
 
 Be professional, warm, and thorough. Ask clarifying questions.
-At the end, summarize the interview configuration for confirmation.`;
+At the end, summarize the interview configuration and call the save_panel_draft tool to save it.`;
 
     const res = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
       method: 'POST',
@@ -61,7 +63,82 @@ At the end, summarize the interview configuration for confirmation.`;
           turn: {
             mode: 'turn',
           },
+          conversation: {
+            max_duration_seconds: 3600,
+          },
         },
+        platform_settings: {
+          webhook: {
+            url: `${vercelUrl}/api/webhooks/elevenlabs`,
+            secret: process.env.ELEVENLABS_WEBHOOK_SECRET || 'connexions-webhook-secret',
+          },
+        },
+        tools: [
+          {
+            type: 'webhook',
+            name: 'save_panel_draft',
+            description: 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
+            webhook: {
+              url: `${vercelUrl}/api/tools/save-draft`,
+              method: 'POST',
+              headers: {
+                'X-Shared-Secret': process.env.TOOL_SHARED_SECRET || 'universal-interviews-tool-secret',
+              },
+            },
+            parameters: {
+              type: 'object',
+              description: 'Extract the interview panel configuration from the conversation. Collect the panel name, research description, list of questions, interviewer tone, target audience, duration in minutes, the AI interviewer name, voice gender (male or female), closing message, and optional greeting.',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Name of the interview panel or study',
+                },
+                description: {
+                  type: 'string',
+                  description: 'Research objective and what insight we are seeking',
+                },
+                questions: {
+                  type: 'array',
+                  description: 'List of interview questions as an array of strings',
+                  items: {
+                    type: 'string',
+                    description: 'A single interview question',
+                  },
+                },
+                tone: {
+                  type: 'string',
+                  description: 'Interview tone such as Friendly and Professional or Casual or Academic',
+                },
+                target_audience: {
+                  type: 'string',
+                  description: 'Description of who will be interviewed including role and experience',
+                },
+                duration_minutes: {
+                  type: 'number',
+                  description: 'Expected interview length in minutes',
+                },
+                agent_name: {
+                  type: 'string',
+                  description: 'Name for the AI interviewer such as Rachel or Alex or Jordan',
+                },
+                voice_gender: {
+                  type: 'string',
+                  description: 'Voice gender for the AI interviewer',
+                  enum: ['male', 'female'],
+                },
+                closing_message: {
+                  type: 'string',
+                  description: 'Thank you message to say at the end of the interview',
+                },
+                greeting: {
+                  type: 'string',
+                  description: 'Optional custom opening line for the interviewer',
+                },
+              },
+              required: ['name', 'description', 'questions', 'tone', 'target_audience', 'duration_minutes', 'agent_name', 'voice_gender', 'closing_message'],
+            },
+          },
+        ],
       }),
     });
 
