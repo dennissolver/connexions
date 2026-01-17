@@ -10,7 +10,13 @@ import { createVercelProject, triggerVercelDeployment } from './vercel';
 import { createSandraAgent, createKiraAgent } from './elevenlabs';
 import { registerWebhook } from './webhook';
 
+// Simple init step that just advances to SUPABASE_CREATING
+async function initStep(ctx: ProvisionContext): Promise<ProvisionStepResult> {
+  return { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
+}
+
 export const STEPS: Partial<Record<ProvisionState, (ctx: ProvisionContext) => Promise<ProvisionStepResult>>> = {
+  INIT: initStep,
   SUPABASE_CREATING: createSupabaseProject,
   GITHUB_CREATING: createGithubRepo,
   VERCEL_CREATING: createVercelProject,
