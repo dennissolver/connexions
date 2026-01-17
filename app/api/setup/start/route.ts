@@ -1,6 +1,6 @@
 // app/api/setup/start/route.ts
 import { NextResponse } from 'next/server';
-import { after } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { startProvisioning } from '@/lib/provisioning/orchestrator';
 
 export async function POST(req: Request) {
@@ -22,18 +22,16 @@ export async function POST(req: Request) {
       .slice(0, 50);
 
     // Run provisioning in background after response is sent
-    after(async () => {
-      try {
-        await startProvisioning({
-          projectSlug,
-          platformName,
-          companyName,
-          metadata: { contactEmail },
-        });
-      } catch (err) {
+    waitUntil(
+      startProvisioning({
+        projectSlug,
+        platformName,
+        companyName,
+        metadata: { contactEmail },
+      }).catch((err) => {
         console.error('Background provisioning error:', err);
-      }
-    });
+      })
+    );
 
     // Return immediately
     return NextResponse.json({
