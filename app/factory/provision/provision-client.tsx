@@ -92,6 +92,33 @@ function getStateMessage(state: ProvisionState): string {
   };
   return map[state];
 }
+function getProgressPercent(state: ProvisionState): number {
+  const progressMap: Record<ProvisionState, number> = {
+    INIT: 0,
+
+    SUPABASE_CREATING: 3,
+    SUPABASE_READY: 10,
+
+    SANDRA_CREATING: 15,
+    SANDRA_READY: 25,
+
+    KIRA_CREATING: 30,
+    KIRA_READY: 35,
+
+    GITHUB_CREATING: 50,
+    GITHUB_READY: 65,
+
+    VERCEL_CREATING: 70,
+    VERCEL_DEPLOYING: 85,
+    VERCEL_READY: 95,
+
+    WEBHOOK_REGISTERING: 98,
+    COMPLETE: 100,
+    FAILED: 100,
+  };
+
+  return progressMap[state] ?? 0;
+}
 
 /* ============================================================================
  * MAIN COMPONENT
@@ -148,6 +175,21 @@ export default function ProvisionClient() {
             <p className="text-sm text-slate-500 mt-2">Elapsed: {formatTime(elapsed)}</p>
           )}
         </div>
+{/* OVERALL PROGRESS BAR */}
+{!isComplete && !isFailed && (
+  <div className="mb-6">
+    <div className="flex justify-between text-xs text-slate-500 mb-1">
+      <span>Overall progress</span>
+      <span>{getProgressPercent(state)}%</span>
+    </div>
+    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-gradient-to-r from-purple-500 to-green-500 transition-all duration-700 ease-out"
+        style={{ width: `${getProgressPercent(state)}%` }}
+      />
+    </div>
+  </div>
+)}
 
         {/* EXPECTATION SETTING (NEW) */}
         {!isComplete && !isFailed && (
