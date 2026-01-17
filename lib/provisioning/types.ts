@@ -7,7 +7,6 @@ export type ProvisionExecutionState =
   | 'WEBHOOK_REGISTERING';
 
 export type ProvisionTerminalState =
-  | 'INIT'
   | 'SUPABASE_READY'
   | 'GITHUB_READY'
   | 'VERCEL_READY'
