@@ -113,3 +113,5 @@ export const STATE_DESCRIPTIONS: Record<ProvisionState, { title: string; descrip
     description: 'Provisioning encountered an error.'
   },
 };
+// Alias for backward compatibility with ProvisioningProgress component
+export const PROVISION_UI = STATE_DESCRIPTIONS;
