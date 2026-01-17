@@ -52,10 +52,10 @@ At the end, summarize the interview configuration for confirmation.`;
             language: 'en',
           },
           tts: {
-            model_id: 'eleven_turbo_v2_5',
+            model_id: 'eleven_turbo_v2',
             voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah
           },
-          stt: {
+          asr: {
             provider: 'elevenlabs',
           },
           turn: {

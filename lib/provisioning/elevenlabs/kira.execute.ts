@@ -50,10 +50,10 @@ Be analytical, clear, and objective. Support conclusions with evidence.`;
             language: 'en',
           },
           tts: {
-            model_id: 'eleven_turbo_v2_5',
+            model_id: 'eleven_turbo_v2',
             voice_id: 'pNInz6obpgDQGcFmaJgB', // Adam
           },
-          stt: {
+          asr: {
             provider: 'elevenlabs',
           },
           turn: {
