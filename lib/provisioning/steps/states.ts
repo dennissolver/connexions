@@ -25,25 +25,25 @@ export type ProvisionState =
  */
 export const ALLOWED_TRANSITIONS: Record<ProvisionState, ProvisionState[]> = {
   INIT: ['SUPABASE_CREATING', 'SUPABASE_READY', 'FAILED'],
-
+  
   SUPABASE_CREATING: ['SUPABASE_CREATING', 'SUPABASE_READY', 'FAILED'],
   SUPABASE_READY: ['GITHUB_CREATING', 'GITHUB_READY', 'FAILED'],
-
+  
   GITHUB_CREATING: ['GITHUB_CREATING', 'GITHUB_READY', 'FAILED'],
   GITHUB_READY: ['VERCEL_CREATING', 'VERCEL_DEPLOYING', 'VERCEL_READY', 'FAILED'],
-
+  
   VERCEL_CREATING: ['VERCEL_DEPLOYING', 'VERCEL_READY', 'SANDRA_CREATING', 'FAILED'],
   VERCEL_DEPLOYING: ['VERCEL_DEPLOYING', 'VERCEL_READY', 'SANDRA_CREATING', 'FAILED'],
   VERCEL_READY: ['SANDRA_CREATING', 'FAILED'],
-
+  
   // Sandra (Setup Agent) - creates interview panels
   SANDRA_CREATING: ['SANDRA_CREATING', 'SANDRA_READY', 'FAILED'],
   SANDRA_READY: ['KIRA_CREATING', 'FAILED'],
-
+  
   // Kira (Insights Agent) - data exploration
   KIRA_CREATING: ['KIRA_CREATING', 'KIRA_READY', 'FAILED'],
   KIRA_READY: ['WEBHOOK_REGISTERING', 'COMPLETE', 'FAILED'],
-
+  
   WEBHOOK_REGISTERING: ['WEBHOOK_REGISTERING', 'COMPLETE', 'FAILED'],
   COMPLETE: [],
   FAILED: ['INIT'], // Allow retry from failed state
@@ -53,67 +53,67 @@ export const ALLOWED_TRANSITIONS: Record<ProvisionState, ProvisionState[]> = {
  * Human-readable state descriptions for UI
  */
 export const STATE_DESCRIPTIONS: Record<ProvisionState, { title: string; description: string }> = {
-  INIT: {
-    title: 'Initializing',
-    description: 'Preparing to provision your platform...'
+  INIT: { 
+    title: 'Initializing', 
+    description: 'Preparing to provision your platform...' 
   },
-  SUPABASE_CREATING: {
-    title: 'Creating Database',
-    description: 'Setting up your Supabase database and authentication...'
+  SUPABASE_CREATING: { 
+    title: 'Creating Database', 
+    description: 'Setting up your Supabase database and authentication...' 
   },
-  SUPABASE_READY: {
-    title: 'Database Ready',
-    description: 'Your database is configured and ready.'
+  SUPABASE_READY: { 
+    title: 'Database Ready', 
+    description: 'Your database is configured and ready.' 
   },
-  GITHUB_CREATING: {
-    title: 'Creating Repository',
-    description: 'Setting up GitHub repository with platform code...'
+  GITHUB_CREATING: { 
+    title: 'Creating Repository', 
+    description: 'Setting up GitHub repository with platform code...' 
   },
-  GITHUB_READY: {
-    title: 'Repository Ready',
-    description: 'GitHub repository created with all template files.'
+  GITHUB_READY: { 
+    title: 'Repository Ready', 
+    description: 'GitHub repository created with all template files.' 
   },
-  VERCEL_CREATING: {
-    title: 'Creating Deployment',
-    description: 'Setting up Vercel project with environment variables...'
+  VERCEL_CREATING: { 
+    title: 'Creating Deployment', 
+    description: 'Setting up Vercel project with environment variables...' 
   },
-  VERCEL_DEPLOYING: {
-    title: 'Deploying',
-    description: 'Building and deploying your platform...'
+  VERCEL_DEPLOYING: { 
+    title: 'Deploying', 
+    description: 'Building and deploying your platform...' 
   },
-  VERCEL_READY: {
-    title: 'Deployment Ready',
-    description: 'Your platform is deployed and accessible.'
+  VERCEL_READY: { 
+    title: 'Deployment Ready', 
+    description: 'Your platform is deployed and accessible.' 
   },
   // Sandra - Setup Agent
-  SANDRA_CREATING: {
-    title: 'Creating Sandra',
-    description: 'Setting up your AI Setup Agent for panel creation...'
+  SANDRA_CREATING: { 
+    title: 'Creating Sandra', 
+    description: 'Setting up your AI Setup Agent for panel creation...' 
   },
-  SANDRA_READY: {
-    title: 'Sandra Ready',
-    description: 'Your Setup Agent is configured and ready to help create panels.'
+  SANDRA_READY: { 
+    title: 'Sandra Ready', 
+    description: 'Your Setup Agent is configured and ready to help create panels.' 
   },
   // Kira - Insights Agent
-  KIRA_CREATING: {
-    title: 'Creating Kira',
-    description: 'Setting up your AI Insights Agent for data exploration...'
+  KIRA_CREATING: { 
+    title: 'Creating Kira', 
+    description: 'Setting up your AI Insights Agent for data exploration...' 
   },
-  KIRA_READY: {
-    title: 'Kira Ready',
-    description: 'Your Insights Agent is ready to help explore interview data.'
+  KIRA_READY: { 
+    title: 'Kira Ready', 
+    description: 'Your Insights Agent is ready to help explore interview data.' 
   },
-  WEBHOOK_REGISTERING: {
-    title: 'Registering Webhooks',
-    description: 'Connecting child platform to parent for monitoring...'
+  WEBHOOK_REGISTERING: { 
+    title: 'Registering Webhooks', 
+    description: 'Connecting child platform to parent for monitoring...' 
   },
-  COMPLETE: {
-    title: 'Complete',
-    description: 'Your platform is ready to use!'
+  COMPLETE: { 
+    title: 'Complete', 
+    description: 'Your platform is ready to use!' 
   },
-  FAILED: {
-    title: 'Failed',
-    description: 'Provisioning encountered an error.'
+  FAILED: { 
+    title: 'Failed', 
+    description: 'Provisioning encountered an error.' 
   },
 };
 

@@ -1,176 +1,230 @@
-// lib/provisioning/steps/index.ts
+// lib/provisioning/index.ts (orchestrator)
 
-import { ProvisionState } from '../states';
-import { ProvisionContext, ProvisionStepResult } from '../types';
-import { createSupabaseProject, waitForSupabaseReady } from './supabase';
-import { createGithubRepo } from './github';
-import { createVercelProject, triggerVercelDeployment } from './vercel';
-import { createElevenLabsAgent } from './elevenlabs';
-import { registerWebhook } from './webhook';
-import { verifySupabase, verifyGitHub, verifyVercel } from './verify';
+import { ProvisionContext, ProvisionStepResult, ProvisionRun } from './types';
+import { 
+  ProvisionState, 
+  ALLOWED_TRANSITIONS, 
+  isValidTransition, 
+  isTerminalState,
+  STATE_DESCRIPTIONS 
+} from './states';
 
-export type StepFunction = (ctx: ProvisionContext) => Promise<ProvisionStepResult>;
+// Step imports
+import { createSupabaseProject, verifySupabaseReady } from './steps/supabase';
+import { createGitHubRepo, verifyGitHubReady } from './steps/github';
+import { createVercelProject, triggerVercelDeployment, verifyVercelReady } from './steps/vercel';
+import { createSandraAgent, createKiraAgent } from './steps/elevenlabs';
+import { registerWebhooks } from './steps/webhook';
+import { getProvisionRun, updateProvisionRun } from './engine';
 
-// Map each state to its step function
-export const STEPS: Partial<Record<ProvisionState, StepFunction>> = {
-  // Step 1: Initialize and create Supabase project
-  INIT: async (ctx) => {
-    console.log(`[INIT] Starting provisioning for ${ctx.projectSlug}`);
-    return createSupabaseProject(ctx);
-  },
+/**
+ * Run a single provisioning step based on current state
+ */
+export async function runProvisioningStep(ctx: ProvisionContext): Promise<ProvisionStepResult> {
+  const currentState = ctx.state;
+  console.log(`[orchestrator] Running step for state: ${currentState}`);
+  
+  try {
+    let result: ProvisionStepResult;
 
-  // Step 2: Wait for Supabase to be ready, run migrations
-  SUPABASE_CREATING: async (ctx) => {
-    console.log(`[SUPABASE_CREATING] Waiting for Supabase project...`);
-    const result = await waitForSupabaseReady(ctx);
+    switch (currentState) {
+      // ========== INIT ==========
+      case 'INIT':
+        result = { nextState: 'SUPABASE_CREATING', metadata: ctx.metadata };
+        break;
 
-    // If we're moving to SUPABASE_READY, verify first
-    if (result.nextState === 'SUPABASE_READY') {
-      const verification = await verifySupabase({ ...ctx, metadata: result.metadata || ctx.metadata });
-      if (!verification.success) {
-        console.error(`[SUPABASE_CREATING] Verification failed: ${verification.error}`);
-        // Stay in SUPABASE_CREATING to retry
-        return { nextState: 'SUPABASE_CREATING', metadata: result.metadata };
-      }
-      console.log(`[SUPABASE_CREATING] Verification passed`);
+      // ========== SUPABASE ==========
+      case 'SUPABASE_CREATING':
+        result = await createSupabaseProject(ctx);
+        break;
+        
+      case 'SUPABASE_READY':
+        // Verify and move to GitHub
+        const supabaseOk = await verifySupabaseReady(ctx);
+        if (!supabaseOk) {
+          throw new Error('Supabase verification failed');
+        }
+        result = { nextState: 'GITHUB_CREATING', metadata: ctx.metadata };
+        break;
+
+      // ========== GITHUB ==========
+      case 'GITHUB_CREATING':
+        result = await createGitHubRepo(ctx);
+        break;
+        
+      case 'GITHUB_READY':
+        // Verify and move to Vercel
+        const githubOk = await verifyGitHubReady(ctx);
+        if (!githubOk) {
+          throw new Error('GitHub verification failed');
+        }
+        result = { nextState: 'VERCEL_CREATING', metadata: ctx.metadata };
+        break;
+
+      // ========== VERCEL ==========
+      case 'VERCEL_CREATING':
+        result = await createVercelProject(ctx);
+        break;
+        
+      case 'VERCEL_DEPLOYING':
+        result = await triggerVercelDeployment(ctx);
+        break;
+        
+      case 'VERCEL_READY':
+        // Verify and move to Sandra
+        const vercelOk = await verifyVercelReady(ctx);
+        if (!vercelOk) {
+          throw new Error('Vercel verification failed');
+        }
+        result = { nextState: 'SANDRA_CREATING', metadata: ctx.metadata };
+        break;
+
+      // ========== SANDRA (Setup Agent) ==========
+      case 'SANDRA_CREATING':
+        result = await createSandraAgent(ctx);
+        break;
+        
+      case 'SANDRA_READY':
+        // Sandra is verified within createSandraAgent, move to Kira
+        result = { nextState: 'KIRA_CREATING', metadata: ctx.metadata };
+        break;
+
+      // ========== KIRA (Insights Agent) ==========
+      case 'KIRA_CREATING':
+        result = await createKiraAgent(ctx);
+        break;
+        
+      case 'KIRA_READY':
+        // Kira is verified within createKiraAgent, move to webhooks
+        result = { nextState: 'WEBHOOK_REGISTERING', metadata: ctx.metadata };
+        break;
+
+      // ========== WEBHOOKS ==========
+      case 'WEBHOOK_REGISTERING':
+        result = await registerWebhooks(ctx);
+        break;
+
+      // ========== TERMINAL STATES ==========
+      case 'COMPLETE':
+        console.log(`[orchestrator] Provisioning complete for ${ctx.projectSlug}`);
+        result = { nextState: 'COMPLETE', metadata: ctx.metadata };
+        break;
+        
+      case 'FAILED':
+        console.log(`[orchestrator] Provisioning failed for ${ctx.projectSlug}`);
+        result = { nextState: 'FAILED', metadata: ctx.metadata };
+        break;
+
+      default:
+        throw new Error(`Unknown state: ${currentState}`);
     }
 
+    // Validate state transition
+    if (!isValidTransition(currentState, result.nextState)) {
+      console.error(`[orchestrator] Invalid transition: ${currentState} → ${result.nextState}`);
+      console.error(`[orchestrator] Allowed transitions from ${currentState}: ${ALLOWED_TRANSITIONS[currentState]?.join(', ')}`);
+      throw new Error(`Invalid state transition: ${currentState} → ${result.nextState}`);
+    }
+
+    console.log(`[orchestrator] Transition: ${currentState} → ${result.nextState}`);
     return result;
-  },
 
-  // Step 3: Create GitHub repository with template files
-  SUPABASE_READY: async (ctx) => {
-    console.log(`[SUPABASE_READY] Creating GitHub repository...`);
-    return createGithubRepo(ctx);
-  },
-
-  // Step 4: GitHub ready, create Vercel project
-  GITHUB_CREATING: async (ctx) => {
-    console.log(`[GITHUB_CREATING] Waiting for GitHub...`);
-    // GitHub creation is synchronous, so if we're here, check if done
-    if (ctx.metadata.githubRepoName) {
-      // Verify before advancing
-      const verification = await verifyGitHub(ctx);
-      if (!verification.success) {
-        console.error(`[GITHUB_CREATING] Verification failed: ${verification.error}`);
-        return { nextState: 'GITHUB_CREATING', metadata: ctx.metadata };
-      }
-      return { nextState: 'GITHUB_READY', metadata: ctx.metadata };
-    }
-    return createGithubRepo(ctx);
-  },
-
-  // Step 5: Create Vercel project linked to GitHub
-  GITHUB_READY: async (ctx) => {
-    console.log(`[GITHUB_READY] Creating Vercel project...`);
-    return createVercelProject(ctx);
-  },
-
-  // Step 6: Vercel project created, wait for deployment
-  VERCEL_CREATING: async (ctx) => {
-    console.log(`[VERCEL_CREATING] Triggering deployment...`);
-    return triggerVercelDeployment(ctx);
-  },
-
-  // Step 7: Wait for Vercel deployment to complete
-  VERCEL_DEPLOYING: async (ctx) => {
-    console.log(`[VERCEL_DEPLOYING] Waiting for deployment...`);
-    const result = await triggerVercelDeployment(ctx);
-
-    // If moving past VERCEL_DEPLOYING, verify deployment is actually ready
-    if (result.nextState !== 'VERCEL_DEPLOYING') {
-      const verification = await verifyVercel({ ...ctx, metadata: result.metadata || ctx.metadata });
-      if (!verification.success) {
-        console.error(`[VERCEL_DEPLOYING] Verification failed: ${verification.error}`);
-        // Stay in deploying state
-        return { nextState: 'VERCEL_DEPLOYING', metadata: result.metadata };
-      }
-      console.log(`[VERCEL_DEPLOYING] Verification passed`);
-    }
-
-    return result;
-  },
-
-  // Step 8: Vercel ready, create ElevenLabs agent
-  VERCEL_READY: async (ctx) => {
-    console.log(`[VERCEL_READY] Creating ElevenLabs agent...`);
-    return createElevenLabsAgent(ctx);
-  },
-
-  // Step 9: ElevenLabs agent created, now do final configuration
-  ELEVENLABS_CREATING: async (ctx) => {
-    console.log(`[ELEVENLABS_CREATING] Waiting for ElevenLabs...`);
-    // If we have the agent ID, move to webhook registration
-    if (ctx.metadata.elevenLabsAgentId) {
-      return { nextState: 'WEBHOOK_REGISTERING', metadata: ctx.metadata };
-    }
-    return createElevenLabsAgent(ctx);
-  },
-
-  // Step 10: Final configuration - Supabase auth, Vercel env vars, webhooks
-  // This step now includes full verification before marking COMPLETE
-  WEBHOOK_REGISTERING: async (ctx) => {
-    console.log(`[WEBHOOK_REGISTERING] Running final configuration...`);
-    console.log(`  - Supabase URL: ${ctx.metadata.supabaseUrl}`);
-    console.log(`  - Vercel URL: ${ctx.metadata.vercelUrl}`);
-    console.log(`  - ElevenLabs Agent ID: ${ctx.metadata.elevenLabsAgentId}`);
-    return registerWebhook(ctx);
-  },
-
-  // Terminal states - no action needed
-  COMPLETE: async (ctx) => {
-    console.log(`[COMPLETE] Provisioning complete for ${ctx.projectSlug}!`);
-    return { metadata: ctx.metadata };
-  },
-
-  FAILED: async (ctx) => {
-    console.log(`[FAILED] Provisioning failed for ${ctx.projectSlug}`);
-    return { metadata: ctx.metadata };
-  },
-};
-
-// Helper to check if a state is terminal
-export function isTerminalState(state: ProvisionState): boolean {
-  return state === 'COMPLETE' || state === 'FAILED';
+  } catch (error: any) {
+    console.error(`[orchestrator] Step failed:`, error);
+    
+    // Return FAILED state with error info
+    return {
+      nextState: 'FAILED',
+      metadata: {
+        ...ctx.metadata,
+        error: error.message,
+        errorState: currentState,
+        errorTimestamp: new Date().toISOString(),
+      },
+    };
+  }
 }
 
-// Helper to get human-readable step description
-export function getStepDescription(state: ProvisionState): string {
-  const descriptions: Record<ProvisionState, string> = {
-    INIT: 'Initializing provisioning...',
-    SUPABASE_CREATING: 'Creating Supabase database...',
-    SUPABASE_READY: 'Database ready, creating repository...',
-    GITHUB_CREATING: 'Creating GitHub repository...',
-    GITHUB_READY: 'Repository ready, creating deployment...',
-    VERCEL_CREATING: 'Creating Vercel project...',
-    VERCEL_DEPLOYING: 'Deploying to Vercel...',
-    VERCEL_READY: 'Deployment ready, creating voice agent...',
-    ELEVENLABS_CREATING: 'Creating ElevenLabs voice agent...',
-    WEBHOOK_REGISTERING: 'Configuring final settings...',
-    COMPLETE: 'Provisioning complete!',
-    FAILED: 'Provisioning failed',
+/**
+ * Advance provisioning by one step
+ * Called by status polling endpoint
+ */
+export async function advanceProvisioning(projectSlug: string): Promise<ProvisionRun | null> {
+  const run = await getProvisionRun(projectSlug);
+  if (!run) {
+    console.error(`[orchestrator] Run not found: ${projectSlug}`);
+    return null;
+  }
+
+  // Don't advance if in terminal state
+  if (isTerminalState(run.state as ProvisionState)) {
+    console.log(`[orchestrator] Already in terminal state: ${run.state}`);
+    return run;
+  }
+
+  // Build context from stored run data
+  const ctx: ProvisionContext = {
+    projectSlug,
+    platformName: run.platform_name || projectSlug,
+    state: run.state as ProvisionState,
+    metadata: run.metadata || {},
+    // These should be loaded from secure storage/env
+    supabaseAccessToken: process.env.SUPABASE_ACCESS_TOKEN!,
+    githubToken: process.env.GITHUB_TOKEN!,
+    vercelToken: process.env.VERCEL_TOKEN!,
+    elevenLabsApiKey: process.env.ELEVENLABS_API_KEY!,
+    publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://connexions.ai',
   };
-  return descriptions[state] || state;
+
+  // Run the step
+  const result = await runProvisioningStep(ctx);
+
+  // Update the run with new state
+  const updatedRun = await updateProvisionRun(projectSlug, {
+    state: result.nextState,
+    metadata: result.metadata,
+    ...(result.nextState === 'COMPLETE' ? { completed_at: new Date().toISOString() } : {}),
+    ...(result.nextState === 'FAILED' ? { 
+      error: result.metadata?.error,
+      failed_at: new Date().toISOString(),
+    } : {}),
+  });
+
+  return updatedRun;
 }
 
-// Export individual step functions for direct use if needed
-export {
-  createSupabaseProject,
-  waitForSupabaseReady,
-  createGithubRepo,
-  createVercelProject,
-  triggerVercelDeployment,
-  createElevenLabsAgent,
-  registerWebhook,
-};
+/**
+ * Get human-readable status for current state
+ */
+export function getStateDescription(state: ProvisionState): { title: string; description: string } {
+  return STATE_DESCRIPTIONS[state] || { 
+    title: 'Unknown', 
+    description: 'Unknown state' 
+  };
+}
 
-// Export verification functions
-export {
-  verifySupabase,
-  verifyGitHub,
-  verifyVercel,
-  verifyAllComplete,
-  verifyElevenLabs,
-  verifyVercelEnvVars,
-  verifyChildSupabaseData,
-} from './verify';
+/**
+ * Initialize a new provisioning run
+ */
+export async function initializeProvisioning(
+  projectSlug: string,
+  platformName: string,
+  initialMetadata?: Record<string, any>
+): Promise<ProvisionRun> {
+  const run = await updateProvisionRun(projectSlug, {
+    state: 'INIT',
+    platform_name: platformName,
+    metadata: initialMetadata || {},
+    started_at: new Date().toISOString(),
+  });
+
+  if (!run) {
+    throw new Error(`Failed to initialize provisioning for ${projectSlug}`);
+  }
+
+  return run;
+}
+
+// Re-export types and utilities
+export * from './types';
+export * from './states';

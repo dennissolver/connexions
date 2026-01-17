@@ -10,13 +10,13 @@ export interface ProvisionContext {
   platformName: string;
   state: ProvisionState;
   metadata: ProvisionMetadata;
-
+  
   // API credentials (loaded from env/secure storage)
   supabaseAccessToken: string;
   githubToken: string;
   vercelToken: string;
   elevenLabsApiKey: string;
-
+  
   // URLs
   publicBaseUrl: string;
 }
@@ -30,46 +30,46 @@ export interface ProvisionMetadata {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   supabaseServiceKey?: string;
-
+  
   // GitHub
   githubRepoUrl?: string;
   githubRepoName?: string;
   githubRepoOwner?: string;
-
+  
   // Vercel
   vercelProjectId?: string;
   vercelUrl?: string;
   vercelDeploymentId?: string;
   vercelDeploymentUrl?: string;
-
+  
   // Sandra (Setup Agent)
   sandraAgentId?: string;
   sandraAgentName?: string;
   sandraToolId?: string;
   sandraToolUrl?: string;
   sandraVerified?: boolean;
-
+  
   // Kira (Insights Agent)
   kiraAgentId?: string;
   kiraAgentName?: string;
   kiraToolIds?: string[];
   kiraVerified?: boolean;
-
+  
   // Legacy compatibility fields
   elevenLabsAgentId?: string;      // Alias for sandraAgentId
   setupAgentId?: string;           // Alias for sandraAgentId
   insightsAgentId?: string;        // Alias for kiraAgentId
   elevenLabsRouterUrl?: string;
-
+  
   // Webhooks
   webhooksRegistered?: boolean;
   parentWebhookUrl?: string;
-
+  
   // Error tracking
   error?: string;
   errorState?: string;
   errorTimestamp?: string;
-
+  
   // Allow additional fields
   [key: string]: any;
 }
