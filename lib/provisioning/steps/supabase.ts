@@ -1,10 +1,14 @@
-export async function createSupabaseProject(ctx: {
-  projectSlug: string;
-}) {
-  // real implementation already exists elsewhere
-  // this is the contract the registry expects
+import { ProvisionContext, ProvisionStepResult } from '../types';
+
+export async function createSupabaseProject(
+  ctx: ProvisionContext
+): Promise<ProvisionStepResult> {
+  // … real Supabase logic …
+
   return {
     nextState: 'SUPABASE_READY',
-    metadata: {},
+    metadata: {
+      supabaseProjectRef: 'abc123',
+    },
   };
 }

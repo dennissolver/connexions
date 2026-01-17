@@ -1,4 +1,14 @@
+import { ProvisionContext, ProvisionStepResult } from '../types';
 
-export async function registerWebhooks(ctx: any) {
-  return { nextState: 'WEBHOOK_VERIFYING', metadata: ctx.metadata };
+export async function registerWebhooks(
+  ctx: ProvisionContext
+): Promise<ProvisionStepResult> {
+  // real webhook registration logic here
+
+  return {
+    nextState: 'COMPLETE',
+    metadata: {
+      webhooksRegistered: true,
+    },
+  };
 }

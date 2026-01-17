@@ -7,12 +7,15 @@ import { getProvisionRunBySlug, updateProvisionRun } from './store';
 
 export async function advanceProvision(projectSlug: string) {
   const run = await getProvisionRunBySlug(projectSlug);
-  if (!run) throw new Error(`Provision run not found: ${projectSlug}`);
+  if (!run) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
+  }
 
   const state = run.state as ProvisionState;
 
+  // Stop if terminal or non-executable
   if (!isExecutableState(state)) {
-    return; // terminal or waiting state
+    return;
   }
 
   const executor = EXECUTION_REGISTRY[state];
@@ -33,7 +36,7 @@ export async function advanceProvision(projectSlug: string) {
   } catch (err: any) {
     await updateProvisionRun(projectSlug, {
       state: 'FAILED',
-      last_error: err.message ?? 'Unknown error',
+      last_error: err?.message ?? 'Unknown error',
     });
     throw err;
   }
@@ -44,6 +47,6 @@ export async function advanceProvision(projectSlug: string) {
 
   await updateProvisionRun(projectSlug, {
     state: result.nextState,
-    metadata: result.metadata ?? run.metadata,
+    metadata: result.metadata ?? run.metadata ?? undefined,
   });
 }
