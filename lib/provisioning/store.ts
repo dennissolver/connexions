@@ -58,3 +58,15 @@ export async function updateProvisionRun(
 
   if (error) throw error;
 }
+
+/**
+ * ✅ THIS IS WHAT WAS MISSING
+ */
+export async function deleteProvisionRunBySlug(projectSlug: string) {
+  const { error } = await supabaseAdmin
+    .from('provision_runs')
+    .delete()
+    .eq('project_slug', projectSlug);
+
+  if (error) throw error;
+}
