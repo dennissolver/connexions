@@ -139,6 +139,10 @@ export type VerifyHandler = (ctx: ProvisionContext) => Promise<StepResult>;
 // HELPERS
 // =============================================================================
 
+
+export function isServiceComplete(state: ServiceState): boolean {
+  return state === 'READY';
+}
 export function isServiceActionable(state: ServiceState): boolean {
   return state !== 'READY' && state !== 'FAILED';
 }
