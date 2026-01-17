@@ -26,12 +26,12 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
 
     const deploymentsRes = await fetch(deploymentsUrl.toString(), {
       headers: {
-        'Authorization': \Bearer \\,
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
       },
     });
 
     if (!deploymentsRes.ok) {
-      console.log(\[vercel.verify] Could not fetch deployments: \\);
+      console.log(`[vercel.verify] Could not fetch deployments: ${deploymentsRes.status}`);
       return { status: 'wait' };
     }
 
@@ -51,7 +51,7 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
     const deployment = deployments[0];
 
     if (deployment.readyState !== 'READY') {
-      console.log(\[vercel.verify] Deployment state: \\);
+      console.log(`[vercel.verify] Deployment state: ${deployment.readyState}`);
       return { status: 'wait' };
     }
 
@@ -60,7 +60,7 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
       try {
         const healthRes = await fetch(vercelUrl, { method: 'HEAD' });
         if (!healthRes.ok && healthRes.status !== 404) {
-          console.log(\[vercel.verify] Health check: \\);
+          console.log(`[vercel.verify] Health check: ${healthRes.status}`);
           if (healthRes.status >= 500) {
             return { status: 'wait' };
           }
@@ -71,7 +71,7 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
       }
     }
 
-    console.log(\[vercel.verify] Verified: \\);
+    console.log(`[vercel.verify] Verified: ${projectId}`);
     return {
       status: 'advance',
       metadata: {
@@ -79,7 +79,7 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
       },
     };
   } catch (err) {
-    console.log(\[vercel.verify] Error, will retry: \\);
+    console.log(`[vercel.verify] Error, will retry: ${err}`);
     return { status: 'wait' };
   }
 }
@@ -92,7 +92,7 @@ async function triggerDeployment(projectId: string, githubRepo: string): Promise
     const res = await fetch(deployUrl.toString(), {
       method: 'POST',
       headers: {
-        'Authorization': \Bearer \\,
+        'Authorization': `Bearer ${VERCEL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -107,12 +107,12 @@ async function triggerDeployment(projectId: string, githubRepo: string): Promise
     });
 
     if (res.ok) {
-      console.log(\[vercel.verify] Triggered deployment for \\);
+      console.log(`[vercel.verify] Triggered deployment for ${projectId}`);
     } else {
       const text = await res.text();
-      console.log(\[vercel.verify] Deployment trigger failed: \\);
+      console.log(`[vercel.verify] Deployment trigger failed: ${text}`);
     }
   } catch (err) {
-    console.log(\[vercel.verify] Deployment trigger error: \\);
+    console.log(`[vercel.verify] Deployment trigger error: ${err}`);
   }
 }
