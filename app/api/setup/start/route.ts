@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   // 3. Create provisioning run (idempotent handled in store)
   await createProvisionRun({
     projectSlug,
-    state: 'SUPABASE_CREATING',
+    initialState: 'SUPABASE_CREATING',
     metadata: {},
   });
 
