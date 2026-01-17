@@ -12,7 +12,8 @@ export type ServiceName =
   | 'supabase-config'
   | 'sandra'
   | 'kira'
-  | 'webhooks';
+  | 'webhooks'
+  | 'finalize';
 
 export type ServiceState =
   | 'PENDING'   // Not started, waiting for dependencies
@@ -32,6 +33,7 @@ export const INITIAL_SERVICE_STATES: ServiceStates = {
   sandra: 'PENDING',
   kira: 'PENDING',
   webhooks: 'PENDING',
+  finalize: 'PENDING',
 };
 
 // =============================================================================

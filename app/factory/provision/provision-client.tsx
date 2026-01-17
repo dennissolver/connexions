@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Shield,
   Clock,
+  Trash2,
 } from 'lucide-react';
 
 /* ============================================================================
@@ -24,25 +25,18 @@ import {
  * ==========================================================================*/
 
 type ServiceState = 'PENDING' | 'CREATING' | 'VERIFYING' | 'WAITING' | 'READY' | 'FAILED';
+type CleanupState = 'NOT_NEEDED' | 'CLEANING' | 'CLEANED' | 'FAILED';
 
 type ServiceName =
+  | 'cleanup'
   | 'supabase'
   | 'github'
   | 'vercel'
   | 'supabase-config'
   | 'sandra'
   | 'kira'
-  | 'webhooks';
-
-interface ServiceStates {
-  supabase: ServiceState;
-  github: ServiceState;
-  vercel: ServiceState;
-  'supabase-config': ServiceState;
-  sandra: ServiceState;
-  kira: ServiceState;
-  webhooks: ServiceState;
-}
+  | 'webhooks'
+  | 'finalize';
 
 interface ProvisionStatus {
   project_slug: string;
@@ -54,11 +48,17 @@ interface ProvisionStatus {
   sandra_state: ServiceState;
   kira_state: ServiceState;
   webhooks_state: ServiceState;
+  finalize_state?: ServiceState;
   metadata?: {
     error?: string;
     vercel_url?: string;
     platform_name?: string;
     company_name?: string;
+    cleanup_performed?: boolean;
+    cleanup_result?: {
+      deleted: Record<string, boolean>;
+      errors: string[];
+    };
   };
 }
 
@@ -66,7 +66,8 @@ interface ServiceConfig {
   id: ServiceName;
   label: string;
   icon: React.ReactNode;
-  description: Record<ServiceState, string>;
+  description: Record<ServiceState | CleanupState, string>;
+  isCleanup?: boolean;
 }
 
 /* ============================================================================
@@ -74,6 +75,25 @@ interface ServiceConfig {
  * ==========================================================================*/
 
 const SERVICES: ServiceConfig[] = [
+  {
+    id: 'cleanup',
+    label: 'Cleanup',
+    icon: <Trash2 className="w-5 h-5" />,
+    isCleanup: true,
+    description: {
+      NOT_NEEDED: 'No existing resources',
+      CLEANING: 'Removing old resources...',
+      CLEANED: 'Previous resources cleaned',
+      FAILED: 'Cleanup failed',
+      // Standard states (won't be used but TypeScript needs them)
+      PENDING: 'Checking...',
+      CREATING: 'Cleaning...',
+      VERIFYING: 'Verifying...',
+      WAITING: 'Waiting...',
+      READY: 'Clean',
+      // FAILED already defined above
+    },
+  },
   {
     id: 'supabase',
     label: 'Database',
@@ -85,6 +105,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for database to be ready...',
       READY: 'Database ready',
       FAILED: 'Database setup failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -98,6 +121,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for repository...',
       READY: 'Repository ready',
       FAILED: 'Repository setup failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -111,6 +137,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for deployment...',
       READY: 'Deployment ready',
       FAILED: 'Deployment failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -124,6 +153,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for configuration...',
       READY: 'Auth configured',
       FAILED: 'Auth config failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -137,6 +169,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for Sandra...',
       READY: 'Sandra ready',
       FAILED: 'Sandra setup failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -150,6 +185,9 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for Kira...',
       READY: 'Kira ready',
       FAILED: 'Kira setup failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
   {
@@ -163,6 +201,25 @@ const SERVICES: ServiceConfig[] = [
       WAITING: 'Waiting for webhook verification...',
       READY: 'Webhooks configured',
       FAILED: 'Webhook setup failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
+    },
+  },
+  {
+    id: 'finalize',
+    label: 'Finalize',
+    icon: <Sparkles className="w-5 h-5" />,
+    description: {
+      PENDING: 'Waiting for all services...',
+      CREATING: 'Configuring platform...',
+      VERIFYING: 'Verifying final deployment...',
+      WAITING: 'Waiting for redeploy...',
+      READY: 'Platform ready!',
+      FAILED: 'Finalization failed',
+      NOT_NEEDED: '',
+      CLEANING: '',
+      CLEANED: '',
     },
   },
 ];
@@ -171,55 +228,115 @@ const SERVICES: ServiceConfig[] = [
  * HELPERS
  * ==========================================================================*/
 
-function getServiceState(status: ProvisionStatus, serviceId: ServiceName): ServiceState {
-  const stateKey = serviceId === 'supabase-config'
-    ? 'supabase-config_state'
-    : `${serviceId}_state` as keyof ProvisionStatus;
-  return (status[stateKey] as ServiceState) || 'PENDING';
+function getServiceState(status: ProvisionStatus, serviceId: ServiceName): ServiceState | CleanupState {
+  // Special handling for cleanup
+  if (serviceId === 'cleanup') {
+    const cleanupPerformed = status.metadata?.cleanup_performed;
+    const cleanupResult = status.metadata?.cleanup_result;
+
+    if (cleanupPerformed === undefined) {
+      // Still determining
+      return 'CLEANING';
+    }
+    if (cleanupPerformed === false) {
+      return 'NOT_NEEDED';
+    }
+    if (cleanupResult?.errors && cleanupResult.errors.length > 0) {
+      return 'FAILED';
+    }
+    return 'CLEANED';
+  }
+
+  // Handle hyphenated service names
+  let stateKey: string;
+  if (serviceId === 'supabase-config') {
+    stateKey = 'supabase-config_state';
+  } else if (serviceId === 'finalize') {
+    stateKey = 'finalize_state';
+  } else {
+    stateKey = `${serviceId}_state`;
+  }
+
+  return (status[stateKey as keyof ProvisionStatus] as ServiceState) || 'PENDING';
 }
 
-function getStateColor(state: ServiceState): string {
+function getStateColor(state: ServiceState | CleanupState): string {
   switch (state) {
-    case 'READY': return 'bg-emerald-500';
+    case 'READY':
+    case 'CLEANED':
+    case 'NOT_NEEDED':
+      return 'bg-emerald-500';
     case 'CREATING':
-    case 'VERIFYING': return 'bg-blue-500';
-    case 'WAITING': return 'bg-amber-500';
-    case 'FAILED': return 'bg-red-500';
-    default: return 'bg-slate-600';
+    case 'VERIFYING':
+    case 'CLEANING':
+      return 'bg-blue-500';
+    case 'WAITING':
+      return 'bg-amber-500';
+    case 'FAILED':
+      return 'bg-red-500';
+    default:
+      return 'bg-slate-600';
   }
 }
 
-function getStateTextColor(state: ServiceState): string {
+function getStateBgColor(state: ServiceState | CleanupState): string {
   switch (state) {
-    case 'READY': return 'text-emerald-400';
+    case 'READY':
+    case 'CLEANED':
+    case 'NOT_NEEDED':
+      return 'bg-emerald-500/20 text-emerald-400';
     case 'CREATING':
-    case 'VERIFYING': return 'text-blue-400';
-    case 'WAITING': return 'text-amber-400';
-    case 'FAILED': return 'text-red-400';
-    default: return 'text-slate-500';
+    case 'VERIFYING':
+    case 'CLEANING':
+      return 'bg-blue-500/20 text-blue-400';
+    case 'WAITING':
+      return 'bg-amber-500/20 text-amber-400';
+    case 'FAILED':
+      return 'bg-red-500/20 text-red-400';
+    default:
+      return 'bg-slate-700/50 text-slate-500';
   }
 }
 
-function getStateProgress(state: ServiceState): number {
+function getStateProgress(state: ServiceState | CleanupState): number {
   switch (state) {
-    case 'READY': return 100;
-    case 'VERIFYING': return 75;
-    case 'WAITING': return 60;
-    case 'CREATING': return 30;
-    case 'FAILED': return 100;
-    default: return 0;
+    case 'READY':
+    case 'CLEANED':
+    case 'NOT_NEEDED':
+      return 100;
+    case 'VERIFYING':
+      return 75;
+    case 'WAITING':
+      return 60;
+    case 'CREATING':
+    case 'CLEANING':
+      return 30;
+    case 'FAILED':
+      return 100;
+    default:
+      return 0;
   }
+}
+
+function isActiveState(state: ServiceState | CleanupState): boolean {
+  return state === 'CREATING' || state === 'VERIFYING' || state === 'WAITING' || state === 'CLEANING';
+}
+
+function isCompleteState(state: ServiceState | CleanupState): boolean {
+  return state === 'READY' || state === 'CLEANED' || state === 'NOT_NEEDED';
 }
 
 function getOverallProgress(status: ProvisionStatus): number {
   const weights: Record<ServiceName, number> = {
-    supabase: 15,
-    github: 10,
-    vercel: 25,
+    cleanup: 5,
+    supabase: 12,
+    github: 8,
+    vercel: 18,
     'supabase-config': 5,
-    sandra: 15,
-    kira: 15,
-    webhooks: 15,
+    sandra: 12,
+    kira: 12,
+    webhooks: 10,
+    finalize: 18,
   };
 
   let totalProgress = 0;
@@ -240,38 +357,45 @@ function countByState(status: ProvisionStatus): { ready: number; active: number;
 
   for (const service of SERVICES) {
     const state = getServiceState(status, service.id);
-    switch (state) {
-      case 'READY': ready++; break;
-      case 'CREATING':
-      case 'VERIFYING':
-      case 'WAITING': active++; break;
-      case 'FAILED': failed++; break;
-      default: pending++; break;
+    if (isCompleteState(state)) {
+      ready++;
+    } else if (isActiveState(state)) {
+      active++;
+    } else if (state === 'FAILED') {
+      failed++;
+    } else {
+      pending++;
     }
   }
 
   return { ready, active, pending, failed };
 }
 
+function getDisplayState(state: ServiceState | CleanupState): string {
+  switch (state) {
+    case 'NOT_NEEDED': return 'SKIPPED';
+    case 'CLEANED': return 'DONE';
+    case 'CLEANING': return 'CLEANING';
+    default: return state;
+  }
+}
+
 /* ============================================================================
  * SERVICE ROW COMPONENT
  * ==========================================================================*/
 
-function ServiceRow({ service, state }: { service: ServiceConfig; state: ServiceState }) {
-  const isActive = state === 'CREATING' || state === 'VERIFYING' || state === 'WAITING';
+function ServiceRow({ service, state }: { service: ServiceConfig; state: ServiceState | CleanupState }) {
+  const isActive = isActiveState(state);
+  const isComplete = isCompleteState(state);
+  const isFailed = state === 'FAILED';
   const progress = getStateProgress(state);
 
   return (
     <div className="flex items-center gap-4 py-3 border-b border-slate-800 last:border-0">
       {/* Icon */}
-      <div className={`p-2 rounded-lg ${
-        state === 'READY' ? 'bg-emerald-500/20 text-emerald-400' :
-        state === 'FAILED' ? 'bg-red-500/20 text-red-400' :
-        isActive ? 'bg-blue-500/20 text-blue-400' :
-        'bg-slate-700/50 text-slate-500'
-      }`}>
-        {state === 'READY' ? <CheckCircle2 className="w-5 h-5" /> :
-         state === 'FAILED' ? <XCircle className="w-5 h-5" /> :
+      <div className={`p-2 rounded-lg ${getStateBgColor(state)}`}>
+        {isComplete ? <CheckCircle2 className="w-5 h-5" /> :
+         isFailed ? <XCircle className="w-5 h-5" /> :
          isActive ? <Loader2 className="w-5 h-5 animate-spin" /> :
          service.icon}
       </div>
@@ -280,16 +404,13 @@ function ServiceRow({ service, state }: { service: ServiceConfig; state: Service
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-white">{service.label}</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            state === 'READY' ? 'bg-emerald-500/20 text-emerald-400' :
-            state === 'FAILED' ? 'bg-red-500/20 text-red-400' :
-            isActive ? 'bg-blue-500/20 text-blue-400' :
-            'bg-slate-700 text-slate-400'
-          }`}>
-            {state}
+          <span className={`text-xs px-2 py-0.5 rounded-full ${getStateBgColor(state)}`}>
+            {getDisplayState(state)}
           </span>
         </div>
-        <p className="text-sm text-slate-400 truncate">{service.description[state]}</p>
+        <p className="text-sm text-slate-400 truncate">
+          {service.description[state] || service.description.PENDING}
+        </p>
       </div>
 
       {/* Progress Bar */}
@@ -382,8 +503,8 @@ export default function ProvisionClient() {
           <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-700 ease-out ${
-                isFailed ? 'bg-red-500' : 
-                isComplete ? 'bg-emerald-500' : 
+                isFailed ? 'bg-red-500' :
+                isComplete ? 'bg-emerald-500' :
                 'bg-gradient-to-r from-purple-500 to-blue-500'
               }`}
               style={{ width: `${overallProgress}%` }}
@@ -396,7 +517,7 @@ export default function ProvisionClient() {
           <div className="flex gap-4 mb-6 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-slate-400">{counts.ready} Ready</span>
+              <span className="text-slate-400">{counts.ready} Done</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />

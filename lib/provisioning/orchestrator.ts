@@ -14,14 +14,14 @@ import {
   ServiceStates,
   allServicesComplete,
   allServicesReady,
-  anyServiceFailed,
-  isServiceActionable,
 } from './types';
+import { cleanupProvisionedPlatform, projectSlugExists } from './cleanup';
 
 const ALL_SERVICES: ServiceName[] = [
   'supabase',
-  'github', 
+  'github',
   'vercel',
+  'supabase-config',
   'sandra',
   'kira',
   'webhooks',
@@ -41,6 +41,7 @@ export interface OrchestrationResult {
   complete: boolean;
   success: boolean;
   results: ServiceAdvanceResult[];
+  cleanedUp?: boolean;
 }
 
 /**
@@ -54,11 +55,12 @@ async function runIteration(projectSlug: string): Promise<ServiceAdvanceResult[]
   }
 
   const services = getServiceStates(run);
-  
+
   // Find all services that can be advanced
-  const actionableServices = ALL_SERVICES.filter(
-    service => isServiceActionable(services[service])
-  );
+  const actionableServices = ALL_SERVICES.filter(service => {
+    const state = services[service];
+    return state !== 'READY' && state !== 'FAILED';
+  });
 
   if (actionableServices.length === 0) {
     return [];
@@ -166,14 +168,14 @@ export async function processActiveRuns(): Promise<BatchResult> {
     try {
       // Run just one iteration for batch processing
       const iterationResults = await runIteration(run.project_slug);
-      
+
       const currentRun = await getProvisionRunBySlug(run.project_slug);
       const services = getServiceStates(currentRun!);
 
       if (allServicesComplete(services)) {
         const success = allServicesReady(services);
         await setOverallStatus(run.project_slug, success ? 'complete' : 'failed');
-        
+
         if (success) completed++;
         else failed++;
 
@@ -221,30 +223,67 @@ export interface StartProvisioningParams {
   companyName: string;
   platformName: string;
   metadata?: Record<string, unknown>;
+  forceCleanup?: boolean; // If true, delete existing resources first
 }
 
 /**
  * Start a new provisioning run with parallel execution.
+ * If slug already exists and forceCleanup is true, deletes all resources first.
  */
 export async function startProvisioning(params: StartProvisioningParams): Promise<OrchestrationResult> {
+  const { projectSlug, forceCleanup = true } = params;
+
   // Check if already exists
-  const existing = await getProvisionRunBySlug(params.projectSlug);
+  const existing = await getProvisionRunBySlug(projectSlug);
+
+  let cleanupResult: Awaited<ReturnType<typeof cleanupProvisionedPlatform>> | null = null;
+
   if (existing) {
-    // Resume existing run
-    return runProvisioning(params.projectSlug);
+    if (forceCleanup) {
+      // Clean up all existing resources before re-provisioning
+      console.log(`[orchestrator] ${projectSlug}: Cleaning up existing resources...`);
+      cleanupResult = await cleanupProvisionedPlatform(projectSlug);
+      console.log(`[orchestrator] ${projectSlug}: Cleanup complete:`, cleanupResult);
+
+      if (cleanupResult.errors.length > 0) {
+        console.warn(`[orchestrator] ${projectSlug}: Cleanup had errors:`, cleanupResult.errors);
+        // Continue anyway - some resources might have been manually deleted
+      }
+    } else {
+      // Resume existing run without cleanup
+      console.log(`[orchestrator] ${projectSlug}: Resuming existing run`);
+      return runProvisioning(projectSlug);
+    }
   }
 
   // Create new run - all services start PENDING
+  // Include cleanup info in metadata
+  const cleanupMetadata = existing ? {
+    cleanup_performed: true,
+    cleanup_result: cleanupResult,
+  } : {
+    cleanup_performed: false,
+  };
+
   await createProvisionRun({
     projectSlug: params.projectSlug,
     clientId: params.clientId,
     companyName: params.companyName,
     platformName: params.platformName,
-    metadata: params.metadata,
+    metadata: {
+      ...params.metadata,
+      ...cleanupMetadata,
+    },
   });
 
+  console.log(`[orchestrator] ${projectSlug}: Created new provision run`);
+
   // Begin parallel orchestration
-  return runProvisioning(params.projectSlug);
+  const result = await runProvisioning(projectSlug);
+  return {
+    ...result,
+    cleanedUp: existing !== null && forceCleanup,
+  };
 }
 
 // =============================================================================

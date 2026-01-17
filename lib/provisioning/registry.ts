@@ -25,6 +25,7 @@ import { kiraExecute } from './elevenlabs/kira.execute';
 import { kiraVerify } from './elevenlabs/kira.verify';
 import { webhooksExecute } from './webhooks/execute';
 import { webhooksVerify } from './webhooks/verify';
+import { finalizeExecute, finalizeVerify } from './finalize/execute';
 
 // =============================================================================
 // DEPENDENCY GRAPH
@@ -39,7 +40,8 @@ export const DEPENDENCIES: Record<ServiceName, ServiceName[]> = {
   'supabase-config': ['vercel', 'supabase'], // Needs Vercel URL to configure Supabase auth
   sandra: ['vercel', 'supabase'],            // Needs Vercel URL + Supabase ready
   kira: ['vercel', 'supabase'],              // Needs Vercel URL + Supabase ready
-  webhooks: ['sandra', 'kira', 'vercel', 'supabase-config'], // Needs everything ready
+  webhooks: ['sandra', 'kira', 'vercel', 'supabase-config'], // Needs agents ready
+  finalize: ['sandra', 'kira', 'webhooks'],  // Runs last - adds agent IDs to Vercel env
 };
 
 // =============================================================================
@@ -54,6 +56,7 @@ export const EXECUTE_HANDLERS: Record<ServiceName, ExecuteHandler> = {
   sandra: sandraExecute,
   kira: kiraExecute,
   webhooks: webhooksExecute,
+  finalize: finalizeExecute,
 };
 
 export const VERIFY_HANDLERS: Record<ServiceName, VerifyHandler> = {
@@ -64,6 +67,7 @@ export const VERIFY_HANDLERS: Record<ServiceName, VerifyHandler> = {
   sandra: sandraVerify,
   kira: kiraVerify,
   webhooks: webhooksVerify,
+  finalize: finalizeVerify,
 };
 
 // =============================================================================
@@ -183,6 +187,18 @@ export const SERVICE_UI: Record<ServiceName, ServiceUiMeta> = {
       FAILED: 'Webhook setup failed',
     },
   },
+  finalize: {
+    title: 'Finalize',
+    order: 8,
+    description: {
+      PENDING: 'Waiting for all services...',
+      CREATING: 'Configuring platform...',
+      VERIFYING: 'Verifying final deployment...',
+      WAITING: 'Waiting for redeploy...',
+      READY: 'Platform ready!',
+      FAILED: 'Finalization failed',
+    },
+  },
 };
 
 export function getServiceUiMeta(service: ServiceName, state: ServiceState): { title: string; description: string; order: number } {
@@ -199,13 +215,14 @@ export function getServiceUiMeta(service: ServiceName, state: ServiceState): { t
 
 export function calculateOverallProgress(services: ServiceStates): number {
   const weights: Record<ServiceName, number> = {
-    supabase: 15,
-    github: 10,
-    vercel: 25,
+    supabase: 12,
+    github: 8,
+    vercel: 20,
     'supabase-config': 5,
     sandra: 15,
     kira: 15,
-    webhooks: 15,
+    webhooks: 10,
+    finalize: 15,
   };
 
   let progress = 0;
