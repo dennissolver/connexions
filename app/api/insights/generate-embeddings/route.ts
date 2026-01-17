@@ -5,13 +5,82 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// ============================================================================
+// CONFIGURATION & GUARDS
+// ============================================================================
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('[generate-embeddings] Missing Supabase configuration');
+}
+
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  : null;
 
 const EMBEDDING_DIMENSIONS = 1024;
-const BATCH_SIZE = 10; // Process 10 interviews at a time
+const BATCH_SIZE = 10;
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface PainPoint {
+  point?: string;
+  [key: string]: unknown;
+}
+
+interface Desire {
+  desire?: string;
+  [key: string]: unknown;
+}
+
+interface Quote {
+  quote?: string;
+  context?: string;
+  theme?: string;
+  [key: string]: unknown;
+}
+
+interface Evaluation {
+  id: string;
+  summary?: string;
+  sentiment?: string;
+  sentiment_score?: number;
+  quality_score?: number;
+  topics?: string[];
+  pain_points?: (string | PainPoint)[];
+  desires?: (string | Desire)[];
+  key_quotes?: (string | Quote)[];
+}
+
+interface Agent {
+  name?: string;
+}
+
+interface Interview {
+  id: string;
+  panel_id: string;
+  participant_name?: string;
+  participant_company?: string;
+  completed_at?: string;
+  agents?: Agent[];
+  interview_evaluations?: Evaluation[];
+}
+
+interface InterviewContent {
+  panel_name?: string;
+  participant_name?: string;
+  participant_company?: string;
+  summary?: string;
+  sentiment?: string;
+  topics?: string[];
+  pain_points?: (string | PainPoint)[];
+  desires?: (string | Desire)[];
+  key_quotes?: (string | Quote)[];
+}
 
 // ============================================================================
 // EMBEDDING GENERATION
@@ -21,6 +90,12 @@ async function generateEmbedding(text: string): Promise<number[]> {
   const voyageApiKey = process.env.VOYAGE_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
+  if (!text || text.trim().length === 0) {
+    throw new Error('Cannot generate embedding for empty text');
+  }
+
+  const sanitizedText = text.slice(0, 8000).trim();
+
   if (voyageApiKey) {
     const response = await fetch('https://api.voyageai.com/v1/embeddings', {
       method: 'POST',
@@ -29,7 +104,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        input: text.slice(0, 8000), // Voyage limit
+        input: sanitizedText,
         model: 'voyage-3.5',
       }),
     });
@@ -40,6 +115,11 @@ async function generateEmbedding(text: string): Promise<number[]> {
     }
 
     const data = await response.json();
+
+    if (!data?.data?.[0]?.embedding) {
+      throw new Error('Invalid response from Voyage API');
+    }
+
     return data.data[0].embedding;
   }
 
@@ -51,7 +131,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        input: text.slice(0, 8000),
+        input: sanitizedText,
         model: 'text-embedding-3-small',
       }),
     });
@@ -62,17 +142,22 @@ async function generateEmbedding(text: string): Promise<number[]> {
     }
 
     const data = await response.json();
+
+    if (!data?.data?.[0]?.embedding) {
+      throw new Error('Invalid response from OpenAI API');
+    }
+
     return data.data[0].embedding;
   }
 
-  throw new Error('No embedding API key configured');
+  throw new Error('No embedding API key configured (VOYAGE_API_KEY or OPENAI_API_KEY)');
 }
 
 // ============================================================================
 // BUILD EMBEDDING CONTENT
 // ============================================================================
 
-function buildInterviewContent(interview: any): string {
+function buildInterviewContent(interview: InterviewContent): string {
   const parts: string[] = [];
 
   if (interview.panel_name) {
@@ -92,31 +177,54 @@ function buildInterviewContent(interview: any): string {
   }
 
   // Add topics
-  if (interview.topics && Array.isArray(interview.topics)) {
-    parts.push(`Topics: ${interview.topics.join(', ')}`);
+  if (interview.topics && Array.isArray(interview.topics) && interview.topics.length > 0) {
+    const validTopics = interview.topics.filter(t => typeof t === 'string' && t.trim());
+    if (validTopics.length > 0) {
+      parts.push(`Topics: ${validTopics.join(', ')}`);
+    }
   }
 
   // Add pain points
-  if (interview.pain_points && Array.isArray(interview.pain_points)) {
-    const painStrings = interview.pain_points.map((p: any) =>
-      typeof p === 'string' ? p : p.point || JSON.stringify(p)
-    );
-    parts.push(`Pain points: ${painStrings.join(', ')}`);
+  if (interview.pain_points && Array.isArray(interview.pain_points) && interview.pain_points.length > 0) {
+    const painStrings = interview.pain_points
+      .map((p) => {
+        if (typeof p === 'string') return p;
+        if (p && typeof p === 'object' && 'point' in p) return p.point;
+        return null;
+      })
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+
+    if (painStrings.length > 0) {
+      parts.push(`Pain points: ${painStrings.join(', ')}`);
+    }
   }
 
   // Add desires
-  if (interview.desires && Array.isArray(interview.desires)) {
-    const desireStrings = interview.desires.map((d: any) =>
-      typeof d === 'string' ? d : d.desire || JSON.stringify(d)
-    );
-    parts.push(`Desires: ${desireStrings.join(', ')}`);
+  if (interview.desires && Array.isArray(interview.desires) && interview.desires.length > 0) {
+    const desireStrings = interview.desires
+      .map((d) => {
+        if (typeof d === 'string') return d;
+        if (d && typeof d === 'object' && 'desire' in d) return d.desire;
+        return null;
+      })
+      .filter((d): d is string => typeof d === 'string' && d.trim().length > 0);
+
+    if (desireStrings.length > 0) {
+      parts.push(`Desires: ${desireStrings.join(', ')}`);
+    }
   }
 
   // Add key quotes
-  if (interview.key_quotes && Array.isArray(interview.key_quotes)) {
-    const quoteStrings = interview.key_quotes.slice(0, 5).map((q: any) =>
-      typeof q === 'string' ? q : q.quote || ''
-    ).filter(Boolean);
+  if (interview.key_quotes && Array.isArray(interview.key_quotes) && interview.key_quotes.length > 0) {
+    const quoteStrings = interview.key_quotes
+      .slice(0, 5)
+      .map((q) => {
+        if (typeof q === 'string') return q;
+        if (q && typeof q === 'object' && 'quote' in q) return q.quote;
+        return null;
+      })
+      .filter((q): q is string => typeof q === 'string' && q.trim().length > 0);
+
     if (quoteStrings.length > 0) {
       parts.push(`Key quotes: ${quoteStrings.join(' | ')}`);
     }
@@ -126,10 +234,54 @@ function buildInterviewContent(interview: any): string {
 }
 
 // ============================================================================
+// HELPER: Get panel name safely
+// ============================================================================
+
+function getPanelName(agents: Agent[] | undefined | null): string | undefined {
+  if (!agents || !Array.isArray(agents) || agents.length === 0) {
+    return undefined;
+  }
+  const firstAgent = agents[0];
+  if (!firstAgent || typeof firstAgent !== 'object') {
+    return undefined;
+  }
+  return firstAgent.name || undefined;
+}
+
+// ============================================================================
+// HELPER: Get first evaluation safely
+// ============================================================================
+
+function getFirstEvaluation(evaluations: Evaluation[] | undefined | null): Evaluation | undefined {
+  if (!evaluations || !Array.isArray(evaluations) || evaluations.length === 0) {
+    return undefined;
+  }
+  return evaluations[0];
+}
+
+// ============================================================================
+// HELPER: Get embedding model name
+// ============================================================================
+
+function getEmbeddingModelName(): string {
+  if (process.env.VOYAGE_API_KEY) return 'voyage-3.5';
+  if (process.env.OPENAI_API_KEY) return 'text-embedding-3-small';
+  return 'unknown';
+}
+
+// ============================================================================
 // MAIN ENDPOINT
 // ============================================================================
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Guard: Check Supabase client
+  if (!supabase) {
+    return NextResponse.json(
+      { error: 'Database not configured', details: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
+      { status: 500 }
+    );
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const {
@@ -138,7 +290,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       force_regenerate = false
     } = body;
 
-    console.log('[generate-embeddings] Starting batch, limit:', limit);
+    // Guard: Validate limit
+    const safeLimit = Math.min(Math.max(1, Number(limit) || BATCH_SIZE), 100);
+
+    console.log('[generate-embeddings] Starting batch, limit:', safeLimit);
 
     // Find interviews needing embeddings
     let query = supabase
@@ -167,10 +322,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq('status', 'completed')
       .not('interview_evaluations', 'is', null)
       .order('completed_at', { ascending: false })
-      .limit(limit);
+      .limit(safeLimit);
 
-    if (panel_id) {
-      query = query.eq('panel_id', panel_id);
+    // Guard: Validate panel_id if provided
+    if (panel_id && typeof panel_id === 'string' && panel_id.trim()) {
+      query = query.eq('panel_id', panel_id.trim());
     }
 
     const { data: interviews, error: fetchError } = await query;
@@ -179,7 +335,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new Error(`Failed to fetch interviews: ${fetchError.message}`);
     }
 
-    if (!interviews || interviews.length === 0) {
+    if (!interviews || !Array.isArray(interviews) || interviews.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No interviews to process',
@@ -188,39 +344,68 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Filter to only those without embeddings (unless force_regenerate)
-    let interviewsToProcess = interviews;
+    let interviewsToProcess: Interview[] = interviews as Interview[];
 
     if (!force_regenerate) {
-      const interviewIds = interviews.map((i: any) => i.id);
-      const { data: existingEmbeddings } = await supabase
-        .from('interview_embeddings')
-        .select('interview_id')
-        .in('interview_id', interviewIds);
+      const interviewIds = interviews
+        .map((i) => i?.id)
+        .filter((id): id is string => typeof id === 'string');
 
-      const existingIds = new Set((existingEmbeddings || []).map((e: any) => e.interview_id));
-      interviewsToProcess = interviews.filter((i: any) => !existingIds.has(i.id));
+      if (interviewIds.length > 0) {
+        const { data: existingEmbeddings } = await supabase
+          .from('interview_embeddings')
+          .select('interview_id')
+          .in('interview_id', interviewIds);
+
+        const existingIds = new Set(
+          (existingEmbeddings || [])
+            .map((e) => e?.interview_id)
+            .filter((id): id is string => typeof id === 'string')
+        );
+
+        interviewsToProcess = (interviews as Interview[]).filter(
+          (i) => i?.id && !existingIds.has(i.id)
+        );
+      }
     }
 
     console.log('[generate-embeddings] Processing', interviewsToProcess.length, 'interviews');
 
     const results = {
       processed: 0,
+      skipped: 0,
       failed: 0,
       errors: [] as string[],
     };
 
     // Process each interview
     for (const interview of interviewsToProcess) {
+      // Guard: Validate interview object
+      if (!interview || !interview.id || !interview.panel_id) {
+        console.log('[generate-embeddings] Skipping invalid interview object');
+        results.skipped++;
+        continue;
+      }
+
       try {
-        const evaluation = interview.interview_evaluations?.[0];
-        if (!evaluation?.summary) {
+        const evaluation = getFirstEvaluation(interview.interview_evaluations);
+
+        // Guard: Check evaluation exists and has summary
+        if (!evaluation) {
+          console.log('[generate-embeddings] Skipping interview without evaluation:', interview.id);
+          results.skipped++;
+          continue;
+        }
+
+        if (!evaluation.summary || typeof evaluation.summary !== 'string' || evaluation.summary.trim().length === 0) {
           console.log('[generate-embeddings] Skipping interview without summary:', interview.id);
+          results.skipped++;
           continue;
         }
 
         // Build content for embedding
         const content = buildInterviewContent({
-          panel_name: interview.agents?.[0]?.name,
+          panel_name: getPanelName(interview.agents),
           participant_name: interview.participant_name,
           participant_company: interview.participant_company,
           summary: evaluation.summary,
@@ -231,13 +416,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           key_quotes: evaluation.key_quotes,
         });
 
+        // Guard: Check content length
         if (content.length < 50) {
-          console.log('[generate-embeddings] Content too short for:', interview.id);
+          console.log('[generate-embeddings] Content too short for:', interview.id, '- length:', content.length);
+          results.skipped++;
           continue;
         }
 
         // Generate embedding
         const embedding = await generateEmbedding(content);
+
+        // Guard: Validate embedding
+        if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+          throw new Error('Invalid embedding returned');
+        }
 
         // Store interview embedding
         const { error: insertError } = await supabase
@@ -247,9 +439,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             panel_id: interview.panel_id,
             content_text: content,
             embedding: embedding,
-            sentiment: evaluation.sentiment,
-            quality_score: evaluation.quality_score,
-            model_used: process.env.VOYAGE_API_KEY ? 'voyage-large-2' : 'text-embedding-3-small',
+            sentiment: evaluation.sentiment || null,
+            quality_score: evaluation.quality_score || null,
+            model_used: getEmbeddingModelName(),
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'interview_id',
@@ -260,13 +452,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         // Generate quote embeddings
-        if (evaluation.key_quotes && Array.isArray(evaluation.key_quotes)) {
-          for (const quote of evaluation.key_quotes.slice(0, 10)) {
+        if (evaluation.key_quotes && Array.isArray(evaluation.key_quotes) && evaluation.key_quotes.length > 0) {
+          const quotesToProcess = evaluation.key_quotes.slice(0, 10);
+
+          for (const quote of quotesToProcess) {
+            // Guard: Validate quote
+            if (!quote) continue;
+
             const quoteText = typeof quote === 'string' ? quote : quote.quote;
-            if (!quoteText || quoteText.length < 10) continue;
+
+            // Guard: Check quote text
+            if (!quoteText || typeof quoteText !== 'string' || quoteText.trim().length < 10) {
+              continue;
+            }
 
             try {
               const quoteEmbedding = await generateEmbedding(quoteText);
+
+              // Guard: Validate quote embedding
+              if (!quoteEmbedding || !Array.isArray(quoteEmbedding) || quoteEmbedding.length === 0) {
+                console.error('[generate-embeddings] Invalid quote embedding for interview:', interview.id);
+                continue;
+              }
+
+              const quoteContext = typeof quote === 'object' && quote.context ? quote.context : null;
+              const quoteTheme = typeof quote === 'object' && quote.theme ? quote.theme : null;
 
               await supabase
                 .from('quote_embeddings')
@@ -274,11 +484,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                   interview_id: interview.id,
                   evaluation_id: evaluation.id,
                   panel_id: interview.panel_id,
-                  quote_text: quoteText,
-                  context: quote.context || null,
-                  theme: quote.theme || null,
+                  quote_text: quoteText.trim(),
+                  context: quoteContext,
+                  theme: quoteTheme,
                   embedding: quoteEmbedding,
-                  model_used: process.env.VOYAGE_API_KEY ? 'voyage-large-2' : 'text-embedding-3-small',
+                  model_used: getEmbeddingModelName(),
                 });
             } catch (quoteErr) {
               console.error('[generate-embeddings] Quote embedding failed:', quoteErr);
@@ -308,7 +518,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     console.error('[generate-embeddings] Fatal error:', error);
     return NextResponse.json(
-      { error: 'Embedding generation failed', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Embedding generation failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
@@ -319,34 +532,81 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 // ============================================================================
 
 export async function GET(): Promise<NextResponse> {
-  // Count interviews with and without embeddings
-  const { count: totalInterviews } = await supabase
-    .from('interviews')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'completed');
+  // Guard: Check Supabase client
+  if (!supabase) {
+    return NextResponse.json(
+      {
+        status: 'error',
+        error: 'Database not configured',
+        details: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
+      },
+      { status: 500 }
+    );
+  }
 
-  const { count: withEmbeddings } = await supabase
-    .from('interview_embeddings')
-    .select('id', { count: 'exact', head: true });
+  try {
+    // Count interviews with and without embeddings
+    const { count: totalInterviews, error: interviewsError } = await supabase
+      .from('interviews')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'completed');
 
-  const { count: totalEvaluations } = await supabase
-    .from('interview_evaluations')
-    .select('id', { count: 'exact', head: true });
+    if (interviewsError) {
+      console.error('[generate-embeddings] Error fetching interview count:', interviewsError);
+    }
 
-  const { count: totalQuoteEmbeddings } = await supabase
-    .from('quote_embeddings')
-    .select('id', { count: 'exact', head: true });
+    const { count: withEmbeddings, error: embeddingsError } = await supabase
+      .from('interview_embeddings')
+      .select('id', { count: 'exact', head: true });
 
-  return NextResponse.json({
-    status: 'active',
-    endpoint: 'insights/generate-embeddings',
-    stats: {
-      total_completed_interviews: totalInterviews || 0,
-      interviews_with_embeddings: withEmbeddings || 0,
-      interviews_needing_embeddings: (totalInterviews || 0) - (withEmbeddings || 0),
-      total_evaluations: totalEvaluations || 0,
-      total_quote_embeddings: totalQuoteEmbeddings || 0,
-    },
-    embedding_provider: process.env.VOYAGE_API_KEY ? 'voyage' : (process.env.OPENAI_API_KEY ? 'openai' : 'none'),
-  });
+    if (embeddingsError) {
+      console.error('[generate-embeddings] Error fetching embeddings count:', embeddingsError);
+    }
+
+    const { count: totalEvaluations, error: evaluationsError } = await supabase
+      .from('interview_evaluations')
+      .select('id', { count: 'exact', head: true });
+
+    if (evaluationsError) {
+      console.error('[generate-embeddings] Error fetching evaluations count:', evaluationsError);
+    }
+
+    const { count: totalQuoteEmbeddings, error: quoteEmbeddingsError } = await supabase
+      .from('quote_embeddings')
+      .select('id', { count: 'exact', head: true });
+
+    if (quoteEmbeddingsError) {
+      console.error('[generate-embeddings] Error fetching quote embeddings count:', quoteEmbeddingsError);
+    }
+
+    const safeTotal = totalInterviews ?? 0;
+    const safeWithEmbeddings = withEmbeddings ?? 0;
+
+    return NextResponse.json({
+      status: 'active',
+      endpoint: 'insights/generate-embeddings',
+      stats: {
+        total_completed_interviews: safeTotal,
+        interviews_with_embeddings: safeWithEmbeddings,
+        interviews_needing_embeddings: Math.max(0, safeTotal - safeWithEmbeddings),
+        total_evaluations: totalEvaluations ?? 0,
+        total_quote_embeddings: totalQuoteEmbeddings ?? 0,
+      },
+      embedding_provider: process.env.VOYAGE_API_KEY
+        ? 'voyage'
+        : (process.env.OPENAI_API_KEY ? 'openai' : 'none'),
+      model: getEmbeddingModelName(),
+    });
+
+  } catch (error) {
+    console.error('[generate-embeddings] GET error:', error);
+    return NextResponse.json(
+      {
+        status: 'error',
+        error: 'Failed to fetch stats',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
 }
