@@ -4,7 +4,7 @@ import { ProvisionState } from '../states';
 import { ProvisionContext, ProvisionStepResult } from '../types';
 
 // Import step functions (matching actual export names)
-import { createSupabaseProject } from './supabase';
+import { createSupabaseProject, waitForSupabaseReady } from './supabase';
 import { createGithubRepo } from './github';
 import { createVercelProject, triggerVercelDeployment } from './vercel';
 import { createSandraAgent, createKiraAgent } from './elevenlabs';
@@ -19,8 +19,19 @@ export const STEPS: Partial<Record<ProvisionState, (ctx: ProvisionContext) => Pr
   // Init
   INIT: transitionTo('SUPABASE_CREATING'),
   
-  // Supabase
-  SUPABASE_CREATING: createSupabaseProject,
+  // Supabase - createSupabaseProject creates, then waitForSupabaseReady polls until keys available
+  SUPABASE_CREATING: async (ctx) => {
+    // If no project ref yet, create it
+    if (!ctx.metadata.supabaseProjectRef) {
+      return createSupabaseProject(ctx);
+    }
+    // If project exists but no keys, poll for ready state
+    if (!ctx.metadata.supabaseAnonKey) {
+      return waitForSupabaseReady(ctx);
+    }
+    // Project ready with keys, move on
+    return { nextState: 'SUPABASE_READY', metadata: ctx.metadata };
+  },
   SUPABASE_READY: transitionTo('GITHUB_CREATING'),
   
   // GitHub
@@ -48,7 +59,7 @@ export function isTerminalState(state: ProvisionState): boolean {
   return state === 'COMPLETE' || state === 'FAILED';
 }
 
-export { createSupabaseProject } from './supabase';
+export { createSupabaseProject, waitForSupabaseReady } from './supabase';
 export { createGithubRepo } from './github';
 export { createVercelProject, triggerVercelDeployment } from './vercel';
 export { createSandraAgent, createKiraAgent, verifyAgentExists } from './elevenlabs';
