@@ -4,18 +4,13 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { ProvisionState } from '@/lib/provisioning/states';
 
 /* ============================================================================
- * UI CONFIG (INTENTIONALLY LOCAL)
+ * UI CONFIG (INTENTIONALLY LOCAL, DOMAIN-SAFE)
  * ==========================================================================*/
 
 const UI_MAP: Record<
   ProvisionState,
   { title: string; description: string }
 > = {
-  INIT: {
-    title: 'Starting',
-    description: 'Preparing provisioning workflow',
-  },
-
   SUPABASE_CREATING: {
     title: 'Database',
     description: 'Creating Supabase project',
@@ -90,7 +85,12 @@ type Props = {
 };
 
 export default function ProvisioningProgress({ state }: Props) {
-  const ui = UI_MAP[state];
+  const ui =
+    UI_MAP[state] ??
+    {
+      title: 'Starting',
+      description: 'Preparing provisioning workflow',
+    };
 
   const isComplete = state === 'COMPLETE';
   const isFailed = state === 'FAILED';
