@@ -220,7 +220,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         // Build content for embedding
         const content = buildInterviewContent({
-          panel_name: interview.agents?.name,
+          panel_name: interview.agents?.[0]?.name,
           participant_name: interview.participant_name,
           participant_company: interview.participant_company,
           summary: evaluation.summary,
