@@ -1,103 +1,29 @@
+
 // lib/provisioning/engine.ts
+import { verifyComponent } from './verify';
+import { RETRY_POLICIES } from './retryPolicies';
+import { sleep } from './utils';
 
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { ProvisionState, ALLOWED_TRANSITIONS } from './states';
-import { ProvisionRun, ProvisionMetadata } from './types';
+export async function runVerificationLoop(component: string, ctx: any, transition: (s: string) => Promise<void>, fail: (e: string) => Promise<void>) {
+  const policy = RETRY_POLICIES[component];
+  if (!policy) throw new Error(`No retry policy for ${component}`);
 
-export async function getProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .select('*')
-    .eq('project_slug', projectSlug)
-    .maybeSingle();
-  if (error) throw error;
-  return data as ProvisionRun | null;
-}
+  for (let attempt = 1; attempt <= policy.maxRetries; attempt++) {
+    const result = await verifyComponent(component, ctx);
 
-export async function createProvisionRun(projectSlug: string, platformName: string, companyName: string): Promise<ProvisionRun> {
-  const existing = await getProvisionRun(projectSlug);
-  if (existing) return existing;
+    if (result.ok) {
+      await transition(`${component.toUpperCase()}_READY`);
+      return;
+    }
 
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .insert({
-      project_slug: projectSlug,
-      platform_name: platformName,
-      company_name: companyName,
-      state: 'INIT',
-      metadata: {}
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as ProvisionRun;
-}
+    if (!result.retryable) {
+      await fail(result.reason || 'Verification failed');
+      return;
+    }
 
-export async function advanceState(
-  projectSlug: string,
-  from: ProvisionState,
-  to: ProvisionState,
-  metadata?: ProvisionMetadata
-): Promise<ProvisionRun> {
-  if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
-    throw new Error(`Invalid: ${from} → ${to}`);
+    const delay = Math.min(policy.baseDelayMs * 2 ** (attempt - 1), policy.maxDelayMs);
+    await sleep(delay);
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .update({
-      state: to,
-      metadata: metadata ?? {},
-      updated_at: new Date().toISOString()
-    })
-    .eq('project_slug', projectSlug)
-    .eq('state', from)
-    .select()
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (!data) {
-    const current = await getProvisionRun(projectSlug);
-    if (!current) throw new Error(`Provision run not found: ${projectSlug}`);
-    console.warn(`[${projectSlug}] State already changed from ${from}, current: ${current.state}`);
-    return current;
-  }
-
-  return data as ProvisionRun;
-}
-
-export async function failRun(projectSlug: string, errorMessage: string): Promise<void> {
-  await supabaseAdmin
-    .from('provision_runs')
-    .update({
-      state: 'FAILED',
-      last_error: errorMessage,
-      updated_at: new Date().toISOString()
-    })
-    .eq('project_slug', projectSlug);
-}
-
-export async function deleteProvisionRun(projectSlug: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('provision_runs')
-    .delete()
-    .eq('project_slug', projectSlug);
-  if (error) throw error;
-}
-
-export async function resetProvisionRun(projectSlug: string): Promise<ProvisionRun | null> {
-  const { data, error } = await supabaseAdmin
-    .from('provision_runs')
-    .update({
-      state: 'INIT',
-      metadata: {},
-      last_error: null,
-      updated_at: new Date().toISOString()
-    })
-    .eq('project_slug', projectSlug)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as ProvisionRun | null;
+  await fail(`${component} did not become ready after ${policy.maxRetries} attempts`);
 }
