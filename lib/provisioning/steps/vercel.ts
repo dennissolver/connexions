@@ -6,7 +6,7 @@ const GITHUB_API = 'https://api.github.com';
 
 export async function createVercelProject(ctx: ProvisionContext): Promise<ProvisionStepResult> {
   if (ctx.metadata.vercelProjectId) {
-    return { nextState: 'VERCEL_CREATING', metadata: ctx.metadata };
+    return { nextState: 'VERCEL_DEPLOYING', metadata: ctx.metadata };
   }
 
   const safeName = ctx.projectSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 100);
