@@ -58,10 +58,10 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
     // Build environment variables
     const envVars = [];
     if (ctx.metadata.supabase_url) {
-      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_URL', value: ctx.metadata.supabase_url, target: ['production', 'preview', 'development'], type: 'encrypted' });
+      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_URL', value: ctx.metadata.supabase_url, target: ['production', 'preview', 'development'], type: 'plain' });
     }
     if (ctx.metadata.supabase_anon_key) {
-      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: ctx.metadata.supabase_anon_key, target: ['production', 'preview', 'development'], type: 'encrypted' });
+      envVars.push({ key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: ctx.metadata.supabase_anon_key, target: ['production', 'preview', 'development'], type: 'plain' });
     }
     if (ctx.metadata.supabase_service_role_key) {
       envVars.push({ key: 'SUPABASE_SERVICE_ROLE_KEY', value: ctx.metadata.supabase_service_role_key, target: ['production', 'preview', 'development'], type: 'encrypted' });
