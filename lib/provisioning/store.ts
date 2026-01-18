@@ -51,6 +51,7 @@ export async function createProvisionRun(params: {
       sandra_state: 'PENDING',
       kira_state: 'PENDING',
       webhooks_state: 'PENDING',
+      finalize_state: 'PENDING',
 
       status: 'running',
 
