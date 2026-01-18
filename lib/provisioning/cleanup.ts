@@ -2,13 +2,20 @@
 // Deletes all provisioned resources for a project slug
 // Called before re-provisioning an existing slug
 
-import { getProvisionRunBySlug, updateProvisionRun } from './store';
+import { createClient } from '@supabase/supabase-js';
+import { getProvisionRunBySlug } from './store';
 
 const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+
+// Direct Supabase client for cleanup operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 interface CleanupResult {
   slug: string;
@@ -110,28 +117,36 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
   }
 
   // 6. Reset all component states to PENDING for fresh re-provisioning
+  // Use direct SQL update to avoid type constraints
   try {
-    await updateProvisionRun(projectSlug, {
-      state: 'INIT',
-      supabase_state: 'PENDING',
-      github_state: 'PENDING',
-      vercel_state: 'PENDING',
-      sandra_state: 'PENDING',
-      kira_state: 'PENDING',
-      webhooks_state: 'PENDING',
-      'supabase-config_state': 'PENDING',
-      finalize_state: 'PENDING',
-      sandra_agent_id: undefined,
-      kira_agent_id: undefined,
-      last_error: undefined,
-      metadata: {
-        company_name: metadata.company_name,
-        platform_name: metadata.platform_name,
-        contactEmail: metadata.contactEmail,
-        cleanup_performed: true,
-        cleanup_result: result,
-      },
-    });
+    const { error } = await supabase
+      .from('provision_runs')
+      .update({
+        status: 'running',
+        supabase_state: 'PENDING',
+        github_state: 'PENDING',
+        vercel_state: 'PENDING',
+        'supabase-config_state': 'PENDING',
+        sandra_state: 'PENDING',
+        kira_state: 'PENDING',
+        webhooks_state: 'PENDING',
+        finalize_state: 'PENDING',
+        sandra_agent_id: null,
+        kira_agent_id: null,
+        last_error: null,
+        metadata: {
+          company_name: metadata.company_name,
+          platform_name: metadata.platform_name,
+          contactEmail: metadata.contactEmail,
+          cleanup_performed: true,
+          cleanup_result: result,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('project_slug', projectSlug);
+
+    if (error) throw error;
+
     result.deleted.database = true;
     console.log(`[cleanup] Reset provision run states to PENDING for fresh start`);
   } catch (err) {
@@ -149,12 +164,6 @@ export async function deleteProvisionedPlatform(projectSlug: string): Promise<Cl
   const result = await cleanupProvisionedPlatform(projectSlug);
 
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
     const { error } = await supabase
       .from('provision_runs')
       .delete()
