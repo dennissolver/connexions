@@ -1,0 +1,80 @@
+{
+  "type": "webhook",
+  "name": "search_transcripts",
+  "description": "Search across all interview transcripts for keywords or themes",
+  "disable_interruptions": false,
+  "force_pre_tool_speech": "auto",
+  "assignments": [],
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "api_schema": {
+    "url": "https://cx-3500-survey.vercel.app/api/kira/tools",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Parameters for searching transcripts",
+      "properties": [
+        {
+          "id": "tool_name",
+          "type": "string",
+          "value_type": "constant",
+          "description": "",
+          "dynamic_variable": "",
+          "constant_value": "search_transcripts",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true,
+          "properties": []
+        },
+        {
+          "id": "query",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "Keywords or phrases to search for",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true,
+          "properties": []
+        },
+        {
+          "id": "panel_name",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "Limit search to specific panel",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false,
+          "properties": []
+        },
+        {
+          "id": "limit",
+          "type": "number",
+          "value_type": "llm_prompt",
+          "description": "Maximum results to return",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false,
+          "properties": []
+        }
+      ],
+      "required": false,
+      "value_type": "llm_prompt"
+    },
+    "request_headers": [],
+    "auth_connection": null
+  },
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  }
+}
