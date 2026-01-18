@@ -35,7 +35,7 @@ import { finalizeExecute, finalizeVerify } from './finalize/execute';
 // All services start at the same time, but wait on their dependencies
 export const DEPENDENCIES: Record<ServiceName, ServiceName[]> = {
   supabase: [],                              // No dependencies - starts immediately
-  github: [],                                // No dependencies - starts immediately
+  github: ['supabase'],                                // No dependencies - starts immediately
   vercel: ['github', 'supabase'],            // Needs GitHub repo + Supabase keys
   'supabase-config': ['vercel', 'supabase'], // Needs Vercel URL to configure Supabase auth
   sandra: ['vercel', 'supabase'],            // Needs Vercel URL + Supabase ready
