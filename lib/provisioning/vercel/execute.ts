@@ -115,6 +115,14 @@ export async function vercelExecute(ctx: ProvisionContext): Promise<StepResult> 
       type: 'plain',
     });
 
+    // Internal API key for create-panel endpoint
+    envVars.push({
+      key: 'INTERNAL_API_KEY',
+      value: 'internal-create-panel',
+      target: ['production', 'preview', 'development'],
+      type: 'encrypted',
+    });
+
     // Create project
     const createUrl = new URL('https://api.vercel.com/v10/projects');
     if (VERCEL_TEAM_ID) createUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
