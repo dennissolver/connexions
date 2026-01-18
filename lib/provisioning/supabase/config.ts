@@ -150,25 +150,21 @@ CREATE TABLE IF NOT EXISTS setup_conversations (
 -- ============================================================================
 
 -- PANEL DRAFTS (Sandra conversation outputs before publishing)
+-- Column names match Universal Interviews save-draft API exactly
 CREATE TABLE IF NOT EXISTS panel_drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
   name TEXT,
   description TEXT,
-  research_goal TEXT,
   target_audience TEXT,
-  interview_context TEXT CHECK (interview_context IN ('B2B', 'B2C')),
+  tone TEXT,
+  duration_minutes INTEGER,
   questions JSONB DEFAULT '[]',
   agent_name TEXT,
-  voice_gender TEXT CHECK (voice_gender IN ('male', 'female')),
-  tone TEXT,
-  estimated_duration_minutes INTEGER,
+  voice_gender TEXT,
   closing_message TEXT,
   greeting TEXT,
-  company_name TEXT,
-  setup_conversation_id TEXT,
-  elevenlabs_conversation_id TEXT,
-  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'approved', 'published', 'discarded')),
+  conversation_id TEXT,
+  status TEXT DEFAULT 'draft',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
