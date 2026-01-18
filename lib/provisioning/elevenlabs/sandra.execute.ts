@@ -1,5 +1,6 @@
 // lib/provisioning/elevenlabs/sandra.execute.ts
-// Creates Sandra setup agent - DEPENDS ON: vercel, supabase
+// Creates Sandra setup agent using new tool_ids approach
+// DEPENDS ON: vercel, supabase
 
 import { ProvisionContext, StepResult } from '../types';
 
@@ -7,159 +8,85 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const CONNEXIONS_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://connexions-silk.vercel.app';
 
 // ============================================================================
-// SANDRA'S TOOL DEFINITION - CORRECT ELEVENLABS FORMAT
+// SANDRA'S TOOL CONFIG - NEW ELEVENLABS FORMAT (tool_ids approach)
 // ============================================================================
 
-function getSandraTool(webhookUrl: string) {
+function getSandraToolConfig(webhookUrl: string) {
   return {
     type: 'webhook',
     name: 'save_panel_draft',
     description: 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
-    disable_interruptions: false,
-    force_pre_tool_speech: 'auto',
-    assignments: [],
-    tool_call_sound: null,
-    tool_call_sound_behavior: 'auto',
-    execution_mode: 'immediate',
-    api_schema: {
-      url: webhookUrl,
+    params: {
       method: 'POST',
-      path_params_schema: [],
-      query_params_schema: [],
+      url: webhookUrl,
       request_body_schema: {
-        id: 'body',
         type: 'object',
         description: 'Interview panel configuration to save as draft',
-        properties: [
-          {
-            id: 'name',
+        properties: {
+          name: {
             type: 'string',
-            value_type: 'llm_prompt',
             description: 'Name of the interview panel or study',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'description',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          description: {
+            type: 'string',
             description: 'Research objective and what insight we are seeking',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
+            value_type: 'llm_prompt',
             required: true,
-            properties: [],
           },
-          {
-            id: 'questions',
+          questions: {
             type: 'array',
-            value_type: 'llm_prompt',
             description: 'List of interview questions',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'tone',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          tone: {
+            type: 'string',
             description: 'Interview tone such as Friendly and Professional or Casual or Academic',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'target_audience',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          target_audience: {
+            type: 'string',
             description: 'Description of who will be interviewed including role and experience',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
+            value_type: 'llm_prompt',
             required: true,
-            properties: [],
           },
-          {
-            id: 'duration_minutes',
+          duration_minutes: {
             type: 'number',
-            value_type: 'llm_prompt',
             description: 'Expected interview length in minutes',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'agent_name',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          agent_name: {
+            type: 'string',
             description: 'Name for the AI interviewer such as Rachel or Alex or Jordan',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'voice_gender',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          voice_gender: {
+            type: 'string',
             description: 'Voice gender for the AI interviewer - must be male or female',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'closing_message',
-            type: 'string',
             value_type: 'llm_prompt',
+            required: true,
+          },
+          closing_message: {
+            type: 'string',
             description: 'Thank you message to say at the end of the interview',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: true,
-            properties: [],
-          },
-          {
-            id: 'greeting',
-            type: 'string',
             value_type: 'llm_prompt',
-            description: 'Optional custom opening line for the interviewer',
-            dynamic_variable: '',
-            constant_value: '',
-            enum: null,
-            is_system_provided: false,
-            required: false,
-            properties: [],
+            required: true,
           },
-        ],
-        required: false,
-        value_type: 'llm_prompt',
+          greeting: {
+            type: 'string',
+            description: 'Optional custom opening line for the interviewer',
+            value_type: 'llm_prompt',
+            required: false,
+          },
+        },
+        required: ['name', 'description', 'questions', 'tone', 'target_audience', 'duration_minutes', 'agent_name', 'voice_gender', 'closing_message'],
       },
-      request_headers: [],
-      auth_connection: null,
     },
-    response_timeout_secs: 20,
-    dynamic_variables: { dynamic_variable_placeholders: {} },
   };
 }
 
@@ -189,6 +116,39 @@ export async function sandraExecute(ctx: ProvisionContext): Promise<StepResult> 
   try {
     const webhookUrl = `${CONNEXIONS_URL}/api/tools/save-draft-router?project_slug=${ctx.projectSlug}`;
 
+    // =========================================================================
+    // STEP 1: Create tool in the workspace first (new approach)
+    // =========================================================================
+    const toolConfig = getSandraToolConfig(webhookUrl);
+    let toolId: string | null = null;
+
+    console.log(`[sandra.execute] Creating save_panel_draft tool in workspace...`);
+
+    try {
+      const toolRes = await fetch('https://api.elevenlabs.io/v1/convai/tools', {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tool_config: toolConfig }),
+      });
+
+      if (toolRes.ok) {
+        const toolData = await toolRes.json();
+        toolId = toolData.id;
+        console.log(`[sandra.execute] Created tool: save_panel_draft -> ${toolId}`);
+      } else {
+        const errText = await toolRes.text();
+        console.warn(`[sandra.execute] Failed to create tool: ${errText}`);
+      }
+    } catch (toolErr) {
+      console.warn(`[sandra.execute] Error creating tool:`, toolErr);
+    }
+
+    // =========================================================================
+    // STEP 2: Create agent with tool_ids (new approach)
+    // =========================================================================
     const systemPrompt = `You are Sandra, the setup consultant for ${ctx.platformName}.
 
 Your role is to help ${ctx.companyName} design their interview agent by understanding:
@@ -208,36 +168,41 @@ IMPORTANT - When you have collected all the information:
 
 Do NOT list out technical details like "I will now call the save tool" or explain the system components. Keep the wrap-up natural and client-focused.`;
 
-    // Create agent first without tools
+    const agentConfig: any = {
+      name: `Sandra - ${ctx.companyName}`,
+      conversation_config: {
+        agent: {
+          prompt: {
+            prompt: systemPrompt,
+            // Only include tool_ids if we successfully created a tool
+            ...(toolId ? { tool_ids: [toolId] } : {}),
+          },
+          first_message: `Hello! I'm Sandra, your setup consultant for ${ctx.platformName}. I'll help you design your interview agent. Let's start - what type of interviews will you be conducting?`,
+          language: 'en',
+        },
+        tts: {
+          model_id: 'eleven_turbo_v2',
+          voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah
+        },
+        asr: {
+          provider: 'elevenlabs',
+        },
+        turn: {
+          mode: 'turn',
+        },
+        conversation: {
+          max_duration_seconds: 3600,
+        },
+      },
+    };
+
     const createRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: `Sandra - ${ctx.companyName}`,
-        conversation_config: {
-          agent: {
-            prompt: { prompt: systemPrompt },
-            first_message: `Hello! I'm Sandra, your setup consultant for ${ctx.platformName}. I'll help you design your interview agent. Let's start - what type of interviews will you be conducting?`,
-            language: 'en',
-          },
-          tts: {
-            model_id: 'eleven_turbo_v2',
-            voice_id: 'EXAVITQu4vr4xnSDxMaL', // Sarah
-          },
-          asr: {
-            provider: 'elevenlabs',
-          },
-          turn: {
-            mode: 'turn',
-          },
-          conversation: {
-            max_duration_seconds: 3600,
-          },
-        },
-      }),
+      body: JSON.stringify(agentConfig),
     });
 
     if (!createRes.ok) {
@@ -252,37 +217,13 @@ Do NOT list out technical details like "I will now call the save tool" or explai
     const agent = await createRes.json();
     const agentId = agent.agent_id;
 
-    console.log(`[sandra.execute] Created agent: ${agentId}, now adding tool...`);
-
-    // Add the save_panel_draft tool
-    const tool = getSandraTool(webhookUrl);
-
-    const toolRes = await fetch(
-      `https://api.elevenlabs.io/v1/convai/agents/${agentId}/add-tool`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(tool),
-      }
-    );
-
-    if (!toolRes.ok) {
-      const errText = await toolRes.text();
-      console.warn(`[sandra.execute] Failed to add tool: ${errText}`);
-      // Don't fail the whole step, Sandra can still work without the tool
-    } else {
-      console.log(`[sandra.execute] Added save_panel_draft tool`);
-    }
-
-    console.log(`[sandra.execute] Created Sandra agent: ${agentId}`);
+    console.log(`[sandra.execute] Created Sandra agent: ${agentId}${toolId ? ` with tool ${toolId}` : ' (no tool)'}`);
 
     return {
       status: 'advance',
       metadata: {
         sandra_agent_id: agentId,
+        sandra_tool_id: toolId,
       },
     };
   } catch (err) {
