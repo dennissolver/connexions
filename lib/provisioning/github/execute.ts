@@ -39,6 +39,7 @@ export async function githubExecute(ctx: ProvisionContext): Promise<StepResult> 
         status: 'advance',
         metadata: {
           github_repo: existing.full_name,
+          github_repo_id: existing.id,  // Capture numeric ID for Vercel deployments
         },
       };
     }
@@ -71,12 +72,13 @@ export async function githubExecute(ctx: ProvisionContext): Promise<StepResult> 
     }
 
     const repo = await createRes.json();
-    console.log(`[github.execute] Created: ${repo.full_name}`);
+    console.log(`[github.execute] Created: ${repo.full_name} (ID: ${repo.id})`);
 
     return {
       status: 'advance',
       metadata: {
         github_repo: repo.full_name,
+        github_repo_id: repo.id,  // Capture numeric ID for Vercel deployments
       },
     };
   } catch (err) {

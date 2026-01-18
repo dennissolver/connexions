@@ -1,14 +1,17 @@
 // lib/provisioning/vercel/verify.ts
 // Verifies Vercel deployment is ready and accessible
+
 import { ProvisionContext, StepResult } from '../types';
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
   const projectId = ctx.metadata.vercel_project_id as string;
   const vercelUrl = ctx.metadata.vercel_url as string;
   const githubRepo = ctx.metadata.github_repo as string;
+  const githubRepoId = ctx.metadata.github_repo_id as number;
 
   if (!projectId) {
     return {
@@ -39,12 +42,12 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
 
     if (!deployments || deployments.length === 0) {
       console.log('[vercel.verify] No deployments yet, triggering deployment...');
-      
+
       // Trigger deployment if none exist
       if (githubRepo) {
-        await triggerDeployment(projectId, githubRepo);
+        await triggerDeployment(projectId, githubRepo, githubRepoId);
       }
-      
+
       return { status: 'wait' };
     }
 
@@ -72,6 +75,7 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
     }
 
     console.log(`[vercel.verify] Verified: ${projectId}`);
+
     return {
       status: 'advance',
       metadata: {
@@ -84,8 +88,34 @@ export async function vercelVerify(ctx: ProvisionContext): Promise<StepResult> {
   }
 }
 
-async function triggerDeployment(projectId: string, githubRepo: string): Promise<void> {
+async function triggerDeployment(
+  projectId: string,
+  githubRepo: string,
+  githubRepoId?: number
+): Promise<void> {
   try {
+    // If we don't have the repo ID, fetch it from GitHub
+    let repoId = githubRepoId;
+
+    if (!repoId) {
+      console.log('[vercel.verify] No github_repo_id in metadata, fetching from GitHub...');
+
+      const repoRes = await fetch(`https://api.github.com/repos/${githubRepo}`, {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!repoRes.ok) {
+        console.log(`[vercel.verify] Could not get GitHub repo ID: ${repoRes.status}`);
+        return;
+      }
+
+      const repoData = await repoRes.json();
+      repoId = repoData.id;
+    }
+
     const deployUrl = new URL('https://api.vercel.com/v13/deployments');
     if (VERCEL_TEAM_ID) deployUrl.searchParams.set('teamId', VERCEL_TEAM_ID);
 
@@ -100,7 +130,7 @@ async function triggerDeployment(projectId: string, githubRepo: string): Promise
         project: projectId,
         gitSource: {
           type: 'github',
-          repo: githubRepo,
+          repoId: repoId,  // Numeric ID required by Vercel API
           ref: 'main',
         },
       }),
