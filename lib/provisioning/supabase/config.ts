@@ -1,23 +1,27 @@
 // lib/provisioning/supabase/config.ts
-// Configures Supabase auth URLs AND runs schema migration
+// Configures Supabase auth URLs AND runs COMPLETE schema migration (base + extensions)
 // DEPENDS ON: vercel (needs URL), supabase (needs project ref + keys)
 
 import { ProvisionContext, StepResult } from '../types';
 
 const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 
-// Base schema - creates core tables
-const BASE_SCHEMA = `
+// =============================================================================
+// COMPLETE SCHEMA - BASE + EXTENSIONS
+// =============================================================================
+const COMPLETE_SCHEMA = `
 -- ============================================================================
--- UNIVERSAL INTERVIEWS - BASE SCHEMA
+-- UNIVERSAL INTERVIEWS - COMPLETE SCHEMA (BASE + EXTENSIONS)
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================================
--- AGENTS TABLE (Interview Panels)
+-- BASE TABLES
 -- ============================================================================
+
+-- AGENTS TABLE (Interview Panels)
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -40,9 +44,7 @@ CREATE TABLE IF NOT EXISTS agents (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================================
 -- INTERVIEWS TABLE
--- ============================================================================
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
@@ -64,9 +66,7 @@ CREATE TABLE IF NOT EXISTS interviews (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================================
 -- INTERVIEW TRANSCRIPTS TABLE
--- ============================================================================
 CREATE TABLE IF NOT EXISTS interview_transcripts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
@@ -88,9 +88,7 @@ CREATE TABLE IF NOT EXISTS interview_transcripts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================================
 -- INTERVIEWEES TABLE (Invited participants)
--- ============================================================================
 CREATE TABLE IF NOT EXISTS interviewees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
@@ -114,9 +112,7 @@ CREATE TABLE IF NOT EXISTS interviewees (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================================
 -- EVALUATIONS TABLE (Agent/Panel quality scores)
--- ============================================================================
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
@@ -132,9 +128,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================================
 -- SETUP CONVERSATIONS TABLE (Sandra's panel creation chats)
--- ============================================================================
 CREATE TABLE IF NOT EXISTS setup_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   elevenlabs_conversation_id TEXT UNIQUE NOT NULL,
@@ -152,8 +146,198 @@ CREATE TABLE IF NOT EXISTS setup_conversations (
 );
 
 -- ============================================================================
+-- EXTENSION TABLES
+-- ============================================================================
+
+-- PANEL DRAFTS (Sandra conversation outputs before publishing)
+CREATE TABLE IF NOT EXISTS panel_drafts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  name TEXT,
+  description TEXT,
+  research_goal TEXT,
+  target_audience TEXT,
+  interview_context TEXT CHECK (interview_context IN ('B2B', 'B2C')),
+  questions JSONB DEFAULT '[]',
+  agent_name TEXT,
+  voice_gender TEXT CHECK (voice_gender IN ('male', 'female')),
+  tone TEXT,
+  estimated_duration_minutes INTEGER,
+  closing_message TEXT,
+  greeting TEXT,
+  company_name TEXT,
+  setup_conversation_id TEXT,
+  elevenlabs_conversation_id TEXT,
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'approved', 'published', 'discarded')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- INTERVIEW EVALUATIONS (Per-interview AI analysis)
+CREATE TABLE IF NOT EXISTS interview_evaluations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  transcript_id UUID REFERENCES interview_transcripts(id) ON DELETE CASCADE,
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  summary TEXT,
+  executive_summary TEXT,
+  sentiment TEXT CHECK (sentiment IN ('positive', 'neutral', 'negative', 'mixed')),
+  sentiment_score DECIMAL(3,2) CHECK (sentiment_score >= -1 AND sentiment_score <= 1),
+  sentiment_reasoning TEXT,
+  quality_score INTEGER CHECK (quality_score >= 0 AND quality_score <= 100),
+  quality_reasoning TEXT,
+  engagement_level TEXT CHECK (engagement_level IN ('high', 'medium', 'low')),
+  key_quotes JSONB DEFAULT '[]',
+  topics JSONB DEFAULT '[]',
+  pain_points JSONB DEFAULT '[]',
+  desires JSONB DEFAULT '[]',
+  surprises JSONB DEFAULT '[]',
+  follow_up_worthy BOOLEAN DEFAULT false,
+  follow_up_reason TEXT,
+  needs_review BOOLEAN DEFAULT false,
+  review_reason TEXT,
+  question_responses JSONB DEFAULT '[]',
+  model_used TEXT,
+  prompt_version TEXT,
+  raw_response JSONB,
+  tokens_used INTEGER,
+  evaluation_duration_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(interview_id)
+);
+
+-- PANEL INSIGHTS (Aggregated insights across all interviews for a panel)
+CREATE TABLE IF NOT EXISTS panel_insights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  interview_count INTEGER,
+  evaluated_count INTEGER,
+  avg_sentiment_score DECIMAL(3,2),
+  sentiment_breakdown JSONB,
+  sentiment_trend JSONB,
+  avg_quality_score DECIMAL(5,2),
+  quality_distribution JSONB,
+  top_themes JSONB,
+  theme_correlations JSONB,
+  common_pain_points JSONB,
+  common_desires JSONB,
+  curated_quotes JSONB,
+  word_frequency JSONB,
+  outlier_interviews JSONB,
+  executive_summary TEXT,
+  key_findings JSONB,
+  recommendations JSONB,
+  segment_comparisons JSONB,
+  model_used TEXT,
+  prompt_version TEXT,
+  generation_duration_ms INTEGER,
+  valid_until TIMESTAMPTZ,
+  stale BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ANALYST SESSIONS (Conversational interface to query interview data)
+CREATE TABLE IF NOT EXISTS analyst_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  user_id UUID,
+  title TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  message_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  last_message_at TIMESTAMPTZ
+);
+
+-- ANALYST MESSAGES
+CREATE TABLE IF NOT EXISTS analyst_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES analyst_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL,
+  context_interviews JSONB,
+  context_token_count INTEGER,
+  citations JSONB,
+  model_used TEXT,
+  tokens_used INTEGER,
+  response_time_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ANALYST SAVED QUERIES
+CREATE TABLE IF NOT EXISTS analyst_saved_queries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE SET NULL,
+  user_id UUID,
+  name TEXT NOT NULL,
+  query TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  use_count INTEGER DEFAULT 0,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- REPORTS
+CREATE TABLE IF NOT EXISTS reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  user_id UUID,
+  title TEXT NOT NULL,
+  report_type TEXT CHECK (report_type IN ('executive', 'detailed', 'quotes', 'custom')),
+  sections JSONB,
+  filters JSONB,
+  content JSONB,
+  pdf_url TEXT,
+  pptx_url TEXT,
+  docx_url TEXT,
+  status TEXT DEFAULT 'generating' CHECK (status IN ('generating', 'ready', 'failed', 'expired')),
+  generation_duration_ms INTEGER,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- EXPORTS
+CREATE TABLE IF NOT EXISTS exports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  user_id UUID,
+  export_type TEXT CHECK (export_type IN ('csv', 'json', 'xlsx', 'transcripts_zip')),
+  record_count INTEGER,
+  filters JSONB,
+  columns JSONB,
+  file_url TEXT,
+  file_size_bytes INTEGER,
+  status TEXT DEFAULT 'generating' CHECK (status IN ('generating', 'ready', 'failed', 'expired')),
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ALERTS
+CREATE TABLE IF NOT EXISTS alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  panel_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  alert_type TEXT NOT NULL,
+  severity TEXT CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  title TEXT NOT NULL,
+  description TEXT,
+  context JSONB,
+  status TEXT DEFAULT 'new' CHECK (status IN ('new', 'viewed', 'acknowledged', 'resolved', 'dismissed')),
+  acknowledged_at TIMESTAMPTZ,
+  acknowledged_by UUID,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
 -- INDEXES
 -- ============================================================================
+
+-- Base indexes
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
 CREATE INDEX IF NOT EXISTS idx_agents_elevenlabs ON agents(elevenlabs_agent_id);
@@ -166,9 +350,22 @@ CREATE INDEX IF NOT EXISTS idx_interviewees_panel ON interviewees(panel_id);
 CREATE INDEX IF NOT EXISTS idx_interviewees_token ON interviewees(invite_token);
 CREATE INDEX IF NOT EXISTS idx_setup_conv_elevenlabs ON setup_conversations(elevenlabs_conversation_id);
 
+-- Extension indexes
+CREATE INDEX IF NOT EXISTS idx_panel_drafts_status ON panel_drafts(status);
+CREATE INDEX IF NOT EXISTS idx_panel_drafts_conversation ON panel_drafts(elevenlabs_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_interview_evaluations_interview ON interview_evaluations(interview_id);
+CREATE INDEX IF NOT EXISTS idx_interview_evaluations_panel ON interview_evaluations(panel_id);
+CREATE INDEX IF NOT EXISTS idx_interview_evaluations_sentiment ON interview_evaluations(sentiment);
+CREATE INDEX IF NOT EXISTS idx_panel_insights_panel ON panel_insights(panel_id);
+CREATE INDEX IF NOT EXISTS idx_analyst_sessions_panel ON analyst_sessions(panel_id);
+CREATE INDEX IF NOT EXISTS idx_analyst_messages_session ON analyst_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_panel ON alerts(panel_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status) WHERE status = 'new';
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
+
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -193,15 +390,45 @@ DROP TRIGGER IF EXISTS trg_interviewees_updated ON interviewees;
 CREATE TRIGGER trg_interviewees_updated BEFORE UPDATE ON interviewees
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_panel_drafts_updated ON panel_drafts;
+CREATE TRIGGER trg_panel_drafts_updated BEFORE UPDATE ON panel_drafts
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_interview_evaluations_updated ON interview_evaluations;
+CREATE TRIGGER trg_interview_evaluations_updated BEFORE UPDATE ON interview_evaluations
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_panel_insights_updated ON panel_insights;
+CREATE TRIGGER trg_panel_insights_updated BEFORE UPDATE ON panel_insights
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_analyst_sessions_updated ON analyst_sessions;
+CREATE TRIGGER trg_analyst_sessions_updated BEFORE UPDATE ON analyst_sessions
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_reports_updated ON reports;
+CREATE TRIGGER trg_reports_updated BEFORE UPDATE ON reports
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================================================
 -- RLS POLICIES
 -- ============================================================================
+
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interview_transcripts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interviewees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE setup_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE panel_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview_evaluations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE panel_insights ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analyst_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analyst_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analyst_saved_queries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all on agents" ON agents;
 DROP POLICY IF EXISTS "Allow all on interviews" ON interviews;
@@ -209,6 +436,15 @@ DROP POLICY IF EXISTS "Allow all on interview_transcripts" ON interview_transcri
 DROP POLICY IF EXISTS "Allow all on interviewees" ON interviewees;
 DROP POLICY IF EXISTS "Allow all on evaluations" ON evaluations;
 DROP POLICY IF EXISTS "Allow all on setup_conversations" ON setup_conversations;
+DROP POLICY IF EXISTS "Allow all on panel_drafts" ON panel_drafts;
+DROP POLICY IF EXISTS "Allow all on interview_evaluations" ON interview_evaluations;
+DROP POLICY IF EXISTS "Allow all on panel_insights" ON panel_insights;
+DROP POLICY IF EXISTS "Allow all on analyst_sessions" ON analyst_sessions;
+DROP POLICY IF EXISTS "Allow all on analyst_messages" ON analyst_messages;
+DROP POLICY IF EXISTS "Allow all on analyst_saved_queries" ON analyst_saved_queries;
+DROP POLICY IF EXISTS "Allow all on reports" ON reports;
+DROP POLICY IF EXISTS "Allow all on exports" ON exports;
+DROP POLICY IF EXISTS "Allow all on alerts" ON alerts;
 
 CREATE POLICY "Allow all on agents" ON agents FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on interviews" ON interviews FOR ALL USING (true) WITH CHECK (true);
@@ -216,6 +452,27 @@ CREATE POLICY "Allow all on interview_transcripts" ON interview_transcripts FOR 
 CREATE POLICY "Allow all on interviewees" ON interviewees FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on evaluations" ON evaluations FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on setup_conversations" ON setup_conversations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on panel_drafts" ON panel_drafts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on interview_evaluations" ON interview_evaluations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on panel_insights" ON panel_insights FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on analyst_sessions" ON analyst_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on analyst_messages" ON analyst_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on analyst_saved_queries" ON analyst_saved_queries FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on reports" ON reports FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on exports" ON exports FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on alerts" ON alerts FOR ALL USING (true) WITH CHECK (true);
+
+-- ============================================================================
+-- DEFAULT DATA
+-- ============================================================================
+
+INSERT INTO analyst_saved_queries (id, panel_id, name, query, category, description) VALUES
+  (gen_random_uuid(), NULL, 'Top Pain Points', 'What are the most common pain points mentioned across all interviews?', 'themes', 'Identify recurring frustrations and challenges'),
+  (gen_random_uuid(), NULL, 'Sentiment Summary', 'Summarize the overall sentiment. What are people happy about vs frustrated with?', 'sentiment', 'Overview of positive and negative feedback'),
+  (gen_random_uuid(), NULL, 'Key Quotes', 'Give me the 10 most impactful quotes from these interviews', 'export', 'Extract memorable quotes for reports'),
+  (gen_random_uuid(), NULL, 'Executive Summary', 'Write a 3-paragraph executive summary of the findings', 'export', 'High-level summary for stakeholders'),
+  (gen_random_uuid(), NULL, 'Recommendations', 'Based on these interviews, what are your top 5 recommendations?', 'custom', 'Actionable insights from the data')
+ON CONFLICT DO NOTHING;
 `;
 
 export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<StepResult> {
@@ -240,25 +497,24 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
   }
 
   try {
-    // Step 1: Run schema migration
+    // Step 1: Run complete schema migration (base + extensions)
     if (!ctx.metadata.supabase_schema_applied) {
-      console.log('[supabase-config.execute] Running schema migration...');
+      console.log('[supabase-config.execute] Running complete schema migration...');
 
       const schemaRes = await fetch(
-        `https://api.supabase.com/v1/projects/${projectRef}/database/query`,
+        `https://api.supabase.com/v1/projects/\${projectRef}/database/query`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
+            'Authorization': `Bearer \${SUPABASE_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ query: BASE_SCHEMA }),
+          body: JSON.stringify({ query: COMPLETE_SCHEMA }),
         }
       );
 
       if (!schemaRes.ok) {
         const text = await schemaRes.text();
-        // 404 means database not ready yet
         if (schemaRes.status === 404) {
           console.log('[supabase-config.execute] Database not ready yet');
           return { status: 'wait' };
@@ -266,22 +522,22 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
         console.error('[supabase-config.execute] Schema migration failed:', text);
         return {
           status: 'fail',
-          error: `Schema migration failed (${schemaRes.status}): ${text}`,
+          error: `Schema migration failed (\${schemaRes.status}): \${text}`,
         };
       }
 
-      console.log('[supabase-config.execute] Schema migration complete');
+      console.log('[supabase-config.execute] Complete schema migration done');
     }
 
     // Step 2: Configure auth URLs
     if (!ctx.metadata.supabase_urls_configured) {
       console.log('[supabase-config.execute] Configuring auth URLs...');
 
-      const authConfigUrl = `https://api.supabase.com/v1/projects/${projectRef}/config/auth`;
+      const authConfigUrl = `https://api.supabase.com/v1/projects/\${projectRef}/config/auth`;
       const authRes = await fetch(authConfigUrl, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
+          'Authorization': `Bearer \${SUPABASE_ACCESS_TOKEN}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -289,7 +545,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
           uri_allow_list: [
             'http://localhost:3000/**',
             'http://localhost:3000',
-            `${vercelUrl}/**`,
+            `\${vercelUrl}/**`,
             vercelUrl,
           ].join(','),
         }),
@@ -303,7 +559,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
         }
         return {
           status: 'fail',
-          error: `Supabase auth config failed (${authRes.status}): ${text}`,
+          error: `Supabase auth config failed (\${authRes.status}): \${text}`,
         };
       }
 
@@ -319,10 +575,10 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
       const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
       for (const bucket of buckets) {
         try {
-          await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+          await fetch(`\${supabaseUrl}/storage/v1/bucket`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${serviceKey}`,
+              'Authorization': `Bearer \${serviceKey}`,
               'Content-Type': 'application/json',
               'apikey': serviceKey,
             },
@@ -332,14 +588,14 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
               public: bucket === 'assets',
             }),
           });
-          console.log(`[supabase-config.execute] Created bucket: ${bucket}`);
+          console.log(`[supabase-config.execute] Created bucket: \${bucket}`);
         } catch {
           // Bucket may already exist, ignore
         }
       }
     }
 
-    console.log(`[supabase-config.execute] Fully configured: ${projectRef}`);
+    console.log(`[supabase-config.execute] Fully configured: \${projectRef}`);
 
     return {
       status: 'advance',
@@ -351,7 +607,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
   } catch (err) {
     return {
       status: 'fail',
-      error: `Supabase config failed: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Supabase config failed: \${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }
