@@ -25,6 +25,7 @@ const ALL_SERVICES: ServiceName[] = [
   'sandra',
   'kira',
   'webhooks',
+'finalize',
 ];
 
 const MAX_ITERATIONS = 100;
@@ -293,3 +294,4 @@ export async function startProvisioning(params: StartProvisioningParams): Promis
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
