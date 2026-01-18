@@ -20,30 +20,99 @@ export async function POST(request: NextRequest) {
       request.headers.get('x-conversation-id') ||
       null;
 
-    const {
-      name,
-      description,
-      interview_type,
-      target_audience,
-      tone,
-      duration_minutes,
-      questions,
-    } = body;
+    // Flexibly map Sandra's output to our schema
+    // Sandra might use different field names, so we check multiple possibilities
 
-    // Validate required fields
-    if (!name) {
-      return NextResponse.json({
-        error: 'Panel name is required',
-        success: false
-      }, { status: 400 });
+    const name =
+      body.name ||
+      body.panel_name ||
+      body.study_name ||
+      body.survey_name ||
+      body.purpose ||
+      body.title ||
+      'Untitled Panel';
+
+    const description =
+      body.description ||
+      body.research_objective ||
+      body.objective ||
+      body.purpose ||
+      body.summary ||
+      '';
+
+    const target_audience =
+      body.target_audience ||
+      body.target_participants ||
+      body.participants ||
+      body.audience ||
+      '';
+
+    const tone =
+      body.tone ||
+      body.tone_style ||
+      body.style ||
+      body.interview_tone ||
+      'Friendly';
+
+    const duration_minutes =
+      body.duration_minutes ||
+      body.duration ||
+      body.interview_length ||
+      body.length_minutes ||
+      15;
+
+    const agent_name =
+      body.agent_name ||
+      body.interviewer_name ||
+      body.ai_name ||
+      'Alex';
+
+    const voice_gender =
+      body.voice_gender ||
+      body.gender ||
+      body.voice ||
+      'female';
+
+    const closing_message =
+      body.closing_message ||
+      body.closing_remarks ||
+      body.thank_you_message ||
+      body.outro ||
+      'Thank you for your time and contributions.';
+
+    const greeting =
+      body.greeting ||
+      body.opening ||
+      body.intro ||
+      body.opening_message ||
+      null;
+
+    // Handle questions - could be array of strings or array of objects or comma-separated
+    let questionsList: string[] = [];
+    const rawQuestions =
+      body.questions ||
+      body.key_questions ||
+      body.key_questions_areas ||
+      body.interview_questions ||
+      body.survey_questions ||
+      [];
+
+    if (typeof rawQuestions === 'string') {
+      questionsList = rawQuestions.split(',').map((q: string) => q.trim()).filter(Boolean);
+    } else if (Array.isArray(rawQuestions)) {
+      questionsList = rawQuestions.map((q: any) => {
+        if (typeof q === 'string') return q;
+        if (typeof q === 'object' && q.question) return q.question;
+        if (typeof q === 'object' && q.text) return q.text;
+        return String(q);
+      }).filter(Boolean);
     }
 
-    // Normalize questions to array
-    let questionsList: string[] = [];
-    if (typeof questions === 'string') {
-      questionsList = questions.split(',').map((q: string) => q.trim()).filter(Boolean);
-    } else if (Array.isArray(questions)) {
-      questionsList = questions;
+    // Extract constraints into description if provided
+    let fullDescription = description;
+    const constraints = body.constraints_requirements || body.constraints || body.requirements;
+    if (constraints && Array.isArray(constraints)) {
+      fullDescription = `${description}\n\nRequirements: ${constraints.join(', ')}`;
     }
 
     // Save draft to database
@@ -51,13 +120,16 @@ export async function POST(request: NextRequest) {
       .from('panel_drafts')
       .insert({
         name,
-        description: description || '',
-        interview_type: interview_type || '',
-        target_audience: target_audience || '',
-        tone: tone || 'professional',
-        duration_minutes: duration_minutes || 15,
+        description: fullDescription.trim(),
+        target_audience,
+        tone,
+        duration_minutes: typeof duration_minutes === 'number' ? duration_minutes : parseInt(duration_minutes) || 15,
         questions: questionsList,
-        conversation_id: conversation_id,
+        agent_name,
+        voice_gender,
+        closing_message,
+        greeting,
+        conversation_id,
         status: 'draft',
       })
       .select()
@@ -76,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Return success message for Sandra to speak
     return NextResponse.json({
       success: true,
-      message: `I've saved your panel "${name}" as a draft. You can see it on your screen now to review and make any changes.`,
+      message: `I've saved your interview panel as a draft. You can review it on your screen now.`,
       draft_id: draft.id,
       review_url: `/panels/drafts/${draft.id}`,
     });

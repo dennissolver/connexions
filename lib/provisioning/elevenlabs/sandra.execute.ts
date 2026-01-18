@@ -4,6 +4,7 @@
 import { ProvisionContext, StepResult } from '../types';
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const CONNEXIONS_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://connexions.vercel.app';
 
 export async function sandraExecute(ctx: ProvisionContext): Promise<StepResult> {
   // Already have Sandra? Skip (idempotent)
@@ -23,8 +24,6 @@ export async function sandraExecute(ctx: ProvisionContext): Promise<StepResult> 
   if (!ctx.metadata.vercel_url) {
     return { status: 'wait' };
   }
-
-  const vercelUrl = ctx.metadata.vercel_url as string;
 
   try {
     const systemPrompt = `You are Sandra, the setup consultant for ${ctx.platformName}.
@@ -46,7 +45,8 @@ IMPORTANT - When you have collected all the information:
 
 Do NOT list out technical details like "I will now call the save tool" or explain the system components. Keep the wrap-up natural and client-focused.`;
 
-    const res = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
+    // First create the agent to get the agent_id
+    const createRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
@@ -74,19 +74,38 @@ Do NOT list out technical details like "I will now call the save tool" or explai
             max_duration_seconds: 3600,
           },
         },
-        platform_settings: {
-          webhook: {
-            url: `${vercelUrl}/api/webhooks/elevenlabs`,
-            secret: process.env.ELEVENLABS_WEBHOOK_SECRET || 'connexions-webhook-secret',
-          },
-        },
+      }),
+    });
+
+    if (!createRes.ok) {
+      const text = await createRes.text();
+      return {
+        status: 'fail',
+        error: `ElevenLabs API error (${createRes.status}): ${text}`,
+      };
+    }
+
+    const agent = await createRes.json();
+    const agentId = agent.agent_id;
+    console.log(`[sandra.execute] Created agent: ${agentId}`);
+
+    // Now update the agent with tools that include the agent_id in the webhook URL
+    // This ensures Connexions router can identify which child platform to forward to
+    const updateRes = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         tools: [
           {
             type: 'webhook',
             name: 'save_panel_draft',
             description: 'Save the interview panel configuration as a draft. The user will see it on screen where they can review and edit before creating. Call this when the user has confirmed all details.',
             webhook: {
-              url: `${vercelUrl}/api/tools/save-draft`,
+              // Route through Connexions for central logging and evals
+              url: `${CONNEXIONS_URL}/api/tools/save-draft-router?agent_id=${agentId}&project_slug=${ctx.projectSlug}`,
               method: 'POST',
               headers: {
                 'X-Shared-Secret': process.env.TOOL_SHARED_SECRET || 'universal-interviews-tool-secret',
@@ -149,21 +168,18 @@ Do NOT list out technical details like "I will now call the save tool" or explai
       }),
     });
 
-    if (!res.ok) {
-      const text = await res.text();
-      return {
-        status: 'fail',
-        error: `ElevenLabs API error (${res.status}): ${text}`,
-      };
+    if (!updateRes.ok) {
+      const text = await updateRes.text();
+      console.warn(`[sandra.execute] Failed to add tools: ${text}`);
+      // Don't fail - agent is created, tools can be added manually
+    } else {
+      console.log(`[sandra.execute] Added tools with Connexions router webhook`);
     }
-
-    const agent = await res.json();
-    console.log(`[sandra.execute] Created: ${agent.agent_id}`);
 
     return {
       status: 'advance',
       metadata: {
-        sandra_agent_id: agent.agent_id,
+        sandra_agent_id: agentId,
       },
     };
   } catch (err) {
