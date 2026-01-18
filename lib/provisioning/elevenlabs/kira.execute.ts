@@ -6,243 +6,282 @@ import { ProvisionContext, StepResult } from '../types';
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
 // ============================================================================
-// KIRA'S TOOL DEFINITIONS
+// KIRA'S TOOL DEFINITIONS - CORRECT ELEVENLABS FORMAT
 // ============================================================================
 
 function getKiraTools(webhookUrl: string) {
-  const toolWebhook = {
-    url: `${webhookUrl}/api/kira/tools`,
-    secret: process.env.ELEVENLABS_WEBHOOK_SECRET || 'connexions-webhook-secret',
-  };
+  const toolsUrl = `${webhookUrl}/api/kira/tools`;
+
+  // Helper to create a tool in the correct ElevenLabs format
+  function createTool(
+    name: string,
+    description: string,
+    bodyDescription: string,
+    properties: Array<{
+      id: string;
+      type: string;
+      description: string;
+      required: boolean;
+      isConstant?: boolean;
+      constantValue?: string;
+    }>
+  ) {
+    return {
+      type: 'webhook',
+      name,
+      description,
+      disable_interruptions: false,
+      force_pre_tool_speech: 'auto',
+      assignments: [],
+      tool_call_sound: null,
+      tool_call_sound_behavior: 'auto',
+      execution_mode: 'immediate',
+      api_schema: {
+        url: toolsUrl,
+        method: 'POST',
+        path_params_schema: [],
+        query_params_schema: [],
+        request_body_schema: {
+          id: 'body',
+          type: 'object',
+          description: bodyDescription,
+          properties: [
+            // Always include tool_name as constant
+            {
+              id: 'tool_name',
+              type: 'string',
+              value_type: 'constant',
+              description: '',
+              dynamic_variable: '',
+              constant_value: name,
+              enum: null,
+              is_system_provided: false,
+              required: true,
+              properties: [],
+            },
+            // Add the tool-specific properties
+            ...properties.map((prop) => ({
+              id: prop.id,
+              type: prop.type,
+              value_type: prop.isConstant ? 'constant' : 'llm_prompt',
+              description: prop.description,
+              dynamic_variable: '',
+              constant_value: prop.constantValue || '',
+              enum: null,
+              is_system_provided: false,
+              required: prop.required,
+              properties: [],
+            })),
+          ],
+          required: false,
+          value_type: 'llm_prompt',
+        },
+        request_headers: [],
+        auth_connection: null,
+      },
+      response_timeout_secs: 20,
+      dynamic_variables: { dynamic_variable_placeholders: {} },
+    };
+  }
 
   return [
-    {
-      type: 'webhook',
-      name: 'list_panels',
-      description: 'Get a list of all interview panels with their statistics. Use this to see what research is available to analyze.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          status: {
-            type: 'string',
-            enum: ['active', 'paused', 'archived', 'all'],
-            description: "Filter by panel status. Default is 'active'.",
-          },
+    createTool(
+      'list_panels',
+      'Get all interview panels with their statistics',
+      'Parameters for listing interview panels',
+      [
+        {
+          id: 'status',
+          type: 'string',
+          description: 'Filter: active, archived, or all',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'get_panel',
-      description: 'Get detailed information about a specific interview panel including research goals, target audience, questions asked, and interview statistics.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_name: {
-            type: 'string',
-            description: 'The name of the panel to look up',
-          },
-          panel_id: {
-            type: 'string',
-            description: 'The UUID of the panel (use if you have it)',
-          },
+      ]
+    ),
+
+    createTool(
+      'get_panel',
+      'Get detailed information about a specific panel',
+      'Parameters for getting panel details',
+      [
+        {
+          id: 'panel_name',
+          type: 'string',
+          description: 'Name of the panel to retrieve',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'list_interviews',
-      description: 'Get a list of interviews, optionally filtered by panel, status, or date range. Returns participant info, duration, and evaluation summary.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_name: {
-            type: 'string',
-            description: 'Filter to interviews from this panel',
-          },
-          status: {
-            type: 'string',
-            enum: ['completed', 'in_progress', 'pending', 'all'],
-            description: "Filter by interview status. Default is 'completed'.",
-          },
-          limit: {
-            type: 'integer',
-            description: 'Maximum number of interviews to return. Default is 20.',
-          },
-          days_back: {
-            type: 'integer',
-            description: 'Only include interviews from the last N days',
-          },
+        {
+          id: 'panel_id',
+          type: 'string',
+          description: 'UUID of the panel to retrieve',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'get_interview',
-      description: 'Get the full transcript and analysis for a specific interview. Use this to dive deep into what a participant said.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          interview_id: {
-            type: 'string',
-            description: 'The UUID of the interview',
-          },
-          participant_name: {
-            type: 'string',
-            description: "Search by participant name if you don't have the ID",
-          },
-          participant_email: {
-            type: 'string',
-            description: 'Search by participant email',
-          },
+      ]
+    ),
+
+    createTool(
+      'list_interviews',
+      'Get interviews for a panel with optional filters',
+      'Parameters for listing interviews',
+      [
+        {
+          id: 'panel_name',
+          type: 'string',
+          description: 'Name of the panel',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'search_transcripts',
-      description: 'Search across all interview transcripts for specific topics, keywords, or themes. Returns matching quotes with context.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: "What to search for (e.g., 'pricing concerns', 'competitor mentions', 'feature requests')",
-          },
-          panel_name: {
-            type: 'string',
-            description: 'Optionally limit search to a specific panel',
-          },
-          limit: {
-            type: 'integer',
-            description: 'Maximum number of results. Default is 10.',
-          },
+        {
+          id: 'panel_id',
+          type: 'string',
+          description: 'UUID of the panel',
+          required: false,
         },
-        required: ['query'],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'get_statistics',
-      description: 'Get quantitative statistics and metrics. Includes interview counts, completion rates, sentiment distribution, average scores, and trends.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_name: {
-            type: 'string',
-            description: 'Get stats for a specific panel. If omitted, returns platform-wide stats.',
-          },
-          metric: {
-            type: 'string',
-            enum: ['overview', 'sentiment', 'quality', 'completion', 'duration', 'trends'],
-            description: "Specific metric to focus on. Default is 'overview' which includes all.",
-          },
-          days_back: {
-            type: 'integer',
-            description: 'Time period for trends. Default is 30 days.',
-          },
+        {
+          id: 'status',
+          type: 'string',
+          description: 'Filter: completed, in_progress, pending, or all',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'get_themes',
-      description: 'Get aggregated themes and patterns across interviews. Shows common topics, pain points, and desires with supporting evidence.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          panel_name: {
-            type: 'string',
-            description: 'Get themes for a specific panel',
-          },
-          theme_type: {
-            type: 'string',
-            enum: ['all', 'pain_points', 'desires', 'topics', 'quotes'],
-            description: "Type of themes to retrieve. Default is 'all'.",
-          },
-          min_frequency: {
-            type: 'integer',
-            description: 'Only return themes mentioned at least this many times',
-          },
+        {
+          id: 'limit',
+          type: 'number',
+          description: 'Maximum interviews to return',
+          required: false,
         },
-        required: [],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'recall_memory',
-      description: 'Search your memory for insights, context, or information from previous conversations and analyses.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: "What to search for in memory (e.g., 'pricing insights', 'user preferences')",
-          },
-          memory_type: {
-            type: 'string',
-            enum: ['insight', 'user_preference', 'research_context', 'followup', 'correction', 'entity', 'all'],
-            description: "Type of memory to search. Default is 'all'.",
-          },
-          panel_name: {
-            type: 'string',
-            description: 'Limit to memories related to a specific panel',
-          },
+      ]
+    ),
+
+    createTool(
+      'get_interview',
+      'Get full transcript and analysis for a specific interview',
+      'Parameters for getting interview details',
+      [
+        {
+          id: 'interview_id',
+          type: 'string',
+          description: 'UUID of the interview',
+          required: false,
         },
-        required: ['query'],
-      },
-    },
-    {
-      type: 'webhook',
-      name: 'save_memory',
-      description: 'Save an important insight, finding, or piece of context to remember for future conversations. Use this when you discover something significant.',
-      webhook: toolWebhook,
-      parameters: {
-        type: 'object',
-        properties: {
-          memory_type: {
-            type: 'string',
-            enum: ['insight', 'user_preference', 'research_context', 'followup', 'correction', 'entity'],
-            description: 'What type of memory this is',
-          },
-          title: {
-            type: 'string',
-            description: "Short title for the memory (e.g., 'Price sensitivity is top concern')",
-          },
-          content: {
-            type: 'string',
-            description: 'Full description of what to remember',
-          },
-          importance: {
-            type: 'integer',
-            description: 'How important is this? 1-10, where 10 is critical. Default is 5.',
-          },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: "Tags for easier retrieval (e.g., ['pricing', 'enterprise', 'blocker'])",
-          },
-          related_panel: {
-            type: 'string',
-            description: 'Panel name this memory relates to',
-          },
+        {
+          id: 'participant_name',
+          type: 'string',
+          description: 'Name of the participant',
+          required: false,
         },
-        required: ['memory_type', 'content'],
-      },
-    },
+      ]
+    ),
+
+    createTool(
+      'search_transcripts',
+      'Search across all interview transcripts for keywords or themes',
+      'Parameters for searching transcripts',
+      [
+        {
+          id: 'query',
+          type: 'string',
+          description: 'Keywords or phrases to search for',
+          required: true,
+        },
+        {
+          id: 'panel_name',
+          type: 'string',
+          description: 'Limit search to specific panel',
+          required: false,
+        },
+        {
+          id: 'limit',
+          type: 'number',
+          description: 'Maximum results to return',
+          required: false,
+        },
+      ]
+    ),
+
+    createTool(
+      'get_statistics',
+      'Get quantitative metrics for panels and interviews',
+      'Parameters for getting statistics',
+      [
+        {
+          id: 'panel_name',
+          type: 'string',
+          description: 'Panel name for specific stats',
+          required: false,
+        },
+        {
+          id: 'panel_id',
+          type: 'string',
+          description: 'Panel UUID for specific stats',
+          required: false,
+        },
+      ]
+    ),
+
+    createTool(
+      'get_themes',
+      'Get aggregated themes and patterns from interview analyses',
+      'Parameters for getting themes',
+      [
+        {
+          id: 'panel_name',
+          type: 'string',
+          description: 'Panel name to analyze',
+          required: false,
+        },
+        {
+          id: 'panel_id',
+          type: 'string',
+          description: 'Panel UUID to analyze',
+          required: false,
+        },
+      ]
+    ),
+
+    createTool(
+      'recall_memory',
+      "Search Kira's memory for past insights and findings",
+      'Parameters for recalling memory',
+      [
+        {
+          id: 'query',
+          type: 'string',
+          description: 'What to search for in memory',
+          required: true,
+        },
+        {
+          id: 'memory_type',
+          type: 'string',
+          description: 'Type: insight, finding, user_preference, followup, or all',
+          required: false,
+        },
+      ]
+    ),
+
+    createTool(
+      'save_memory',
+      'Save an important insight or finding for later recall',
+      'Parameters for saving memory',
+      [
+        {
+          id: 'content',
+          type: 'string',
+          description: 'The insight or finding to remember',
+          required: true,
+        },
+        {
+          id: 'memory_type',
+          type: 'string',
+          description: 'Type: insight, finding, user_preference, or followup',
+          required: true,
+        },
+        {
+          id: 'importance',
+          type: 'number',
+          description: 'Importance 1-10, higher = more important',
+          required: false,
+        },
+      ]
+    ),
   ];
 }
 
@@ -296,7 +335,8 @@ GUIDELINES:
 
     const tools = getKiraTools(vercelUrl);
 
-    const res = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
+    // Create agent first without tools
+    const createRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
@@ -309,7 +349,6 @@ GUIDELINES:
             prompt: { prompt: systemPrompt },
             first_message: `Hello! I'm Kira, your insights analyst. I have access to all your interview data and can help you understand patterns, themes, and key findings. What would you like to explore?`,
             language: 'en',
-            tools: tools,
           },
           tts: {
             model_id: 'eleven_turbo_v2_5',
@@ -336,21 +375,54 @@ GUIDELINES:
       }),
     });
 
-    if (!res.ok) {
-      const text = await res.text();
+    if (!createRes.ok) {
+      const text = await createRes.text();
       return {
         status: 'fail',
-        error: `ElevenLabs API error (${res.status}): ${text}`,
+        error: `ElevenLabs create agent error (${createRes.status}): ${text}`,
       };
     }
 
-    const agent = await res.json();
-    console.log(`[kira.execute] Created with ${tools.length} tools: ${agent.agent_id}`);
+    const agent = await createRes.json();
+    const agentId = agent.agent_id;
+
+    console.log(`[kira.execute] Created agent: ${agentId}, now adding ${tools.length} tools...`);
+
+    // Add tools one by one using the agent tools endpoint
+    let toolsAdded = 0;
+    for (const tool of tools) {
+      try {
+        const toolRes = await fetch(
+          `https://api.elevenlabs.io/v1/convai/agents/${agentId}/add-tool`,
+          {
+            method: 'POST',
+            headers: {
+              'xi-api-key': ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tool),
+          }
+        );
+
+        if (toolRes.ok) {
+          toolsAdded++;
+          console.log(`[kira.execute] Added tool: ${tool.name}`);
+        } else {
+          const errText = await toolRes.text();
+          console.warn(`[kira.execute] Failed to add tool ${tool.name}: ${errText}`);
+        }
+      } catch (toolErr) {
+        console.warn(`[kira.execute] Error adding tool ${tool.name}:`, toolErr);
+      }
+    }
+
+    console.log(`[kira.execute] Created Kira with ${toolsAdded}/${tools.length} tools: ${agentId}`);
 
     return {
       status: 'advance',
       metadata: {
-        kira_agent_id: agent.agent_id,
+        kira_agent_id: agentId,
+        kira_tools_added: toolsAdded,
       },
     };
   } catch (err) {
