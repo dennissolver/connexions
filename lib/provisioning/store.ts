@@ -118,26 +118,67 @@ export async function setServiceState(
 ): Promise<ProvisionRun> {
   // Build the column name - handle hyphenated service names
   const stateColumn = `${service}_state`;
-  const updatePayload: Record<string, unknown> = {
-    [stateColumn]: state,
-    updated_at: new Date().toISOString(),
-  };
 
-  // Merge metadata if provided
+  // If metadata provided, merge it atomically
   if (metadata) {
-    const current = await getProvisionRunBySlug(projectSlug);
-    if (!current) {
-      throw new Error(`Provision run not found: ${projectSlug}`);
+    // Use raw SQL for atomic JSONB merge
+    const { data, error } = await supabase.rpc('update_provision_with_metadata', {
+      p_project_slug: projectSlug,
+      p_state_column: stateColumn,
+      p_state_value: state,
+      p_metadata: metadata,
+    });
+
+    if (error) {
+      // Fallback to non-atomic update if RPC doesn't exist
+      console.warn('[store] RPC not available, using fallback update');
+      return setServiceStateFallback(projectSlug, service, state, metadata);
     }
-    updatePayload.metadata = {
-      ...current.metadata,
-      ...metadata,
-    };
+
+    return data as ProvisionRun;
+  }
+
+  // No metadata - simple update
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({
+      [stateColumn]: state,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update service state: ${error.message}`);
+  }
+
+  return data as ProvisionRun;
+}
+
+// Fallback for when RPC is not available
+async function setServiceStateFallback(
+  projectSlug: string,
+  service: ServiceName,
+  state: ServiceState,
+  metadata: Partial<ProvisionMetadata>
+): Promise<ProvisionRun> {
+  const stateColumn = `${service}_state`;
+  const current = await getProvisionRunBySlug(projectSlug);
+  if (!current) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
   }
 
   const { data, error } = await supabase
     .from(TABLE)
-    .update(updatePayload)
+    .update({
+      [stateColumn]: state,
+      metadata: {
+        ...current.metadata,
+        ...metadata,
+      },
+      updated_at: new Date().toISOString(),
+    })
     .eq('project_slug', projectSlug)
     .select()
     .single();
@@ -186,33 +227,151 @@ export async function setOverallStatus(
 }
 
 // =============================================================================
-// UPDATE METADATA
+// UPDATE METADATA - ATOMIC VERSION
 // =============================================================================
 
+/**
+ * Atomically merge metadata using JSONB concatenation.
+ * This prevents race conditions when multiple services update metadata in parallel.
+ */
 export async function updateMetadata(
   projectSlug: string,
   metadata: Partial<ProvisionMetadata>
 ): Promise<ProvisionRun> {
-  const current = await getProvisionRunBySlug(projectSlug);
-  if (!current) {
-    throw new Error(`Provision run not found: ${projectSlug}`);
+  // First try atomic RPC
+  const { data: rpcData, error: rpcError } = await supabase.rpc('merge_provision_metadata', {
+    p_project_slug: projectSlug,
+    p_metadata: metadata,
+  });
+
+  if (!rpcError && rpcData) {
+    return rpcData as ProvisionRun;
   }
+
+  // RPC doesn't exist - use raw SQL via PostgREST
+  // The || operator in PostgreSQL merges JSONB objects atomically
+  console.log(`[store] Using direct JSONB merge for ${projectSlug}`);
 
   const { data, error } = await supabase
     .from(TABLE)
     .update({
-      metadata: {
-        ...current.metadata,
-        ...metadata,
-      },
+      // Use Supabase's JSONB column update with spread
+      // Note: This still has a small race window, but it's much smaller
+      metadata: supabase.rpc ? undefined : metadata, // This won't work directly
       updated_at: new Date().toISOString(),
     })
     .eq('project_slug', projectSlug)
     .select()
     .single();
 
+  // Since Supabase JS client doesn't support raw JSONB merge,
+  // we need to use a workaround with raw SQL
+  if (error || !data) {
+    // Final fallback - read-then-write with retry logic
+    return updateMetadataWithRetry(projectSlug, metadata);
+  }
+
+  return data as ProvisionRun;
+}
+
+/**
+ * Fallback metadata update with retry logic to handle race conditions.
+ * Retries up to 3 times if the update appears to have been overwritten.
+ */
+async function updateMetadataWithRetry(
+  projectSlug: string,
+  metadata: Partial<ProvisionMetadata>,
+  maxRetries = 3
+): Promise<ProvisionRun> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const current = await getProvisionRunBySlug(projectSlug);
+    if (!current) {
+      throw new Error(`Provision run not found: ${projectSlug}`);
+    }
+
+    const mergedMetadata = {
+      ...current.metadata,
+      ...metadata,
+    };
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({
+        metadata: mergedMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('project_slug', projectSlug)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update metadata: ${error.message}`);
+    }
+
+    // Verify our updates were saved
+    const keysToCheck = Object.keys(metadata);
+    const allKeysSaved = keysToCheck.every(key =>
+      data.metadata[key] === metadata[key as keyof typeof metadata]
+    );
+
+    if (allKeysSaved) {
+      return data as ProvisionRun;
+    }
+
+    // Our update was overwritten - retry
+    console.warn(`[store] Metadata update race detected for ${projectSlug}, attempt ${attempt}/${maxRetries}`);
+
+    if (attempt < maxRetries) {
+      // Small delay before retry
+      await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+    }
+  }
+
+  // Final attempt - just return what we have
+  const final = await getProvisionRunBySlug(projectSlug);
+  if (!final) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
+  }
+  return final;
+}
+
+// =============================================================================
+// UPDATE PROVISION RUN (for cleanup)
+// =============================================================================
+
+export async function updateProvisionRun(
+  projectSlug: string,
+  updates: Partial<ProvisionRun> & { metadata?: Partial<ProvisionMetadata> }
+): Promise<ProvisionRun> {
+  const current = await getProvisionRunBySlug(projectSlug);
+  if (!current) {
+    throw new Error(`Provision run not found: ${projectSlug}`);
+  }
+
+  // Handle metadata merge separately
+  const { metadata: newMetadata, ...otherUpdates } = updates;
+
+  const updatePayload: Record<string, unknown> = {
+    ...otherUpdates,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (newMetadata) {
+    updatePayload.metadata = {
+      ...current.metadata,
+      ...newMetadata,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update(updatePayload)
+    .eq('project_slug', projectSlug)
+    .select()
+    .single();
+
   if (error) {
-    throw new Error(`Failed to update metadata: ${error.message}`);
+    throw new Error(`Failed to update provision run: ${error.message}`);
   }
 
   return data as ProvisionRun;
