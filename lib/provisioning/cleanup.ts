@@ -110,7 +110,6 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
   }
 
   // 6. Reset all component states to PENDING for fresh re-provisioning
-  // This is the KEY FIX for the edge case where cleanup runs but states remain stale
   try {
     await updateProvisionRun(projectSlug, {
       state: 'INIT',
@@ -122,27 +121,15 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
       webhooks_state: 'PENDING',
       'supabase-config_state': 'PENDING',
       finalize_state: 'PENDING',
-      sandra_agent_id: null,
-      kira_agent_id: null,
-      last_error: null,
-      // Clear stale resource IDs from metadata but preserve company/platform names
+      sandra_agent_id: undefined,
+      kira_agent_id: undefined,
+      last_error: undefined,
       metadata: {
         company_name: metadata.company_name,
         platform_name: metadata.platform_name,
         contactEmail: metadata.contactEmail,
         cleanup_performed: true,
         cleanup_result: result,
-        // Clear all resource-specific metadata
-        vercel_url: null,
-        github_repo: null,
-        supabase_url: null,
-        vercel_project_id: null,
-        supabase_project_ref: null,
-        supabase_anon_key: null,
-        supabase_service_role_key: null,
-        github_commit_sha: null,
-        sandra_agent_id: null,
-        kira_agent_id: null,
       },
     });
     result.deleted.database = true;
@@ -157,13 +144,10 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
 
 /**
  * Full cleanup that also deletes the database row entirely
- * Use this when you want to completely remove a platform
  */
 export async function deleteProvisionedPlatform(projectSlug: string): Promise<CleanupResult> {
-  // First do the regular cleanup
   const result = await cleanupProvisionedPlatform(projectSlug);
 
-  // Then delete the database row entirely
   try {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
@@ -211,7 +195,6 @@ async function deleteSupabaseProject(projectRef: string): Promise<void> {
     },
   });
 
-  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`Supabase API error (${res.status}): ${text}`);
@@ -231,7 +214,6 @@ async function deleteGitHubRepo(repoFullName: string): Promise<void> {
     },
   });
 
-  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`GitHub API error (${res.status}): ${text}`);
@@ -253,7 +235,6 @@ async function deleteVercelProject(projectId: string): Promise<void> {
     },
   });
 
-  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`Vercel API error (${res.status}): ${text}`);
@@ -272,7 +253,6 @@ async function deleteElevenLabsAgent(agentId: string): Promise<void> {
     },
   });
 
-  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`ElevenLabs API error (${res.status}): ${text}`);
