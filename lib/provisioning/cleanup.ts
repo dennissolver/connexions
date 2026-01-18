@@ -2,8 +2,7 @@
 // Deletes all provisioned resources for a project slug
 // Called before re-provisioning an existing slug
 
-import { ProvisionContext, ProvisionMetadata } from './types';
-import { getProvisionRunBySlug, deleteProvisionRunBySlug } from './store';
+import { getProvisionRunBySlug, updateProvisionRun } from './store';
 
 const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -50,12 +49,12 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     return result;
   }
 
-  const metadata = existingRun.metadata;
+  const metadata = existingRun.metadata || {};
   console.log(`[cleanup] Starting cleanup for ${projectSlug}`);
 
   // Delete in reverse order of dependencies
 
-  // 1. Delete ElevenLabs agents
+  // 1. Delete ElevenLabs agents (Sandra)
   if (metadata.sandra_agent_id) {
     try {
       await deleteElevenLabsAgent(metadata.sandra_agent_id as string);
@@ -66,6 +65,7 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     }
   }
 
+  // 2. Delete ElevenLabs agents (Kira)
   if (metadata.kira_agent_id) {
     try {
       await deleteElevenLabsAgent(metadata.kira_agent_id as string);
@@ -76,7 +76,7 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     }
   }
 
-  // 2. Delete Vercel project
+  // 3. Delete Vercel project
   if (metadata.vercel_project_id) {
     try {
       await deleteVercelProject(metadata.vercel_project_id as string);
@@ -87,7 +87,7 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     }
   }
 
-  // 3. Delete GitHub repo
+  // 4. Delete GitHub repo
   if (metadata.github_repo) {
     try {
       await deleteGitHubRepo(metadata.github_repo as string);
@@ -98,7 +98,7 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     }
   }
 
-  // 4. Delete Supabase project
+  // 5. Delete Supabase project
   if (metadata.supabase_project_ref) {
     try {
       await deleteSupabaseProject(metadata.supabase_project_ref as string);
@@ -109,16 +109,81 @@ export async function cleanupProvisionedPlatform(projectSlug: string): Promise<C
     }
   }
 
-  // 5. Delete database row
+  // 6. Reset all component states to PENDING for fresh re-provisioning
+  // This is the KEY FIX for the edge case where cleanup runs but states remain stale
   try {
-    await deleteProvisionRunBySlug(projectSlug);
+    await updateProvisionRun(projectSlug, {
+      state: 'INIT',
+      supabase_state: 'PENDING',
+      github_state: 'PENDING',
+      vercel_state: 'PENDING',
+      sandra_state: 'PENDING',
+      kira_state: 'PENDING',
+      webhooks_state: 'PENDING',
+      'supabase-config_state': 'PENDING',
+      finalize_state: 'PENDING',
+      sandra_agent_id: null,
+      kira_agent_id: null,
+      last_error: null,
+      // Clear stale resource IDs from metadata but preserve company/platform names
+      metadata: {
+        company_name: metadata.company_name,
+        platform_name: metadata.platform_name,
+        contactEmail: metadata.contactEmail,
+        cleanup_performed: true,
+        cleanup_result: result,
+        // Clear all resource-specific metadata
+        vercel_url: null,
+        github_repo: null,
+        supabase_url: null,
+        vercel_project_id: null,
+        supabase_project_ref: null,
+        supabase_anon_key: null,
+        supabase_service_role_key: null,
+        github_commit_sha: null,
+        sandra_agent_id: null,
+        kira_agent_id: null,
+      },
+    });
     result.deleted.database = true;
-    console.log(`[cleanup] Deleted provision run record`);
+    console.log(`[cleanup] Reset provision run states to PENDING for fresh start`);
   } catch (err) {
-    result.errors.push(`Database: ${err instanceof Error ? err.message : String(err)}`);
+    result.errors.push(`Database reset: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   console.log(`[cleanup] Cleanup complete for ${projectSlug}:`, result);
+  return result;
+}
+
+/**
+ * Full cleanup that also deletes the database row entirely
+ * Use this when you want to completely remove a platform
+ */
+export async function deleteProvisionedPlatform(projectSlug: string): Promise<CleanupResult> {
+  // First do the regular cleanup
+  const result = await cleanupProvisionedPlatform(projectSlug);
+
+  // Then delete the database row entirely
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { error } = await supabase
+      .from('provision_runs')
+      .delete()
+      .eq('project_slug', projectSlug);
+
+    if (error) throw error;
+
+    result.deleted.database = true;
+    console.log(`[cleanup] Deleted provision run record entirely`);
+  } catch (err) {
+    result.errors.push(`Database delete: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   return result;
 }
 
@@ -146,6 +211,7 @@ async function deleteSupabaseProject(projectRef: string): Promise<void> {
     },
   });
 
+  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`Supabase API error (${res.status}): ${text}`);
@@ -165,6 +231,7 @@ async function deleteGitHubRepo(repoFullName: string): Promise<void> {
     },
   });
 
+  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`GitHub API error (${res.status}): ${text}`);
@@ -186,6 +253,7 @@ async function deleteVercelProject(projectId: string): Promise<void> {
     },
   });
 
+  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`Vercel API error (${res.status}): ${text}`);
@@ -204,6 +272,7 @@ async function deleteElevenLabsAgent(agentId: string): Promise<void> {
     },
   });
 
+  // 404 means already deleted - that's fine
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
     throw new Error(`ElevenLabs API error (${res.status}): ${text}`);
