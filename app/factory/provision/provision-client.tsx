@@ -45,6 +45,8 @@ interface ProvisionStatus {
   github_state: ServiceState;
   vercel_state: ServiceState;
   'supabase-config_state'?: ServiceState;
+  auth_config_state?: ServiceState;  // Added: new column name
+  cleanup_state?: ServiceState;       // Added: cleanup tracking
   sandra_state: ServiceState;
   kira_state: ServiceState;
   webhooks_state: ServiceState;
@@ -247,17 +249,22 @@ function getServiceState(status: ProvisionStatus, serviceId: ServiceName): Servi
     return 'CLEANED';
   }
 
-  // Handle hyphenated service names
-  let stateKey: string;
+  // Handle supabase-config with both old and new column names
   if (serviceId === 'supabase-config') {
-    stateKey = 'supabase-config_state';
-  } else if (serviceId === 'finalize') {
-    stateKey = 'finalize_state';
-  } else {
-    stateKey = `${serviceId}_state`;
+    // Check auth_config_state first (new), then supabase-config_state (old)
+    const newState = status.auth_config_state;
+    const oldState = status['supabase-config_state'];
+    return newState || oldState || 'PENDING';
   }
 
-  return (status[stateKey as keyof ProvisionStatus] as ServiceState) || 'PENDING';
+  // Handle finalize
+  if (serviceId === 'finalize') {
+    return status.finalize_state || 'PENDING';
+  }
+
+  // Standard services
+  const stateKey = `${serviceId}_state` as keyof ProvisionStatus;
+  return (status[stateKey] as ServiceState) || 'PENDING';
 }
 
 function getStateColor(state: ServiceState | CleanupState): string {
@@ -294,7 +301,7 @@ function getStateBgColor(state: ServiceState | CleanupState): string {
     case 'FAILED':
       return 'bg-red-500/20 text-red-400';
     default:
-      return 'bg-slate-700/50 text-slate-500';
+      return 'bg-slate-600/20 text-slate-400';
   }
 }
 
@@ -305,12 +312,12 @@ function getStateProgress(state: ServiceState | CleanupState): number {
     case 'NOT_NEEDED':
       return 100;
     case 'VERIFYING':
-      return 75;
-    case 'WAITING':
-      return 60;
+      return 80;
     case 'CREATING':
     case 'CLEANING':
-      return 30;
+      return 50;
+    case 'WAITING':
+      return 70;
     case 'FAILED':
       return 100;
     default:
@@ -319,18 +326,18 @@ function getStateProgress(state: ServiceState | CleanupState): number {
 }
 
 function isActiveState(state: ServiceState | CleanupState): boolean {
-  return state === 'CREATING' || state === 'VERIFYING' || state === 'WAITING' || state === 'CLEANING';
+  return ['CREATING', 'VERIFYING', 'WAITING', 'CLEANING'].includes(state);
 }
 
 function isCompleteState(state: ServiceState | CleanupState): boolean {
-  return state === 'READY' || state === 'CLEANED' || state === 'NOT_NEEDED';
+  return ['READY', 'CLEANED', 'NOT_NEEDED'].includes(state);
 }
 
 function getOverallProgress(status: ProvisionStatus): number {
   const weights: Record<ServiceName, number> = {
     cleanup: 5,
-    supabase: 12,
-    github: 8,
+    supabase: 15,
+    github: 10,
     vercel: 18,
     'supabase-config': 5,
     sandra: 12,
