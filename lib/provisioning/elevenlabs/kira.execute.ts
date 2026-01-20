@@ -140,6 +140,8 @@ export async function kiraExecute(ctx: ProvisionContext): Promise<StepResult> {
   }
 
   const vercelUrl = ctx.metadata.vercel_url as string;
+  const companyName = ctx.companyName || ctx.metadata.company_name || 'your company';
+  const platformName = ctx.platformName || ctx.metadata.platform_name || 'this platform';
 
   try {
     // =========================================================================
@@ -179,9 +181,9 @@ export async function kiraExecute(ctx: ProvisionContext): Promise<StepResult> {
     // =========================================================================
     // STEP 2: Create agent with tool_ids (new approach)
     // =========================================================================
-    const systemPrompt = `You are Kira, the insights analyst for ${ctx.platformName}.
+    const systemPrompt = `You are Kira, the insights analyst for ${platformName}.
 
-Your role is to help ${ctx.companyName} analyze their interview data. You have tools to access real data.
+Your role is to help ${companyName} analyze their interview data. You have tools to access real data.
 
 YOUR TOOLS:
 - list_panels: See all interview panels and their stats
@@ -208,18 +210,18 @@ GUIDELINES:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name: `Kira - ${ctx.companyName}`,
+        name: `Kira - ${companyName}`,
         conversation_config: {
           agent: {
             prompt: {
               prompt: systemPrompt,
-              tool_ids: toolIds, // NEW: Use tool_ids instead of tools array
+              tool_ids: toolIds,
             },
             first_message: `Hello! I'm Kira, your insights analyst. I have access to all your interview data and can help you understand patterns, themes, and key findings. What would you like to explore?`,
             language: 'en',
           },
           tts: {
-            model_id: 'eleven_turbo_v2_5',
+            model_id: 'eleven_turbo_v2',  // FIXED: Changed from eleven_turbo_v2_5
             voice_id: 'pNInz6obpgDQGcFmaJgB', // Adam - professional male voice
           },
           asr: {
