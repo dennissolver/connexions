@@ -348,7 +348,7 @@ CREATE INDEX IF NOT EXISTS idx_setup_conv_elevenlabs ON setup_conversations(elev
 
 -- Extension indexes
 CREATE INDEX IF NOT EXISTS idx_panel_drafts_status ON panel_drafts(status);
-CREATE INDEX IF NOT EXISTS idx_panel_drafts_conversation ON panel_drafts(elevenlabs_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_panel_drafts_conversation ON panel_drafts(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_interview_evaluations_interview ON interview_evaluations(interview_id);
 CREATE INDEX IF NOT EXISTS idx_interview_evaluations_panel ON interview_evaluations(panel_id);
 CREATE INDEX IF NOT EXISTS idx_interview_evaluations_sentiment ON interview_evaluations(sentiment);
