@@ -498,11 +498,11 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
       console.log('[supabase-config.execute] Running complete schema migration...');
 
       const schemaRes = await fetch(
-        `https://api.supabase.com/v1/projects/\${projectRef}/database/query`,
+        `https://api.supabase.com/v1/projects/${projectRef}/database/query`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer \${SUPABASE_ACCESS_TOKEN}`,
+            'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ query: COMPLETE_SCHEMA }),
@@ -518,7 +518,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
         console.error('[supabase-config.execute] Schema migration failed:', text);
         return {
           status: 'fail',
-          error: `Schema migration failed (\${schemaRes.status}): \${text}`,
+          error: `Schema migration failed (${schemaRes.status}): ${text}`,
         };
       }
 
@@ -529,11 +529,11 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
     if (!ctx.metadata.supabase_urls_configured) {
       console.log('[supabase-config.execute] Configuring auth URLs...');
 
-      const authConfigUrl = `https://api.supabase.com/v1/projects/\${projectRef}/config/auth`;
+      const authConfigUrl = `https://api.supabase.com/v1/projects/${projectRef}/config/auth`;
       const authRes = await fetch(authConfigUrl, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer \${SUPABASE_ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${SUPABASE_ACCESS_TOKEN}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -541,7 +541,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
           uri_allow_list: [
             'http://localhost:3000/**',
             'http://localhost:3000',
-            `\${vercelUrl}/**`,
+            `${vercelUrl}/**`,
             vercelUrl,
           ].join(','),
         }),
@@ -555,7 +555,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
         }
         return {
           status: 'fail',
-          error: `Supabase auth config failed (\${authRes.status}): \${text}`,
+          error: `Supabase auth config failed (${authRes.status}): ${text}`,
         };
       }
 
@@ -571,10 +571,10 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
       const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
       for (const bucket of buckets) {
         try {
-          await fetch(`\${supabaseUrl}/storage/v1/bucket`, {
+          await fetch(`${supabaseUrl}/storage/v1/bucket`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer \${serviceKey}`,
+              'Authorization': `Bearer ${serviceKey}`,
               'Content-Type': 'application/json',
               'apikey': serviceKey,
             },
@@ -584,14 +584,14 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
               public: bucket === 'assets',
             }),
           });
-          console.log(`[supabase-config.execute] Created bucket: \${bucket}`);
+          console.log(`[supabase-config.execute] Created bucket: ${bucket}`);
         } catch {
           // Bucket may already exist, ignore
         }
       }
     }
 
-    console.log(`[supabase-config.execute] Fully configured: \${projectRef}`);
+    console.log(`[supabase-config.execute] Fully configured: ${projectRef}`);
 
     return {
       status: 'advance',
@@ -603,7 +603,7 @@ export async function supabaseConfigExecute(ctx: ProvisionContext): Promise<Step
   } catch (err) {
     return {
       status: 'fail',
-      error: `Supabase config failed: \${err instanceof Error ? err.message : String(err)}`,
+      error: `Supabase config failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }
