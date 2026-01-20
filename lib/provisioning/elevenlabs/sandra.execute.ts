@@ -223,7 +223,7 @@ Do NOT list out technical details like "I will now call the save tool" or explai
       status: 'advance',
       metadata: {
         sandra_agent_id: agentId,
-        sandra_tool_id: toolId,
+        sandra_tool_id: toolId ?? undefined,
       },
     };
   } catch (err) {
