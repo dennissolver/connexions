@@ -55,6 +55,7 @@ export interface ProvisionMetadata {
 
   // GitHub
   github_repo?: string;
+  github_repo_id?: number;
   github_commit_sha?: string;
 
   // Vercel
@@ -64,11 +65,22 @@ export interface ProvisionMetadata {
 
   // ElevenLabs agents
   sandra_agent_id?: string;
+  sandra_tool_id?: string;
   kira_agent_id?: string;
+  kira_tool_ids?: string[];
+  kira_tools_count?: number;
 
   // Webhooks
   webhook_secret?: string;
   webhook_url?: string;
+
+  // Cleanup
+  cleanup_performed?: boolean;
+  cleanup_result?: {
+    slug: string;
+    errors: string[];
+    deleted: Record<string, boolean>;
+  };
 
   // Errors (stored in metadata for history)
   supabase_error?: string;
@@ -77,6 +89,7 @@ export interface ProvisionMetadata {
   sandra_error?: string;
   kira_error?: string;
   webhooks_error?: string;
+  finalize_error?: string;
   'supabase-config_error'?: string;
 
   // Allow additional fields
@@ -88,14 +101,33 @@ export interface ProvisionRun {
   project_slug: string;
   client_id?: string;
 
-  // Service states
+  // Service states - using both naming conventions for compatibility
   supabase_state: ServiceState;
   github_state: ServiceState;
   vercel_state: ServiceState;
-  'supabase-config_state'?: ServiceState;
   sandra_state: ServiceState;
   kira_state: ServiceState;
   webhooks_state: ServiceState;
+  finalize_state: ServiceState;
+
+  // These columns may exist with different names in the database
+  // Use 'supabase-config_state' for hyphenated version
+  'supabase-config_state'?: ServiceState;
+  // Or auth_config_state for the cleaner version
+  auth_config_state?: ServiceState;
+  // Cleanup state
+  cleanup_state?: ServiceState;
+
+  // Error columns
+  supabase_error?: string;
+  github_error?: string;
+  vercel_error?: string;
+  sandra_error?: string;
+  kira_error?: string;
+  webhooks_error?: string;
+  finalize_error?: string;
+  auth_config_error?: string;
+  cleanup_error?: string;
 
   // Overall status
   status: 'running' | 'complete' | 'failed';
@@ -139,10 +171,10 @@ export type VerifyHandler = (ctx: ProvisionContext) => Promise<StepResult>;
 // HELPERS
 // =============================================================================
 
-
 export function isServiceComplete(state: ServiceState): boolean {
   return state === 'READY';
 }
+
 export function isServiceActionable(state: ServiceState): boolean {
   return state !== 'READY' && state !== 'FAILED';
 }
